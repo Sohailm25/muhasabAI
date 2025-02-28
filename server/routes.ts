@@ -2,6 +2,7 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { generateFollowUpQuestions, generateActionItems } from "./lib/anthropic";
+import { transcribeAudio } from "./lib/transcription";
 import { insertReflectionSchema, insertConversationSchema } from "@shared/schema";
 import { ZodError } from "zod";
 import { fromZodError } from "zod-validation-error";
@@ -25,15 +26,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
         throw new Error("Invalid audio data format");
       }
 
+      // Handle audio transcription
+      if (data.type === "audio") {
+        try {
+          const transcription = await transcribeAudio(data.content);
+          data.transcription = transcription;
+          console.log("Transcribed audio successfully:", transcription);
+        } catch (error) {
+          console.error("Error transcribing audio:", error);
+          throw new Error("Failed to transcribe audio reflection. Please try again.");
+        }
+      }
+
       const reflection = await storage.createReflection(data);
       console.log("Created reflection:", reflection.id);
 
       let questions: string[] = [];
       try {
-        // Use content directly since transcription is not implemented yet
-        questions = await generateFollowUpQuestions(
-          data.type === "audio" ? "Thank you for your audio reflection. I'll generate some follow-up questions to help you reflect further." : data.content
-        );
+        // Use transcription for audio reflections
+        const content = data.type === "audio" ? data.transcription! : data.content;
+        questions = await generateFollowUpQuestions(content);
         console.log("Generated questions:", questions);
       } catch (error) {
         console.error("Error generating questions:", error);
@@ -43,7 +55,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const conversation = await storage.createConversation({
         reflectionId: reflection.id,
         messages: [
-          { role: "user", content: data.content },
+          { 
+            role: "user", 
+            content: data.type === "audio" ? data.transcription! : data.content 
+          },
           { role: "assistant", content: JSON.stringify(questions) },
         ],
         actionItems: [],
