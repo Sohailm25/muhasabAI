@@ -99,6 +99,7 @@ export function ConversationView({
               <Button
                 key={i}
                 variant="outline"
+                className="w-full h-auto whitespace-normal p-4 text-left"
                 onClick={() => setSelectedQuestion(question)}
               >
                 {question}
