@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { generateFollowUpQuestions, generateActionItems, transcribeAudio } from "./lib/anthropic";
+import { generateFollowUpQuestions, generateActionItems } from "./lib/anthropic";
 import { insertReflectionSchema, insertConversationSchema } from "@shared/schema";
 import { ZodError } from "zod";
 import { fromZodError } from "zod-validation-error";
@@ -25,26 +25,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         throw new Error("Invalid audio data format");
       }
 
-      // If it's an audio reflection, transcribe it first
-      if (data.type === "audio") {
-        try {
-          const transcription = await transcribeAudio(data.content);
-          data.transcription = transcription;
-          console.log("Transcribed audio successfully");
-        } catch (error) {
-          console.error("Error transcribing audio:", error);
-          throw new Error("Failed to transcribe audio reflection. Please try again.");
-        }
-      }
-
       const reflection = await storage.createReflection(data);
       console.log("Created reflection:", reflection.id);
 
       let questions: string[] = [];
       try {
-        // Initial reflection - no previous context
+        // Use content directly since transcription is not implemented yet
         questions = await generateFollowUpQuestions(
-          data.transcription || data.content
+          data.type === "audio" ? "Thank you for your audio reflection. I'll generate some follow-up questions to help you reflect further." : data.content
         );
         console.log("Generated questions:", questions);
       } catch (error) {
@@ -55,7 +43,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const conversation = await storage.createConversation({
         reflectionId: reflection.id,
         messages: [
-          { role: "user", content: data.transcription || data.content },
+          { role: "user", content: data.content },
           { role: "assistant", content: JSON.stringify(questions) },
         ],
         actionItems: [],
