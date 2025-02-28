@@ -11,7 +11,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/reflection", async (req, res) => {
     try {
+      console.log("Reflection request body:", {
+        type: req.body.type,
+        contentLength: req.body.content?.length,
+        hasTranscription: !!req.body.transcription
+      });
+
       const data = insertReflectionSchema.parse(req.body);
+      console.log("Parsed reflection data successfully");
 
       // Validate base64 for audio
       if (data.type === "audio" && !data.content.startsWith('data:')) {
@@ -19,10 +26,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const reflection = await storage.createReflection(data);
+      console.log("Created reflection:", reflection.id);
 
-      const questions = await generateFollowUpQuestions(
-        data.transcription || data.content
-      );
+      let questions;
+      try {
+        questions = await generateFollowUpQuestions(
+          data.transcription || data.content
+        );
+        console.log("Generated questions:", questions);
+      } catch (error) {
+        console.error("Error generating questions:", error);
+        throw error;
+      }
 
       const conversation = await storage.createConversation({
         reflectionId: reflection.id,
@@ -32,9 +47,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ],
         actionItems: null,
       });
+      console.log("Created conversation:", conversation.id);
 
       res.json({ reflection, conversation, questions });
     } catch (error) {
+      console.error("Error in /api/reflection:", error);
       if (error instanceof ZodError) {
         return res.status(400).json({ 
           error: fromZodError(error).message 
@@ -71,6 +88,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.json({ conversation: updatedConversation, questions });
     } catch (error) {
+      console.error("Error in /api/conversation/respond:", error);
       res.status(400).json({ 
         error: error instanceof Error ? error.message : "Failed to save response" 
       });
@@ -100,6 +118,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.json({ conversation: updatedConversation, actionItems });
     } catch (error) {
+      console.error("Error in /api/conversation/action-items:", error);
       res.status(400).json({ 
         error: error instanceof Error ? error.message : "Failed to generate action items" 
       });

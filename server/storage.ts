@@ -27,6 +27,7 @@ export class MemStorage implements IStorage {
       ...reflection,
       id,
       timestamp: new Date(),
+      transcription: reflection.transcription || null,
     };
     this.reflections.set(id, newReflection);
     return newReflection;
@@ -42,6 +43,8 @@ export class MemStorage implements IStorage {
       ...conversation,
       id,
       timestamp: new Date(),
+      reflectionId: conversation.reflectionId || null,
+      actionItems: conversation.actionItems || [],
     };
     this.conversations.set(id, newConversation);
     return newConversation;
