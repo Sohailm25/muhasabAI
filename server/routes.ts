@@ -36,13 +36,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.log("Generated questions:", questions);
       } catch (error) {
         console.error("Error generating questions:", error);
-        // If we hit rate limits or other Claude API errors, use default questions
-        questions = [
-          "How has this experience impacted your spiritual journey?",
-          "What specific changes would you like to make based on this reflection?",
-          "How can you apply these insights in your daily worship?"
-        ];
-        console.log("Using default questions due to API error");
+        throw new Error("Failed to generate relevant follow-up questions. Please try again.");
       }
 
       const conversation = await storage.createConversation({
