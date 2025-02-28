@@ -36,22 +36,20 @@ export async function transcribeAudio(audioBase64: string): Promise<string> {
 
       console.log('Raw transcription result:', result);
 
-      // Extract text from the result
-      let transcription = '';
-      if (typeof result === 'string') {
-        transcription = result;
-      } else if (result && typeof result === 'object') {
-        // Handle different result formats
-        transcription = result.text || result.transcription || result.toString();
+      // Handle the result which contains file references
+      if (result && result.txt && typeof result.txt.getContent === 'function') {
+        const transcription = await result.txt.getContent();
+        console.log('Processed transcription:', transcription);
+
+        if (!transcription || transcription.trim().length === 0) {
+          throw new Error('No speech detected in audio');
+        }
+
+        return transcription.trim();
+      } else {
+        throw new Error('Invalid transcription result format');
       }
 
-      console.log('Processed transcription:', transcription);
-
-      if (!transcription || transcription.trim().length === 0) {
-        throw new Error('No speech detected in audio');
-      }
-
-      return transcription;
     } catch (whisperError) {
       console.error('Whisper transcription error:', whisperError);
       throw new Error(`Transcription failed: ${whisperError.message}`);
