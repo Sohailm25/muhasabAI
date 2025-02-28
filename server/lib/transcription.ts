@@ -24,19 +24,14 @@ export async function transcribeAudio(audioBase64: string): Promise<string> {
 
     console.log('Temporary audio file created:', tempFilePath);
 
-    // Initialize Whisper with correct configuration
-    const whisper = new Whisper({
-      modelName: "base", // Using the base model
-      whisperOptions: {
-        language: "en",
-        temperature: 0
-      }
+    // Use Whisper as a function, not a constructor
+    console.log('Starting Whisper transcription...');
+    const result = await Whisper(tempFilePath, {
+      modelName: "base",
+      language: "en",
+      temperature: 0
     });
 
-    console.log('Whisper initialized, starting transcription...');
-
-    // Get transcription using the correct API method
-    const result = await whisper.transcribe(tempFilePath);
     console.log('Raw transcription result:', result);
 
     // Extract text from the result
