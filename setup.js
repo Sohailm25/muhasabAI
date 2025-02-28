@@ -1,9 +1,14 @@
 #!/usr/bin/env node
 
-const fs = require('fs');
-const path = require('path');
-const readline = require('readline');
-const { execSync } = require('child_process');
+import fs from 'fs';
+import path from 'path';
+import readline from 'readline';
+import { execSync } from 'child_process';
+import { fileURLToPath } from 'url';
+
+// Get __dirname equivalent in ESM
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const rl = readline.createInterface({
   input: process.stdin,

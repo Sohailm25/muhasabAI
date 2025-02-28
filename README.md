@@ -13,7 +13,7 @@ A spiritual reflection application designed to help Muslims document and deepen 
 ## Prerequisites
 
 Before you begin, ensure you have the following installed:
-- [Node.js](https://nodejs.org/) (v18 or higher recommended)
+- [Node.js](https://nodejs.org/) (v18 or higher **REQUIRED**)
 - [npm](https://www.npmjs.com/) (comes with Node.js)
 - A code editor (e.g., [VS Code](https://code.visualstudio.com/))
 - [Git](https://git-scm.com/)
@@ -116,6 +116,13 @@ muhasabAI/
 - `npm run fix:model`: Fix the Claude model version in the code
 
 ## Troubleshooting
+
+### TypeScript Errors
+
+If you encounter TypeScript errors about missing types:
+- Make sure you're using Node.js v18 or higher
+- The project includes a `global.d.ts` file with type declarations for Node.js and Anthropic SDK
+- If errors persist, try running `npm install` again to ensure all dependencies are installed
 
 ### Audio Recording Issues
 
