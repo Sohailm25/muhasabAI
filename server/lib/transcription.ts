@@ -24,34 +24,41 @@ export async function transcribeAudio(audioBase64: string): Promise<string> {
 
     console.log('Temporary audio file created:', tempFilePath);
 
-    // Initialize Whisper with specific configuration
-    const whisper = new Whisper({
-      modelName: 'base',
+    // Initialize Whisper - note the different initialization
+    // @ts-ignore - Whisper types are not complete
+    const transcriber = new Whisper('base', {
       temperature: 0,
       language: 'en',
-      whisperOptions: {
-        outputTokens: true,
-        outputSegments: true,
-      }
+      print_progress: true,
+      print_special: true,
     });
 
     console.log('Whisper initialized, starting transcription...');
 
-    // Transcribe the audio file
-    const result = await whisper.transcribe(tempFilePath);
+    // Get transcription
+    // @ts-ignore - Whisper types are not complete
+    const result = await transcriber.transcribe(tempFilePath);
+    console.log('Raw transcription result:', result);
 
-    console.log('Transcription completed successfully');
+    if (!result || typeof result !== 'object') {
+      throw new Error('Invalid transcription result');
+    }
 
-    return result.text || 'Audio transcription produced no text.';
+    const transcription = typeof result === 'string' ? result : result.text || result.toString();
+    console.log('Processed transcription:', transcription);
+
+    if (!transcription || transcription.trim().length === 0) {
+      throw new Error('No speech detected in audio');
+    }
+
+    return transcription;
   } catch (error) {
     console.error('Detailed transcription error:', error);
-
     if (error instanceof Error) {
       console.error('Error name:', error.name);
       console.error('Error message:', error.message);
       console.error('Error stack:', error.stack);
     }
-
     throw new Error('Failed to transcribe audio: ' + (error instanceof Error ? error.message : 'Unknown error'));
   } finally {
     // Clean up temporary file
