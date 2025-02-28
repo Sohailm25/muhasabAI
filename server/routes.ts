@@ -30,11 +30,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (data.type === "audio") {
         try {
           const transcription = await transcribeAudio(data.content);
+          if (!transcription || transcription.trim().length === 0) {
+            throw new Error("No speech detected in the audio");
+          }
           data.transcription = transcription;
           console.log("Transcribed audio successfully:", transcription);
         } catch (error) {
           console.error("Error transcribing audio:", error);
-          throw new Error("Failed to transcribe audio reflection. Please try again.");
+          throw new Error("Failed to transcribe audio reflection. Please try again and speak clearly.");
         }
       }
 
