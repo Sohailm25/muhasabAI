@@ -24,27 +24,29 @@ export async function transcribeAudio(audioBase64: string): Promise<string> {
 
     console.log('Temporary audio file created:', tempFilePath);
 
-    // Initialize Whisper - note the different initialization
-    // @ts-ignore - Whisper types are not complete
-    const transcriber = new Whisper('base', {
-      temperature: 0,
-      language: 'en',
-      print_progress: true,
-      print_special: true,
+    // Initialize Whisper with correct configuration
+    const whisper = new Whisper({
+      modelName: "base", // Using the base model
+      whisperOptions: {
+        language: "en",
+        temperature: 0
+      }
     });
 
     console.log('Whisper initialized, starting transcription...');
 
-    // Get transcription
-    // @ts-ignore - Whisper types are not complete
-    const result = await transcriber.transcribe(tempFilePath);
+    // Get transcription using the correct API method
+    const result = await whisper.transcribe(tempFilePath);
     console.log('Raw transcription result:', result);
 
-    if (!result || typeof result !== 'object') {
-      throw new Error('Invalid transcription result');
+    // Extract text from the result
+    let transcription = '';
+    if (typeof result === 'string') {
+      transcription = result;
+    } else if (result && typeof result === 'object') {
+      transcription = result.text || result.toString();
     }
 
-    const transcription = typeof result === 'string' ? result : result.text || result.toString();
     console.log('Processed transcription:', transcription);
 
     if (!transcription || transcription.trim().length === 0) {
