@@ -22,22 +22,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log("Parsed reflection data successfully");
 
       // Validate base64 for audio
-      if (data.type === "audio" && !data.content.startsWith('data:')) {
-        throw new Error("Invalid audio data format");
-      }
-
-      // Handle audio transcription
       if (data.type === "audio") {
+        if (!data.content.startsWith('data:')) {
+          return res.status(400).json({
+            error: "Invalid audio data format. Expected base64 data URL."
+          });
+        }
+
         try {
+          console.log("Starting audio transcription...");
           const transcription = await transcribeAudio(data.content);
           if (!transcription || transcription.trim().length === 0) {
-            throw new Error("No speech detected in the audio");
+            return res.status(400).json({
+              error: "No speech detected in the audio. Please try again and speak clearly."
+            });
           }
           data.transcription = transcription;
           console.log("Transcribed audio successfully:", transcription);
         } catch (error) {
           console.error("Error transcribing audio:", error);
-          throw new Error("Failed to transcribe audio reflection. Please try again and speak clearly.");
+          return res.status(400).json({
+            error: "Failed to transcribe audio. Please ensure you have a clear recording and try again."
+          });
         }
       }
 
@@ -52,7 +58,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.log("Generated questions:", questions);
       } catch (error) {
         console.error("Error generating questions:", error);
-        throw new Error("Failed to generate relevant follow-up questions. Please try again.");
+        // Don't fail the whole request if question generation fails
+        questions = ["How would you like to expand on your reflection?"];
       }
 
       const conversation = await storage.createConversation({

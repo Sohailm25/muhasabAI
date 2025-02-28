@@ -24,31 +24,38 @@ export async function transcribeAudio(audioBase64: string): Promise<string> {
 
     console.log('Temporary audio file created:', tempFilePath);
 
-    // Use Whisper as a function, not a constructor
+    // Use Whisper as a function with proper error handling
     console.log('Starting Whisper transcription...');
-    const result = await Whisper(tempFilePath, {
-      modelName: "base",
-      language: "en",
-      temperature: 0
-    });
+    try {
+      const result = await Whisper(tempFilePath, {
+        model: "base", 
+        language: "en",
+        temperature: 0,
+        task: "transcribe" 
+      });
 
-    console.log('Raw transcription result:', result);
+      console.log('Raw transcription result:', result);
 
-    // Extract text from the result
-    let transcription = '';
-    if (typeof result === 'string') {
-      transcription = result;
-    } else if (result && typeof result === 'object') {
-      transcription = result.text || result.toString();
+      // Extract text from the result
+      let transcription = '';
+      if (typeof result === 'string') {
+        transcription = result;
+      } else if (result && typeof result === 'object') {
+        // Handle different result formats
+        transcription = result.text || result.transcription || result.toString();
+      }
+
+      console.log('Processed transcription:', transcription);
+
+      if (!transcription || transcription.trim().length === 0) {
+        throw new Error('No speech detected in audio');
+      }
+
+      return transcription;
+    } catch (whisperError) {
+      console.error('Whisper transcription error:', whisperError);
+      throw new Error(`Transcription failed: ${whisperError.message}`);
     }
-
-    console.log('Processed transcription:', transcription);
-
-    if (!transcription || transcription.trim().length === 0) {
-      throw new Error('No speech detected in audio');
-    }
-
-    return transcription;
   } catch (error) {
     console.error('Detailed transcription error:', error);
     if (error instanceof Error) {
