@@ -3,9 +3,15 @@ import fs from 'fs';
 import path from 'path';
 import { randomUUID } from 'crypto';
 
+/**
+ * Transcribes audio data from a base64 string
+ * @param audioBase64 Base64 encoded audio data
+ * @returns The transcribed text
+ */
 export async function transcribeAudio(audioBase64: string): Promise<string> {
   let tempFilePath: string | null = null;
   let tempDir: string | null = null;
+  let outputFiles: string[] = [];
 
   try {
     console.log('Starting audio transcription process...');
@@ -44,7 +50,14 @@ export async function transcribeAudio(audioBase64: string): Promise<string> {
       // Construct the correct path to the txt file
       const txtPath = path.join(tempDir, path.basename(result.txt.file));
       console.log('Looking for transcription file at:', txtPath);
-
+      
+      // Add to files to clean up
+      outputFiles.push(txtPath);
+      
+      if (!fs.existsSync(txtPath)) {
+        throw new Error(`Transcription file not found at: ${txtPath}`);
+      }
+      
       const transcription = await fs.promises.readFile(txtPath, 'utf-8');
       console.log('Processed transcription:', transcription);
 
@@ -68,13 +81,21 @@ export async function transcribeAudio(audioBase64: string): Promise<string> {
     throw new Error('Failed to transcribe audio: ' + (error instanceof Error ? error.message : 'Unknown error'));
   } finally {
     // Clean up temporary files
-    if (tempFilePath && fs.existsSync(tempFilePath)) {
-      try {
+    try {
+      if (tempFilePath && fs.existsSync(tempFilePath)) {
         fs.unlinkSync(tempFilePath);
         console.log('Temporary audio file cleaned up');
-      } catch (cleanupError) {
-        console.error('Error cleaning up temporary file:', cleanupError);
       }
+      
+      // Clean up any output files
+      for (const file of outputFiles) {
+        if (fs.existsSync(file)) {
+          fs.unlinkSync(file);
+          console.log(`Cleaned up output file: ${file}`);
+        }
+      }
+    } catch (cleanupError) {
+      console.error('Error cleaning up temporary files:', cleanupError);
     }
   }
 }

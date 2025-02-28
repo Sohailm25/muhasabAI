@@ -1,16 +1,16 @@
-import type { Express } from "express";
+import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { generateFollowUpQuestions, generateActionItems } from "./lib/anthropic";
 import { transcribeAudio } from "./lib/transcription";
-import { insertReflectionSchema, insertConversationSchema } from "@shared/schema";
+import { insertReflectionSchema, insertConversationSchema, Message } from "@shared/schema";
 import { ZodError } from "zod";
 import { fromZodError } from "zod-validation-error";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   const httpServer = createServer(app);
 
-  app.post("/api/reflection", async (req, res) => {
+  app.post("/api/reflection", async (req: Request, res: Response) => {
     try {
       console.log("Reflection request body:", {
         type: req.body.type,
@@ -41,7 +41,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           console.log("Transcribed audio successfully:", transcription);
         } catch (error) {
           console.error("Error transcribing audio:", error);
-          return res.status(400).json({
+          return res.status(500).json({
             error: "Failed to transcribe audio. Please ensure you have a clear recording and try again."
           });
         }
@@ -83,19 +83,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
           error: fromZodError(error).message 
         });
       }
-      res.status(400).json({ 
+      return res.status(error instanceof Error && error.message.includes("400") ? 400 : 500).json({ 
         error: error instanceof Error ? error.message : "Failed to save reflection" 
       });
     }
   });
 
-  app.post("/api/conversation/:id/respond", async (req, res) => {
+  app.post("/api/conversation/:id/respond", async (req: Request, res: Response) => {
     try {
       const conversationId = parseInt(req.params.id);
+      if (isNaN(conversationId)) {
+        return res.status(400).json({ error: "Invalid conversation ID" });
+      }
+      
       const { content } = req.body;
 
       if (!content || typeof content !== 'string') {
-        throw new Error("Content is required");
+        return res.status(400).json({ error: "Content is required and must be a string" });
       }
 
       const conversation = await storage.getConversation(conversationId);
@@ -109,8 +113,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       try {
         // Get all previous user messages for context
         const previousMessages = conversation.messages
-          .map(msg => `${msg.role}: ${msg.content}`)
-          .filter(msg => !msg.includes('["')); // Filter out the question arrays
+          .map((msg: Message) => `${msg.role}: ${msg.content}`)
+          .filter((msg: string) => !msg.includes('["')); // Filter out the question arrays
 
         questions = await generateFollowUpQuestions(content, previousMessages);
       } catch (error) {
@@ -128,15 +132,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({ conversation: updatedConversation, questions });
     } catch (error) {
       console.error("Error in /api/conversation/respond:", error);
-      res.status(400).json({ 
+      return res.status(error instanceof Error && error.message.includes("404") ? 404 : 500).json({ 
         error: error instanceof Error ? error.message : "Failed to save response" 
       });
     }
   });
 
-  app.post("/api/conversation/:id/action-items", async (req, res) => {
+  app.post("/api/conversation/:id/action-items", async (req: Request, res: Response) => {
     try {
       const conversationId = parseInt(req.params.id);
+      if (isNaN(conversationId)) {
+        return res.status(400).json({ error: "Invalid conversation ID" });
+      }
+      
       const conversation = await storage.getConversation(conversationId);
 
       if (!conversation) {
@@ -144,7 +152,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const conversationText = conversation.messages
-        .map((msg) => `${msg.role}: ${msg.content}`)
+        .map((msg: Message) => `${msg.role}: ${msg.content}`)
         .join("\n");
 
       let actionItems: string[];
@@ -164,7 +172,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({ conversation: updatedConversation, actionItems });
     } catch (error) {
       console.error("Error in /api/conversation/action-items:", error);
-      res.status(400).json({ 
+      return res.status(error instanceof Error && error.message.includes("404") ? 404 : 500).json({ 
         error: error instanceof Error ? error.message : "Failed to generate action items" 
       });
     }

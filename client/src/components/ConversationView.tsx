@@ -43,6 +43,32 @@ export function ConversationView({
     }
   };
 
+  // Helper function to render message content properly
+  const renderMessageContent = (message: Message) => {
+    if (message.role === "assistant") {
+      try {
+        // Try to parse as JSON (for questions)
+        const parsed = JSON.parse(message.content);
+        if (Array.isArray(parsed)) {
+          return (
+            <ul className="list-disc list-inside space-y-2">
+              {parsed.map((item, i) => (
+                <li key={i}>{item}</li>
+              ))}
+            </ul>
+          );
+        }
+        // If it's JSON but not an array, stringify it nicely
+        return <pre>{JSON.stringify(parsed, null, 2)}</pre>;
+      } catch (e) {
+        // Not JSON, just render as text
+        return <p>{message.content}</p>;
+      }
+    }
+    // User messages always render as plain text
+    return <p>{message.content}</p>;
+  };
+
   return (
     <div className="flex flex-col h-full gap-4">
       <ScrollArea className="flex-1 px-4">
@@ -54,15 +80,15 @@ export function ConversationView({
             }`}
           >
             <CardContent className="p-4">
-              <p
+              <div
                 className={
                   message.role === "assistant"
                     ? "text-foreground"
                     : "text-primary-foreground"
                 }
               >
-                {message.content}
-              </p>
+                {renderMessageContent(message)}
+              </div>
             </CardContent>
           </Card>
         ))}
@@ -99,8 +125,10 @@ export function ConversationView({
               <Button
                 key={i}
                 variant="outline"
-                className="w-full h-auto whitespace-normal p-4 text-left"
-                onClick={() => setSelectedQuestion(question)}
+                className="justify-start text-left"
+                onClick={() => {
+                  setSelectedQuestion(question);
+                }}
               >
                 {question}
               </Button>

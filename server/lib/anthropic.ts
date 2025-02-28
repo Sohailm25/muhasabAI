@@ -1,16 +1,22 @@
 import Anthropic from '@anthropic-ai/sdk';
 
-// the newest Anthropic model is "claude-3-7-sonnet-20250219" which was released February 24, 2025
+// Using the correct Claude model - claude-3-7-sonnet-20250219
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY || 'default-key',
 });
+
+// Define the types we'll use for messages
+type AnthropicMessage = {
+  role: 'user' | 'assistant';
+  content: string;
+};
 
 export async function generateFollowUpQuestions(input: string, previousMessages?: string[]): Promise<string[]> {
   const conversationContext = previousMessages 
     ? `Previous conversation:\n${previousMessages.join("\n")}\n\nLatest reflection: "${input}"`
     : `Reflection: "${input}"`;
 
-  const prompt = `As an Islamic spiritual guide during Ramadan, carefully analyze this personal reflection and the previous conversation context (if any) to generate 3 thoughtful, contextual follow-up questions. Focus on building upon the insights shared throughout the conversation:
+  const prompt = `As an Islamic spiritual guide, carefully analyze this personal reflection and the previous conversation context (if any) to generate 3 thoughtful, contextual follow-up questions. Focus on building upon the insights shared throughout the conversation:
 
 ${conversationContext}
 
@@ -23,24 +29,24 @@ Your task:
 Example format:
 ["How does this new insight build upon your earlier reflection about patience?", "Given what you shared about your daily prayers, what specific changes are you considering?", "How might these combined experiences shape your approach to the last days of Ramadan?"]`;
 
-  const response = await anthropic.messages.create({
-    model: 'claude-3-7-sonnet-20250219',
-    messages: [{ role: 'user', content: prompt }],
-    max_tokens: 1024,
-    temperature: 0.7,
-  });
-
-  const responseContent = response.content[0].type === 'text' 
-    ? response.content[0].text 
-    : '[]';
-
   try {
+    const response = await anthropic.messages.create({
+      model: 'claude-3-7-sonnet-20250219',
+      messages: [{ role: 'user', content: prompt }],
+      max_tokens: 1024,
+      temperature: 0.7,
+    });
+
+    const responseContent = response.content[0].type === 'text' 
+      ? response.content[0].text 
+      : '[]';
+
     // Clean the response - remove any markdown formatting if present
     const cleanedResponse = responseContent.replace(/```json\n?|\n?```/g, '').trim();
     return JSON.parse(cleanedResponse);
   } catch (error) {
-    console.error("Error parsing Claude's response:", error);
-    console.log("Raw response:", responseContent);
+    console.error("Error generating follow-up questions:", error);
+    console.log("Error details:", error instanceof Error ? error.message : String(error));
     throw new Error("Failed to generate relevant follow-up questions");
   }
 }
@@ -60,24 +66,24 @@ Your task:
 Example format:
 ["Schedule 15 minutes after Fajr prayer for Quran recitation and reflection on Surah Al-Mulk", "Keep a daily gratitude journal focusing on Allah's blessings in your life", "Plan and prepare healthy suhoor meals to maintain energy for worship"]`;
 
-  const response = await anthropic.messages.create({
-    model: 'claude-3-7-sonnet-20250219',
-    messages: [{ role: 'user', content: prompt }],
-    max_tokens: 1024,
-    temperature: 0.7,
-  });
-
-  const responseContent = response.content[0].type === 'text' 
-    ? response.content[0].text 
-    : '[]';
-
   try {
+    const response = await anthropic.messages.create({
+      model: 'claude-3-sonnet-20240229',
+      messages: [{ role: 'user', content: prompt }],
+      max_tokens: 1024,
+      temperature: 0.7,
+    });
+
+    const responseContent = response.content[0].type === 'text' 
+      ? response.content[0].text 
+      : '[]';
+
     // Clean the response - remove any markdown formatting if present
     const cleanedResponse = responseContent.replace(/```json\n?|\n?```/g, '').trim();
     return JSON.parse(cleanedResponse);
   } catch (error) {
-    console.error("Error parsing Claude's response:", error);
-    console.log("Raw response:", responseContent);
+    console.error("Error generating action items:", error);
+    console.log("Error details:", error instanceof Error ? error.message : String(error));
     throw new Error("Failed to generate relevant action items");
   }
 }
