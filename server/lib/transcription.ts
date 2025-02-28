@@ -24,11 +24,11 @@ export async function transcribeAudio(audioBase64: string): Promise<string> {
 
     console.log('Temporary audio file created:', tempFilePath);
 
-    // Use Whisper as a function with proper error handling
+    // Use Whisper with correct parameters
     console.log('Starting Whisper transcription...');
     try {
       const result = await Whisper(tempFilePath, {
-        model: "base", 
+        modelName: "base", // Changed from model to modelName
         language: "en",
         temperature: 0,
         task: "transcribe" 
@@ -47,6 +47,7 @@ export async function transcribeAudio(audioBase64: string): Promise<string> {
 
         return transcription.trim();
       } else {
+        console.error('Invalid result structure:', result);
         throw new Error('Invalid transcription result format');
       }
 
