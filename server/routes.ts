@@ -28,7 +28,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const reflection = await storage.createReflection(data);
       console.log("Created reflection:", reflection.id);
 
-      let questions;
+      let questions: string[] = [];
       try {
         questions = await generateFollowUpQuestions(
           data.transcription || data.content
@@ -36,7 +36,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.log("Generated questions:", questions);
       } catch (error) {
         console.error("Error generating questions:", error);
-        throw error;
+        // If we hit rate limits or other Claude API errors, use default questions
+        questions = [
+          "How has this experience impacted your spiritual journey?",
+          "What specific changes would you like to make based on this reflection?",
+          "How can you apply these insights in your daily worship?"
+        ];
+        console.log("Using default questions due to API error");
       }
 
       const conversation = await storage.createConversation({
@@ -45,7 +51,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           { role: "user", content: data.transcription || data.content },
           { role: "assistant", content: JSON.stringify(questions) },
         ],
-        actionItems: null,
+        actionItems: [],
       });
       console.log("Created conversation:", conversation.id);
 
@@ -77,9 +83,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "Conversation not found" });
       }
 
-      const messages = [...conversation.messages, { role: "user", content }];
-      const questions = await generateFollowUpQuestions(content);
-      messages.push({ role: "assistant", content: JSON.stringify(questions) });
+      const messages = [...conversation.messages, { role: "user" as const, content }];
+      let questions: string[] = [];
+
+      try {
+        questions = await generateFollowUpQuestions(content);
+      } catch (error) {
+        console.error("Error generating follow-up questions:", error);
+        questions = [
+          "Could you elaborate more on that point?",
+          "How does this connect to your earlier reflections?",
+          "What practical steps can you take based on this insight?"
+        ];
+      }
+
+      messages.push({ role: "assistant" as const, content: JSON.stringify(questions) });
 
       const updatedConversation = await storage.updateConversation(
         conversationId,
@@ -108,7 +126,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .map((msg) => `${msg.role}: ${msg.content}`)
         .join("\n");
 
-      const actionItems = await generateActionItems(conversationText);
+      let actionItems: string[];
+      try {
+        actionItems = await generateActionItems(conversationText);
+      } catch (error) {
+        console.error("Error generating action items:", error);
+        actionItems = [
+          "Schedule dedicated time for daily Quran recitation and reflection",
+          "Identify and work on one specific area of personal improvement",
+          "Plan acts of kindness and charity for the community"
+        ];
+      }
 
       const updatedConversation = await storage.updateConversation(
         conversationId,
