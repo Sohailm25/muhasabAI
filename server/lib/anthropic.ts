@@ -5,6 +5,37 @@ const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY || 'default-key',
 });
 
+export async function transcribeAudio(audioBase64: string): Promise<string> {
+  try {
+    const response = await anthropic.messages.create({
+      model: 'claude-3-7-sonnet-20250219',
+      messages: [{
+        role: 'user',
+        content: [
+          {
+            type: "text",
+            text: "Please transcribe this audio recording of a Ramadan reflection. Focus on capturing the spiritual content and personal insights shared."
+          },
+          {
+            type: "image",
+            source: {
+              type: "base64",
+              media_type: "audio/wav",
+              data: audioBase64.replace(/^data:audio\/wav;base64,/, '')
+            }
+          }
+        ]
+      }],
+      max_tokens: 1024,
+    });
+
+    return response.content[0].type === 'text' ? response.content[0].text : '';
+  } catch (error) {
+    console.error("Error transcribing audio:", error);
+    throw new Error("Failed to transcribe audio reflection");
+  }
+}
+
 export async function generateFollowUpQuestions(input: string, previousMessages?: string[]): Promise<string[]> {
   const conversationContext = previousMessages 
     ? `Previous conversation:\n${previousMessages.join("\n")}\n\nLatest reflection: "${input}"`

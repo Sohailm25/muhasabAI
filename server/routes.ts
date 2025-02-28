@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { generateFollowUpQuestions, generateActionItems } from "./lib/anthropic";
+import { generateFollowUpQuestions, generateActionItems, transcribeAudio } from "./lib/anthropic";
 import { insertReflectionSchema, insertConversationSchema } from "@shared/schema";
 import { ZodError } from "zod";
 import { fromZodError } from "zod-validation-error";
@@ -23,6 +23,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Validate base64 for audio
       if (data.type === "audio" && !data.content.startsWith('data:')) {
         throw new Error("Invalid audio data format");
+      }
+
+      // If it's an audio reflection, transcribe it first
+      if (data.type === "audio") {
+        try {
+          const transcription = await transcribeAudio(data.content);
+          data.transcription = transcription;
+          console.log("Transcribed audio successfully");
+        } catch (error) {
+          console.error("Error transcribing audio:", error);
+          throw new Error("Failed to transcribe audio reflection. Please try again.");
+        }
       }
 
       const reflection = await storage.createReflection(data);
