@@ -5,19 +5,23 @@ const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY || 'default-key',
 });
 
-export async function generateFollowUpQuestions(input: string): Promise<string[]> {
-  const prompt = `As an Islamic spiritual guide during Ramadan, carefully analyze this personal reflection and generate 3 thoughtful, contextual follow-up questions. Focus on the specific content shared and help the person achieve deeper spiritual growth:
+export async function generateFollowUpQuestions(input: string, previousMessages?: string[]): Promise<string[]> {
+  const conversationContext = previousMessages 
+    ? `Previous conversation:\n${previousMessages.join("\n")}\n\nLatest reflection: "${input}"`
+    : `Reflection: "${input}"`;
 
-Reflection: "${input}"
+  const prompt = `As an Islamic spiritual guide during Ramadan, carefully analyze this personal reflection and the previous conversation context (if any) to generate 3 thoughtful, contextual follow-up questions. Focus on building upon the insights shared throughout the conversation:
+
+${conversationContext}
 
 Your task:
-1. Consider the unique spiritual context and personal journey expressed in their reflection
-2. Generate exactly 3 questions that directly relate to their specific situation
-3. Aim for questions that encourage deeper reflection and practical spiritual growth
+1. Consider the entire conversational context and spiritual journey expressed so far
+2. Generate exactly 3 questions that build upon both the latest reflection and previous exchanges
+3. Each question should help deepen understanding of topics already discussed or explore closely related aspects
 4. Format your response as a JSON array of strings containing only the questions
 
 Example format:
-["How does this experience relate to your understanding of sabr?", "What specific changes in your daily routine could help strengthen this aspect of your faith?", "How might this insight help you better connect with Allah during your prayers?"]`;
+["How does this new insight build upon your earlier reflection about patience?", "Given what you shared about your daily prayers, what specific changes are you considering?", "How might these combined experiences shape your approach to the last days of Ramadan?"]`;
 
   const response = await anthropic.messages.create({
     model: 'claude-3-7-sonnet-20250219',

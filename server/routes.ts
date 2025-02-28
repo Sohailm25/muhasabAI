@@ -30,6 +30,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       let questions: string[] = [];
       try {
+        // Initial reflection - no previous context
         questions = await generateFollowUpQuestions(
           data.transcription || data.content
         );
@@ -81,14 +82,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let questions: string[] = [];
 
       try {
-        questions = await generateFollowUpQuestions(content);
+        // Get all previous user messages for context
+        const previousMessages = conversation.messages
+          .map(msg => `${msg.role}: ${msg.content}`)
+          .filter(msg => !msg.includes('["')); // Filter out the question arrays
+
+        questions = await generateFollowUpQuestions(content, previousMessages);
       } catch (error) {
         console.error("Error generating follow-up questions:", error);
-        questions = [
-          "Could you elaborate more on that point?",
-          "How does this connect to your earlier reflections?",
-          "What practical steps can you take based on this insight?"
-        ];
+        throw new Error("Failed to generate relevant follow-up questions. Please try again.");
       }
 
       messages.push({ role: "assistant" as const, content: JSON.stringify(questions) });
@@ -125,11 +127,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         actionItems = await generateActionItems(conversationText);
       } catch (error) {
         console.error("Error generating action items:", error);
-        actionItems = [
-          "Schedule dedicated time for daily Quran recitation and reflection",
-          "Identify and work on one specific area of personal improvement",
-          "Plan acts of kindness and charity for the community"
-        ];
+        throw new Error("Failed to generate action items. Please try again.");
       }
 
       const updatedConversation = await storage.updateConversation(
