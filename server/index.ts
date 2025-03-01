@@ -5,6 +5,25 @@ import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 
+// Check for required environment variables
+function checkRequiredEnvVars() {
+  const requiredVars = ['ANTHROPIC_API_KEY'];
+  const missingVars = requiredVars.filter(varName => !process.env[varName]);
+  
+  if (missingVars.length > 0) {
+    console.error(`ERROR: Missing required environment variables: ${missingVars.join(', ')}`);
+    console.error('Please set these variables in your Railway project settings or .env file for local development');
+    
+    // In production, exit the process if variables are missing
+    if (process.env.NODE_ENV === 'production') {
+      process.exit(1);
+    }
+  }
+}
+
+// Run the check
+checkRequiredEnvVars();
+
 const app = express();
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: false, limit: '50mb' }));
@@ -55,7 +74,8 @@ app.use((req, res, next) => {
     serveStatic(app);
   }
 
-  const port = 5000;
+  // Use Railway's PORT environment variable or fall back to 5000
+  const port = process.env.PORT || 5000;
   server.listen({
     port,
     host: "0.0.0.0",

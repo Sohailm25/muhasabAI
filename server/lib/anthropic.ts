@@ -285,6 +285,86 @@ Example format:
   }
 }
 
+export async function generateInsights(messages: AnthropicMessage[] | string, customPrompt?: string): Promise<string[]> {
+  console.log("Generating spiritual insights");
+  
+  // Fallback insights in case of API failure
+  const fallbackInsights = [
+    "Your journey of self-reflection demonstrates a sincere desire to grow spiritually, as emphasized in Surah Al-Ra'd (13:11): 'Indeed, Allah will not change the condition of a people until they change what is in themselves.'", 
+    "Your consistent practice of contemplation aligns with the Prophet's ﷺ emphasis on self-accounting, as he said: 'The wise person is one who takes account of himself and works for what comes after death.' (Tirmidhi)", 
+    "Each step of your spiritual journey reflects the concept of ihsan mentioned in the famous hadith of Jibril, where the Prophet ﷺ described it as 'worshiping Allah as if you see Him, for though you do not see Him, He surely sees you.' (Bukhari & Muslim)"
+  ];
+  
+  // If the API key is missing or obviously invalid, return fallback items immediately
+  if (!process.env.ANTHROPIC_API_KEY || !isValidApiKey(process.env.ANTHROPIC_API_KEY)) {
+    console.warn("Using fallback insights due to missing or invalid API key");
+    return fallbackInsights;
+  }
+  
+  // Convert input to a conversation string if it's an array of messages
+  const conversation = typeof messages === 'string' 
+    ? messages 
+    : messages.map(msg => `${msg.role}: ${msg.content}`).join("\n");
+
+  // Use custom prompt if provided, otherwise use default prompt
+  const prompt = customPrompt || `As an insightful Islamic Reflection Analyst with deep scholarly knowledge of the Quran, Sunnah, and authentic Tafsir, analyze this conversation and provide meaningful spiritual insights.
+
+Conversation:
+${conversation}
+
+Your task:
+1. Identify recurring themes, challenges, spiritual states, and patterns in the user's reflections
+2. Generate 3-5 meaningful insights that connect their experiences to Islamic wisdom
+3. Each insight should include a clear observation, a connection to Islamic sources (Quran, authentic hadith, or scholarly interpretation), and a practical spiritual consideration
+4. Format your response as a JSON array of strings containing only the insights
+
+Example format:
+["Your consistent efforts toward patience reflect the wisdom in Surah Al-Asr, where Allah reminds us that success requires both faith and perseverance. Consider viewing challenges as opportunities to strengthen this virtue.", "The recurring theme of gratitude in your reflections aligns with Allah's reminder in Surah Ibrahim (14:7): 'If you are grateful, I will surely increase you.' Your practice of counting blessings can be enhanced through specific daily dhikr.", "Your journey through doubt demonstrates the natural spiritual growth process. As the Prophet Muhammad ﷺ said in an authentic hadith: 'Faith wears out in your heart as clothes wear out, so ask Allah to renew the faith in your hearts.' (Al-Hakim)"]`;
+
+  try {
+    console.log("Sending prompt to Claude for spiritual insights...");
+    const response = await anthropic.messages.create({
+      model: 'claude-3-7-sonnet-20250219',
+      messages: [{ role: 'user' as const, content: prompt }],
+      max_tokens: 2048,
+      temperature: 0.7,
+    });
+
+    // Extract and process the response content
+    let responseText = '';
+    if (response.content && response.content.length > 0 && response.content[0].type === 'text') {
+      responseText = response.content[0].text || '';
+    }
+
+    console.log(`Raw Claude response for insights: ${responseText.substring(0, 200)}...`);
+    
+    // Try to extract JSON array
+    try {
+      // Find JSON array in the response
+      const jsonRegex = /\[[\s\S]*\]/;
+      const jsonMatch = responseText.match(jsonRegex);
+      
+      if (jsonMatch) {
+        const jsonPart = jsonMatch[0];
+        const parsedItems = JSON.parse(jsonPart);
+        
+        if (Array.isArray(parsedItems) && parsedItems.length > 0) {
+          return parsedItems as string[];
+        }
+      }
+      
+      console.warn("Failed to parse insights as JSON array, using fallback insights");
+      return fallbackInsights;
+    } catch (parseError) {
+      console.error("Error parsing insights from Claude response:", parseError);
+      return fallbackInsights;
+    }
+  } catch (error) {
+    handleAnthropicError(error, "generating insights");
+    return fallbackInsights;
+  }
+}
+
 // Helper function to handle Anthropic API errors consistently
 function handleAnthropicError(error: any, context: string): void {
   console.error(`Error ${context}:`, error);

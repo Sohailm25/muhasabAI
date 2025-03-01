@@ -3,6 +3,7 @@ const { Pool } = pkg;
 import { drizzle } from "drizzle-orm/node-postgres";
 import { neonConfig } from "@neondatabase/serverless";
 import ws from "ws";
+import { log } from "./vite";
 
 // Configure WebSocket for Neon serverless
 neonConfig.webSocketConstructor = ws;
@@ -11,27 +12,64 @@ neonConfig.webSocketConstructor = ws;
 const usingDatabase = !!process.env.DATABASE_URL;
 
 // Log the storage mode
-console.log(`Database module initialized: ${usingDatabase ? 'Using database storage' : 'Using in-memory storage'}`);
+log(`Database module initialized: ${usingDatabase ? 'Using database storage' : 'Using in-memory storage'}`, 'database');
 
 // Only create the database connection if we have a DATABASE_URL
-let pool = undefined;
-let db = undefined;
+let pool: pkg.Pool | undefined = undefined;
+let db: any = undefined;
+
+// Test database connection
+async function testConnection() {
+  if (!pool) return false;
+  
+  try {
+    const client = await pool.connect();
+    const res = await client.query('SELECT NOW()');
+    client.release();
+    log('Database connection test successful', 'database');
+    return true;
+  } catch (error) {
+    log(`Database connection test failed: ${error}`, 'database');
+    return false;
+  }
+}
 
 // Create a connection pool and database client only if DATABASE_URL is provided
 if (usingDatabase && process.env.DATABASE_URL) {
   try {
     pool = new Pool({
       connectionString: process.env.DATABASE_URL,
+      max: 20, // Adjust connection pool size for Railway
+      idleTimeoutMillis: 30000,
+      connectionTimeoutMillis: 5000,
+    });
+    
+    // Add error handler to the pool
+    pool.on('error', (err) => {
+      log(`Unexpected database error: ${err}`, 'database');
+      // Don't crash the app, just log the error
     });
     
     // Initialize Drizzle with the pool
     db = drizzle(pool);
     
-    console.log("Database connection established successfully");
+    // Test connection
+    testConnection()
+      .then(isConnected => {
+        if (isConnected) {
+          log("Database connection established successfully", 'database');
+        } else {
+          log("Database connection test failed", 'database');
+        }
+      })
+      .catch(err => {
+        log(`Error testing database connection: ${err}`, 'database');
+      });
+      
   } catch (error) {
-    console.error("Failed to connect to database:", error);
-    console.warn("Will use in-memory storage instead");
+    log(`Failed to connect to database: ${error}`, 'database');
+    log("Will use in-memory storage instead", 'database');
   }
 }
 
-export { db };
+export { db, testConnection };

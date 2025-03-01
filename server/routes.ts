@@ -1,12 +1,13 @@
 import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { generateFollowUpQuestions, generateActionItems } from "./lib/anthropic";
+import { generateFollowUpQuestions, generateActionItems, generateInsights } from "./lib/anthropic";
 import { transcribeAudio } from "./lib/transcription";
 import { insertReflectionSchema, insertConversationSchema, Message } from "@shared/schema";
 import { ZodError } from "zod";
 import { fromZodError } from "zod-validation-error";
 import multer from "multer";
+import { testConnection } from "./db";
 
 // Configure multer for in-memory storage
 const upload = multer({
@@ -18,6 +19,28 @@ const upload = multer({
 
 export async function registerRoutes(app: Express): Promise<Server> {
   const httpServer = createServer(app);
+
+  // Health check endpoint for Railway
+  app.get("/health", async (req: Request, res: Response) => {
+    const healthCheck = {
+      uptime: process.uptime(),
+      message: 'OK',
+      timestamp: Date.now(),
+      dbStatus: 'not_applicable'
+    };
+
+    // Check database connection if configured
+    if (process.env.DATABASE_URL) {
+      try {
+        const isConnected = await testConnection();
+        healthCheck.dbStatus = isConnected ? 'connected' : 'error';
+      } catch (error) {
+        healthCheck.dbStatus = 'error';
+      }
+    }
+
+    res.status(200).json(healthCheck);
+  });
 
   app.post("/api/reflection", async (req: Request, res: Response) => {
     try {
@@ -254,6 +277,56 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(error instanceof Error && error.message.includes("404") ? 404 : 500).json({ 
         error: error instanceof Error ? error.message : "Failed to generate action items" 
       });
+    }
+  });
+
+  app.post("/api/conversation/:id/insights", async (req: Request, res: Response) => {
+    try {
+      const conversationId = parseInt(req.params.id);
+      if (isNaN(conversationId)) {
+        return res.status(400).json({ error: "Invalid conversation ID" });
+      }
+      
+      const conversation = await storage.getConversation(conversationId);
+
+      if (!conversation) {
+        return res.status(404).json({ error: "Conversation not found" });
+      }
+
+      const conversationText = conversation.messages
+        .map((msg: Message) => `${msg.role}: ${msg.content}`)
+        .join("\n");
+
+      // Get custom prompt from request body if provided
+      const customPrompt = req.body?.prompt;
+
+      // Default insights in case API fails
+      let insights: string[] = [
+        "Your journey of self-reflection demonstrates a sincere desire to grow spiritually, as emphasized in Surah Al-Ra'd (13:11): 'Indeed, Allah will not change the condition of a people until they change what is in themselves.'", 
+        "Your consistent practice of contemplation aligns with the Prophet's ﷺ emphasis on self-accounting, as he said: 'The wise person is one who takes account of himself and works for what comes after death.' (Tirmidhi)", 
+        "Each step of your spiritual journey reflects the concept of ihsan mentioned in the famous hadith of Jibril, where the Prophet ﷺ described it as 'worshiping Allah as if you see Him, for though you do not see Him, He surely sees you.' (Bukhari & Muslim)"
+      ];
+      
+      try {
+        const generatedInsights = await generateInsights(conversationText, customPrompt);
+        if (generatedInsights && generatedInsights.length > 0) {
+          insights = generatedInsights;
+        } else {
+          console.warn("Empty insights array returned from API, using fallback insights");
+        }
+      } catch (error) {
+        console.error("Error generating insights:", error);
+        // Continue with default insights instead of failing the request
+        console.log("Using fallback insights due to API error");
+      }
+
+      // For now, we don't save insights to the conversation storage
+      // This keeps the implementation simpler and storage schema unchanged
+      
+      res.json({ insights });
+    } catch (error) {
+      console.error("Error in /api/conversation/insights:", error);
+      res.status(500).json({ error: "Failed to generate insights" });
     }
   });
 
