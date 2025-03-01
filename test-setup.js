@@ -90,6 +90,50 @@ try {
   console.error('❌ Could not read package.json', error);
 }
 
+// Check for FFmpeg installation
+try {
+  console.log('\nChecking for required external dependencies:');
+  
+  // Try different common paths for FFmpeg on macOS
+  try {
+    execSync('ffmpeg -version', { stdio: 'ignore' });
+    console.log('✅ FFmpeg is installed');
+  } catch (error) {
+    // Try with Homebrew path on Apple Silicon Macs
+    try {
+      execSync('/opt/homebrew/bin/ffmpeg -version', { stdio: 'ignore' });
+      console.log('✅ FFmpeg is installed (Homebrew on Apple Silicon)');
+    } catch (error) {
+      // Try with Homebrew path on Intel Macs
+      try {
+        execSync('/usr/local/bin/ffmpeg -version', { stdio: 'ignore' });
+        console.log('✅ FFmpeg is installed (Homebrew on Intel Mac)');
+      } catch (error) {
+        console.log('❌ FFmpeg is not installed. This is required for audio transcription.');
+        console.log('   Please install FFmpeg from https://ffmpeg.org/ or using your package manager.');
+      }
+    }
+  }
+} catch (error) {
+  console.log('❌ Error checking for FFmpeg:', error);
+}
+
+// Check for Whisper CLI installation
+try {
+  execSync('whisper --help', { stdio: 'ignore' });
+  console.log('✅ OpenAI Whisper CLI is installed');
+} catch (error) {
+  // CLI not found, check for Python module
+  try {
+    execSync('python3 -m whisper --help', { stdio: 'ignore' });
+    console.log('✅ OpenAI Whisper Python module is installed');
+  } catch (pythonModuleError) {
+    console.log('❌ OpenAI Whisper is not installed. This is required for audio transcription.');
+    console.log('   Please install it using: pip install -U openai-whisper');
+    console.log('   For more information: https://github.com/openai/whisper');
+  }
+}
+
 // Final status
 console.log('\n📊 Setup Check Summary');
 console.log('=====================================');

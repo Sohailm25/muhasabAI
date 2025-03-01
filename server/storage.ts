@@ -8,6 +8,7 @@ declare global {
   namespace NodeJS {
     interface ProcessEnv {
       NODE_ENV?: string;
+      DATABASE_URL?: string;
     }
   }
 }
@@ -22,17 +23,10 @@ export interface IStorage {
 
 // Memory storage implementation for development or testing
 export class MemStorage implements IStorage {
-  private reflections: Map<number, Reflection>;
-  private conversations: Map<number, Conversation>;
-  private currentReflectionId: number;
-  private currentConversationId: number;
-
-  constructor() {
-    this.reflections = new Map();
-    this.conversations = new Map();
-    this.currentReflectionId = 1;
-    this.currentConversationId = 1;
-  }
+  private reflections: Map<number, Reflection> = new Map();
+  private conversations: Map<number, Conversation> = new Map();
+  private currentReflectionId = 1;
+  private currentConversationId = 1;
 
   async createReflection(reflection: InsertReflection): Promise<Reflection> {
     const id = this.currentReflectionId++;
@@ -72,7 +66,7 @@ export class MemStorage implements IStorage {
     messages: Message[],
     actionItems?: string[]
   ): Promise<Conversation> {
-    const conversation = await this.getConversation(id);
+    const conversation = this.conversations.get(id);
     if (!conversation) {
       throw new Error("Conversation not found");
     }
@@ -90,11 +84,11 @@ export class MemStorage implements IStorage {
 // Database storage implementation for production
 export class DbStorage implements IStorage {
   async createReflection(reflection: InsertReflection): Promise<Reflection> {
+    if (!db) {
+      throw new Error("Database connection not available");
+    }
     try {
       const result = await db.insert(reflections).values(reflection).returning();
-      if (!result || result.length === 0) {
-        throw new Error("Failed to create reflection");
-      }
       return result[0];
     } catch (error) {
       console.error("Error creating reflection:", error);
@@ -103,9 +97,12 @@ export class DbStorage implements IStorage {
   }
 
   async getReflection(id: number): Promise<Reflection | undefined> {
+    if (!db) {
+      throw new Error("Database connection not available");
+    }
     try {
       const result = await db.select().from(reflections).where(eq(reflections.id, id));
-      return result.length > 0 ? result[0] : undefined;
+      return result[0];
     } catch (error) {
       console.error(`Error getting reflection ${id}:`, error);
       throw error;
@@ -113,11 +110,11 @@ export class DbStorage implements IStorage {
   }
 
   async createConversation(conversation: InsertConversation): Promise<Conversation> {
+    if (!db) {
+      throw new Error("Database connection not available");
+    }
     try {
       const result = await db.insert(conversations).values(conversation).returning();
-      if (!result || result.length === 0) {
-        throw new Error("Failed to create conversation");
-      }
       return result[0];
     } catch (error) {
       console.error("Error creating conversation:", error);
@@ -126,9 +123,12 @@ export class DbStorage implements IStorage {
   }
 
   async getConversation(id: number): Promise<Conversation | undefined> {
+    if (!db) {
+      throw new Error("Database connection not available");
+    }
     try {
       const result = await db.select().from(conversations).where(eq(conversations.id, id));
-      return result.length > 0 ? result[0] : undefined;
+      return result[0];
     } catch (error) {
       console.error(`Error getting conversation ${id}:`, error);
       throw error;
@@ -140,6 +140,9 @@ export class DbStorage implements IStorage {
     messages: Message[],
     actionItems?: string[]
   ): Promise<Conversation> {
+    if (!db) {
+      throw new Error("Database connection not available");
+    }
     try {
       const conversation = await this.getConversation(id);
       if (!conversation) {
@@ -149,15 +152,11 @@ export class DbStorage implements IStorage {
       const result = await db
         .update(conversations)
         .set({ 
-          messages, 
+          messages,
           actionItems: actionItems || conversation.actionItems 
         })
         .where(eq(conversations.id, id))
         .returning();
-
-      if (!result || result.length === 0) {
-        throw new Error("Failed to update conversation");
-      }
       
       return result[0];
     } catch (error) {
@@ -167,7 +166,24 @@ export class DbStorage implements IStorage {
   }
 }
 
-// Use database storage in production, memory storage in development
-export const storage = process.env.NODE_ENV === "production" 
-  ? new DbStorage() 
-  : new MemStorage();
+// Factory function to determine which storage to use
+export function createStorage(): IStorage {
+  // Always use memory storage if DATABASE_URL is not set
+  if (!process.env.DATABASE_URL) {
+    console.log("No DATABASE_URL found, using in-memory storage");
+    return new MemStorage();
+  }
+  
+  // Use database storage if DATABASE_URL is set
+  try {
+    console.log("DATABASE_URL found, using database storage");
+    return new DbStorage();
+  } catch (error) {
+    console.error("Failed to initialize database storage:", error);
+    console.warn("Falling back to in-memory storage");
+    return new MemStorage();
+  }
+}
+
+// Export storage instance
+export const storage = createStorage();

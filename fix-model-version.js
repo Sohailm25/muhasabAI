@@ -22,20 +22,20 @@ try {
   let updated = false;
 
   // Check for incorrect model version in comment
-  if (content.includes('claude-3-7-sonnet-20250219')) {
+  if (content.includes('claude-3-sonnet-20240229')) {
     content = content.replace(
-      'claude-3-7-sonnet-20250219', 
-      'claude-3-sonnet-20240229'
+      'claude-3-sonnet-20240229', 
+      'claude-3-7-sonnet-20250219'
     );
     updated = true;
     console.log('✅ Updated model version in comment');
   }
 
   // Check for incorrect model version in API call
-  if (content.includes("model: 'claude-3-7-sonnet-20250219'")) {
+  if (content.includes("model: 'claude-3-sonnet-20240229'")) {
     content = content.replace(
-      "model: 'claude-3-7-sonnet-20250219'", 
-      "model: 'claude-3-sonnet-20240229'"
+      "model: 'claude-3-sonnet-20240229'", 
+      "model: 'claude-3-7-sonnet-20250219'"
     );
     updated = true;
     console.log('✅ Updated model version in API call');

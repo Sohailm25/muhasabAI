@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "type": "module",
   "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0"
+  },
   "scripts": {
     "dev": "tsx server/index.ts",
     "build": "vite build && esbuild server/index.ts --platform=node --packages=external --bundle --format=esm --outdir=dist",
@@ -11,7 +14,9 @@
     "db:push": "drizzle-kit push",
     "setup": "node setup.js",
     "test:setup": "node test-setup.js",
-    "fix:model": "node fix-model-version.js"
+    "fix:model": "node fix-model-version.js",
+    "check:env": "node check-env.js",
+    "install:whisper": "chmod +x ./install-whisper.sh && ./install-whisper.sh"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.37.0",

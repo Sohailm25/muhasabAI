@@ -15,6 +15,8 @@ A spiritual reflection application designed to help Muslims document and deepen 
 Before you begin, ensure you have the following installed:
 - [Node.js](https://nodejs.org/) (v18 or higher **REQUIRED**)
 - [npm](https://www.npmjs.com/) (comes with Node.js)
+- [FFmpeg](https://ffmpeg.org/) (required for audio transcription)
+- [OpenAI Whisper](https://github.com/openai/whisper) (required for audio transcription)
 - A code editor (e.g., [VS Code](https://code.visualstudio.com/))
 - [Git](https://git-scm.com/)
 
@@ -129,6 +131,17 @@ If you encounter TypeScript errors about missing types:
 If you encounter issues with audio recording:
 - Ensure your browser has permission to access your microphone
 - Check that your microphone is working correctly
+- **Make sure FFmpeg is installed on your system** - this is required for transcription to work
+  - If using macOS, you can install FFmpeg with `brew install ffmpeg`
+  - If using Linux, use your package manager (e.g., `apt install ffmpeg` on Ubuntu)
+  - If using Windows, you can install FFmpeg using [Chocolatey](https://chocolatey.org/) with `choco install ffmpeg`
+
+- **Make sure OpenAI Whisper CLI is installed on your system** - this is required by the node-whisper package
+  - Install using pip: `pip install -U openai-whisper`
+  - For more detailed installation instructions, refer to the [OpenAI Whisper repository](https://github.com/openai/whisper)
+  - Ensure that Python (version 3.8-3.11) and PyTorch are installed
+  - You may need to install Rust if tiktoken does not provide a pre-built wheel for your platform
+
 - Try using Chrome or Firefox for best compatibility
 
 ### API Key Issues
@@ -137,6 +150,9 @@ If Claude responses are not working:
 - Verify your Anthropic API key is correctly set in the `.env` file
 - Check the console logs for any authentication errors
 - Run `npm run test:setup` to verify your API key is properly configured
+- If you see "invalid x-api-key" errors, your key may be expired or incorrect
+- Visit https://console.anthropic.com/ to generate a new API key if needed
+- Note that the application will still function with fallback questions and action items even if the API key is invalid
 
 ### Claude Model Version
 
@@ -150,10 +166,91 @@ By default, the application uses in-memory storage for development. If you want 
 - Ensure your DATABASE_URL is correctly set in the `.env` file
 - Run `npm run db:push` to set up the database schema
 
+## Database Configuration
+
+The application supports two storage modes:
+
+1. **In-Memory Storage (Default for local testing)**
+   - No database configuration required
+   - Data persists only during the server's runtime
+   - Perfect for local testing and development
+
+2. **Database Storage (Required for production)**
+   - Requires a PostgreSQL database connection string
+   - Recommended for production or when data persistence is needed
+   - Uses Neon Database for serverless PostgreSQL
+
+### How to Configure Storage
+
+The application automatically detects which storage mode to use based on the presence of the `DATABASE_URL` environment variable:
+
+- **For local testing without a database**: Simply leave `DATABASE_URL` undefined in your `.env` file, and the application will use in-memory storage.
+- **For testing with a database**: Set the `DATABASE_URL` in your `.env` file to a valid PostgreSQL connection string.
+
+Example in your `.env` file:
+```
+# For in-memory storage (local testing)
+# DATABASE_URL=
+
+# For database storage
+# DATABASE_URL=postgres://username:password@host:port/database
+```
+
+The application will log which storage mode it's using when it starts up.
+
+## Deployment
+
+### Deploying to Railway
+
+When deploying to Railway, you'll need to ensure all dependencies are properly set up:
+
+1. **Environment Variables**: Set the following in Railway's environment variables:
+   - `ANTHROPIC_API_KEY`: Your API key from Anthropic
+   - `DATABASE_URL`: Your database connection string (if using a database)
+   - `NODE_ENV`: Set to `production`
+
+2. **FFmpeg Dependency**: Railway's Nixpacks builder (specified in `railway.toml`) will automatically handle installing FFmpeg as a dependency.
+
+3. **Database Setup**: For production deployments, it's recommended to use a PostgreSQL database. You can:
+   - Add a PostgreSQL service in your Railway project
+   - Connect it to your app by setting the `DATABASE_URL` environment variable
+
+4. **Deployment Steps**:
+   - Connect your repository to Railway
+   - Configure the environment variables
+   - Deploy the application
+
+The application is already configured with a `railway.toml` file that specifies:
+- Node.js version 20
+- Build and start commands
+- Health check configuration
+- Restart policies
+
+This ensures a smooth deployment process on Railway's platform.
+
 ## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
 
 ## License
 
-This project is licensed under the MIT License - see the LICENSE file for details. 
+This project is licensed under the MIT License - see the LICENSE file for details.
+
+## Voice Reflections - Whisper Setup
+
+For voice reflections, this application uses OpenAI's Whisper for transcription. We've created a setup that helps users manage the dependencies:
+
+1. **Install Virtual Environment and Whisper**:
+   ```bash
+   python3 -m venv whisper-venv
+   source whisper-venv/bin/activate
+   pip install -U openai-whisper
+   ```
+
+2. **Using the Whisper Wrapper Script**:
+   We've included a wrapper script to simplify using Whisper. After installing Whisper, you can use it:
+   ```bash
+   ./whisper-wrapper.sh <audio-file> --model base --language en
+   ```
+
+The wrapper script automatically activates the correct Python environment and passes all arguments to Whisper. 
