@@ -18,9 +18,32 @@ export const conversations = pgTable("conversations", {
   timestamp: timestamp("timestamp").defaultNow().notNull(),
 });
 
+export const userSettings = pgTable("user_settings", {
+  id: serial("id").primaryKey(),
+  userId: text("user_id").notNull().unique(),
+  name: text("name"),
+  email: text("email"),
+  preferences: json("preferences").$type<UserPreferences>().notNull(),
+  timestamp: timestamp("timestamp").defaultNow().notNull(),
+});
+
 export type Message = {
   role: "user" | "assistant";
   content: string;
+};
+
+export type Masjid = {
+  id: string;
+  name: string;
+  address: string;
+  zipCode: string;
+};
+
+export type UserPreferences = {
+  emailNotifications: boolean;
+  darkMode: boolean;
+  saveHistory: boolean;
+  selectedMasjid?: Masjid;
 };
 
 export const insertReflectionSchema = createInsertSchema(reflections).pick({
@@ -35,7 +58,29 @@ export const insertConversationSchema = createInsertSchema(conversations).pick({
   actionItems: true,
 });
 
+export const userPreferencesSchema = z.object({
+  emailNotifications: z.boolean().default(false),
+  darkMode: z.boolean().default(false),
+  saveHistory: z.boolean().default(true),
+  selectedMasjid: z.object({
+    id: z.string(),
+    name: z.string(),
+    address: z.string(),
+    zipCode: z.string()
+  }).optional(),
+});
+
+export const insertUserSettingsSchema = createInsertSchema(userSettings).pick({
+  userId: true,
+  name: true,
+  email: true,
+}).extend({
+  preferences: userPreferencesSchema,
+});
+
 export type InsertReflection = z.infer<typeof insertReflectionSchema>;
 export type InsertConversation = z.infer<typeof insertConversationSchema>;
+export type InsertUserSettings = z.infer<typeof insertUserSettingsSchema>;
 export type Reflection = typeof reflections.$inferSelect;
 export type Conversation = typeof conversations.$inferSelect;
+export type UserSettings = typeof userSettings.$inferSelect;

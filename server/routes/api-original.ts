@@ -4,6 +4,12 @@ import { generateResponse, generateFollowUpQuestions, generateActionItems } from
 import { transcribeAudio } from "../lib/transcription";
 import multer from "multer";
 import { Message } from "@shared/schema";
+import { 
+  searchMasjidsByZipCode, 
+  getMasjidDetails, 
+  getMasjidPrayerTimes, 
+  getMasjidWeeklyPrayerTimes 
+} from "../lib/masjidi-api";
 
 // Configure multer for in-memory storage
 const upload = multer({
@@ -344,6 +350,233 @@ router.post("/conversation/:id/respond", async (req, res) => {
     console.error(`Error adding response to conversation ${req.params.id}:`, error);
     res.status(500).json({ 
       error: "Failed to add response to conversation",
+      details: process.env.NODE_ENV === "development" ? (error instanceof Error ? error.message : String(error)) : undefined
+    });
+  }
+});
+
+// ============= Masjidi API Endpoints =============
+
+// Search masjids by zip code
+router.get("/masjids/search", async (req, res) => {
+  try {
+    const zipCode = req.query.zipcode as string;
+    
+    if (!zipCode) {
+      return res.status(400).json({ error: "Zip code is required" });
+    }
+    
+    const masjids = await searchMasjidsByZipCode(zipCode);
+    res.json(masjids);
+  } catch (error) {
+    console.error("Error searching for masjids:", error);
+    res.status(500).json({ 
+      error: "Failed to search for masjids",
+      details: process.env.NODE_ENV === "development" ? (error instanceof Error ? error.message : String(error)) : undefined
+    });
+  }
+});
+
+// Get masjid details
+router.get("/masjids/:id", async (req, res) => {
+  try {
+    const masjidId = req.params.id;
+    
+    if (!masjidId) {
+      return res.status(400).json({ error: "Masjid ID is required" });
+    }
+    
+    const masjid = await getMasjidDetails(masjidId);
+    res.json(masjid);
+  } catch (error) {
+    console.error(`Error getting masjid details for ID ${req.params.id}:`, error);
+    res.status(500).json({ 
+      error: "Failed to get masjid details",
+      details: process.env.NODE_ENV === "development" ? (error instanceof Error ? error.message : String(error)) : undefined
+    });
+  }
+});
+
+// Get prayer times for a specific masjid
+router.get("/masjids/:id/prayertimes", async (req, res) => {
+  try {
+    const masjidId = req.params.id;
+    const date = req.query.date as string;
+    
+    if (!masjidId) {
+      return res.status(400).json({ error: "Masjid ID is required" });
+    }
+    
+    const prayerTimes = await getMasjidPrayerTimes(masjidId, date);
+    res.json(prayerTimes);
+  } catch (error) {
+    console.error(`Error getting prayer times for masjid ID ${req.params.id}:`, error);
+    res.status(500).json({ 
+      error: "Failed to get prayer times",
+      details: process.env.NODE_ENV === "development" ? (error instanceof Error ? error.message : String(error)) : undefined
+    });
+  }
+});
+
+// Get weekly prayer times for a specific masjid
+router.get("/masjids/:id/prayertimes/week", async (req, res) => {
+  try {
+    const masjidId = req.params.id;
+    
+    if (!masjidId) {
+      return res.status(400).json({ error: "Masjid ID is required" });
+    }
+    
+    const weeklyPrayerTimes = await getMasjidWeeklyPrayerTimes(masjidId);
+    res.json(weeklyPrayerTimes);
+  } catch (error) {
+    console.error(`Error getting weekly prayer times for masjid ID ${req.params.id}:`, error);
+    res.status(500).json({ 
+      error: "Failed to get weekly prayer times",
+      details: process.env.NODE_ENV === "development" ? (error instanceof Error ? error.message : String(error)) : undefined
+    });
+  }
+});
+
+// ============= User Settings API Endpoints =============
+
+// Get user settings
+router.get("/user/settings", async (req, res) => {
+  try {
+    // For simplicity, we're using a hardcoded user ID
+    // In a real app, this would come from authentication
+    const userId = "default-user";
+    
+    let userSettings = await storage.getUserSettings(userId);
+    
+    // If no settings exist yet, create default settings
+    if (!userSettings) {
+      userSettings = await storage.saveUserSettings({
+        userId,
+        name: null,
+        email: null,
+        preferences: {
+          emailNotifications: false,
+          darkMode: false,
+          saveHistory: true
+        }
+      });
+    }
+    
+    res.json(userSettings);
+  } catch (error) {
+    console.error("Error getting user settings:", error);
+    res.status(500).json({ 
+      error: "Failed to get user settings",
+      details: process.env.NODE_ENV === "development" ? (error instanceof Error ? error.message : String(error)) : undefined
+    });
+  }
+});
+
+// Save or update user settings
+router.post("/user/settings", async (req, res) => {
+  try {
+    // For simplicity, we're using a hardcoded user ID
+    // In a real app, this would come from authentication
+    const userId = "default-user";
+    
+    const { name, email, preferences } = req.body;
+    
+    // Try to get existing settings
+    const existingSettings = await storage.getUserSettings(userId);
+    
+    let userSettings;
+    
+    if (existingSettings) {
+      // Update existing settings
+      userSettings = await storage.updateUserSettings(userId, {
+        name: name !== undefined ? name : existingSettings.name,
+        email: email !== undefined ? email : existingSettings.email,
+        preferences: preferences !== undefined ? preferences : existingSettings.preferences
+      });
+    } else {
+      // Create new settings
+      userSettings = await storage.saveUserSettings({
+        userId,
+        name: name || null,
+        email: email || null,
+        preferences: preferences || {
+          emailNotifications: false,
+          darkMode: false,
+          saveHistory: true
+        }
+      });
+    }
+    
+    res.json(userSettings);
+  } catch (error) {
+    console.error("Error saving user settings:", error);
+    res.status(500).json({ 
+      error: "Failed to save user settings",
+      details: process.env.NODE_ENV === "development" ? (error instanceof Error ? error.message : String(error)) : undefined
+    });
+  }
+});
+
+// Set preferred masjid
+router.post("/user/settings/masjid", async (req, res) => {
+  try {
+    // For simplicity, we're using a hardcoded user ID
+    // In a real app, this would come from authentication
+    const userId = "default-user";
+    
+    const { masjidId } = req.body;
+    
+    if (!masjidId) {
+      return res.status(400).json({ error: "Masjid ID is required" });
+    }
+    
+    // Get masjid details
+    const masjid = await getMasjidDetails(masjidId);
+    
+    // Get existing user settings
+    let userSettings = await storage.getUserSettings(userId);
+    
+    // If no settings exist yet, create default settings
+    if (!userSettings) {
+      userSettings = await storage.saveUserSettings({
+        userId,
+        name: null,
+        email: null,
+        preferences: {
+          emailNotifications: false,
+          darkMode: false,
+          saveHistory: true,
+          selectedMasjid: {
+            id: masjid._id,
+            name: masjid.name,
+            address: `${masjid.address}, ${masjid.city}, ${masjid.state} ${masjid.zip}`,
+            zipCode: masjid.zip
+          }
+        }
+      });
+    } else {
+      // Update existing settings with new masjid
+      const updatedPreferences = {
+        ...userSettings.preferences,
+        selectedMasjid: {
+          id: masjid._id,
+          name: masjid.name,
+          address: `${masjid.address}, ${masjid.city}, ${masjid.state} ${masjid.zip}`,
+          zipCode: masjid.zip
+        }
+      };
+      
+      userSettings = await storage.updateUserSettings(userId, {
+        preferences: updatedPreferences
+      });
+    }
+    
+    res.json(userSettings);
+  } catch (error) {
+    console.error("Error setting preferred masjid:", error);
+    res.status(500).json({ 
+      error: "Failed to set preferred masjid",
       details: process.env.NODE_ENV === "development" ? (error instanceof Error ? error.message : String(error)) : undefined
     });
   }

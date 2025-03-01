@@ -13,6 +13,7 @@ import Help from "@/pages/help";
 import Profile from "@/pages/profile";
 import NotFound from "@/pages/not-found";
 import PersonalActionPlan from "@/pages/personal-action-plan";
+import MasjidPage from "@/pages/masjid";
 
 function Router() {
   return (
@@ -24,6 +25,7 @@ function Router() {
       <Route path="/help" component={Help} />
       <Route path="/profile" component={Profile} />
       <Route path="/personal-action-plan" component={PersonalActionPlan} />
+      <Route path="/masjid" component={MasjidPage} />
       <Route component={NotFound} />
     </Switch>
   );

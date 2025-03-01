@@ -10,7 +10,8 @@ import {
   PlusCircle,
   ChevronLeft,
   ChevronRight,
-  ClipboardList
+  ClipboardList,
+  Landmark
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -141,6 +142,19 @@ export function Sidebar({ className }: SidebarProps) {
             >
               <ClipboardList className={cn("h-4 w-4", !isCollapsed && "mr-2")} />
               {!isCollapsed && "Action Plan"}
+            </Button>
+
+            <Button 
+              variant={isActive('/masjid') ? "secondary" : "ghost"} 
+              className={cn(
+                "w-full", 
+                isCollapsed ? "justify-center px-2" : "justify-start"
+              )} 
+              onClick={() => navigateTo('/masjid')}
+              title="Masjid & Prayer Times"
+            >
+              <Landmark className={cn("h-4 w-4", !isCollapsed && "mr-2")} />
+              {!isCollapsed && "Masjid"}
             </Button>
 
             <Button 

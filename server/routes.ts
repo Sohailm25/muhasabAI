@@ -8,6 +8,8 @@ import { ZodError } from "zod";
 import { fromZodError } from "zod-validation-error";
 import multer from "multer";
 import { testConnection } from "./db";
+import masjidiRouter from "./masjidi-routes";
+import express from "express";
 
 // Configure multer for in-memory storage
 const upload = multer({
@@ -41,6 +43,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
     res.status(200).json(healthCheck);
   });
+
+  // Mount the Masjidi API routes
+  app.use("/api", masjidiRouter);
 
   app.post("/api/reflection", async (req: Request, res: Response) => {
     try {

@@ -1,6 +1,15 @@
-import { Reflection, InsertReflection, Conversation, InsertConversation, Message } from "@shared/schema";
+import { 
+  Reflection, 
+  InsertReflection, 
+  Conversation, 
+  InsertConversation, 
+  UserSettings,
+  InsertUserSettings,
+  Message,
+  UserPreferences
+} from "@shared/schema";
 import { db } from "./db";
-import { reflections, conversations } from "@shared/schema";
+import { reflections, conversations, userSettings } from "@shared/schema";
 import { eq } from "drizzle-orm";
 
 // For type safety with process.env
@@ -19,14 +28,19 @@ export interface IStorage {
   createConversation(conversation: InsertConversation): Promise<Conversation>;
   getConversation(id: number): Promise<Conversation | undefined>;
   updateConversation(id: number, messages: Message[], actionItems?: string[]): Promise<Conversation>;
+  getUserSettings(userId: string): Promise<UserSettings | undefined>;
+  saveUserSettings(settings: InsertUserSettings): Promise<UserSettings>;
+  updateUserSettings(userId: string, settings: Partial<InsertUserSettings>): Promise<UserSettings>;
 }
 
 // Memory storage implementation for development or testing
 export class MemStorage implements IStorage {
   private reflections: Map<number, Reflection> = new Map();
   private conversations: Map<number, Conversation> = new Map();
+  private userSettingsMap: Map<string, UserSettings> = new Map();
   private currentReflectionId = 1;
   private currentConversationId = 1;
+  private currentUserSettingsId = 1;
 
   async createReflection(reflection: InsertReflection): Promise<Reflection> {
     const id = this.currentReflectionId++;
@@ -50,8 +64,6 @@ export class MemStorage implements IStorage {
       ...conversation,
       id,
       timestamp: new Date(),
-      reflectionId: conversation.reflectionId || null,
-      actionItems: conversation.actionItems || [],
     };
     this.conversations.set(id, newConversation);
     return newConversation;
@@ -66,73 +78,112 @@ export class MemStorage implements IStorage {
     messages: Message[],
     actionItems?: string[]
   ): Promise<Conversation> {
-    const conversation = this.conversations.get(id);
+    const conversation = await this.getConversation(id);
     if (!conversation) {
-      throw new Error("Conversation not found");
+      throw new Error(`Conversation with id ${id} not found`);
     }
 
     const updatedConversation: Conversation = {
       ...conversation,
       messages,
-      actionItems: actionItems || conversation.actionItems,
+      ...(actionItems !== undefined ? { actionItems } : {}),
     };
     this.conversations.set(id, updatedConversation);
     return updatedConversation;
   }
+
+  async getUserSettings(userId: string): Promise<UserSettings | undefined> {
+    for (const settings of this.userSettingsMap.values()) {
+      if (settings.userId === userId) {
+        return settings;
+      }
+    }
+    return undefined;
+  }
+
+  async saveUserSettings(settings: InsertUserSettings): Promise<UserSettings> {
+    const existingSettings = await this.getUserSettings(settings.userId);
+    
+    if (existingSettings) {
+      return this.updateUserSettings(settings.userId, settings);
+    }
+    
+    const id = this.currentUserSettingsId++;
+    const newSettings: UserSettings = {
+      ...settings,
+      id,
+      timestamp: new Date(),
+      name: settings.name || null,
+      email: settings.email || null
+    };
+    this.userSettingsMap.set(settings.userId, newSettings);
+    return newSettings;
+  }
+
+  async updateUserSettings(userId: string, settings: Partial<InsertUserSettings>): Promise<UserSettings> {
+    const existingSettings = await this.getUserSettings(userId);
+    
+    if (!existingSettings) {
+      throw new Error(`No settings found for user ${userId}`);
+    }
+    
+    const updatedSettings: UserSettings = {
+      ...existingSettings,
+      ...settings,
+      userId: existingSettings.userId, // Ensure userId doesn't change
+      timestamp: new Date(),
+      // Ensure null instead of undefined for compatibility
+      name: settings.name !== undefined ? settings.name : existingSettings.name,
+      email: settings.email !== undefined ? settings.email : existingSettings.email
+    };
+    
+    this.userSettingsMap.set(userId, updatedSettings);
+    return updatedSettings;
+  }
 }
 
-// Database storage implementation for production
+// Database storage implementation
 export class DbStorage implements IStorage {
   async createReflection(reflection: InsertReflection): Promise<Reflection> {
-    if (!db) {
-      throw new Error("Database connection not available");
-    }
-    try {
-      const result = await db.insert(reflections).values(reflection).returning();
-      return result[0];
-    } catch (error) {
-      console.error("Error creating reflection:", error);
-      throw error;
-    }
+    if (!db) throw new Error("Database not initialized");
+
+    const results = await db
+      .insert(reflections)
+      .values(reflection)
+      .returning();
+    return results[0];
   }
 
   async getReflection(id: number): Promise<Reflection | undefined> {
-    if (!db) {
-      throw new Error("Database connection not available");
-    }
-    try {
-      const result = await db.select().from(reflections).where(eq(reflections.id, id));
-      return result[0];
-    } catch (error) {
-      console.error(`Error getting reflection ${id}:`, error);
-      throw error;
-    }
+    if (!db) return undefined;
+
+    const results = await db
+      .select()
+      .from(reflections)
+      .where(eq(reflections.id, id))
+      .limit(1);
+    return results[0];
   }
 
   async createConversation(conversation: InsertConversation): Promise<Conversation> {
-    if (!db) {
-      throw new Error("Database connection not available");
-    }
-    try {
-      const result = await db.insert(conversations).values(conversation).returning();
-      return result[0];
-    } catch (error) {
-      console.error("Error creating conversation:", error);
-      throw error;
-    }
+    if (!db) throw new Error("Database not initialized");
+
+    const results = await db
+      .insert(conversations)
+      .values(conversation)
+      .returning();
+    return results[0];
   }
 
   async getConversation(id: number): Promise<Conversation | undefined> {
-    if (!db) {
-      throw new Error("Database connection not available");
-    }
-    try {
-      const result = await db.select().from(conversations).where(eq(conversations.id, id));
-      return result[0];
-    } catch (error) {
-      console.error(`Error getting conversation ${id}:`, error);
-      throw error;
-    }
+    if (!db) return undefined;
+
+    const results = await db
+      .select()
+      .from(conversations)
+      .where(eq(conversations.id, id))
+      .limit(1);
+    return results[0];
   }
 
   async updateConversation(
@@ -140,50 +191,94 @@ export class DbStorage implements IStorage {
     messages: Message[],
     actionItems?: string[]
   ): Promise<Conversation> {
-    if (!db) {
-      throw new Error("Database connection not available");
-    }
-    try {
-      const conversation = await this.getConversation(id);
-      if (!conversation) {
-        throw new Error("Conversation not found");
-      }
+    if (!db) throw new Error("Database not initialized");
 
-      const result = await db
-        .update(conversations)
-        .set({ 
-          messages,
-          actionItems: actionItems || conversation.actionItems 
-        })
-        .where(eq(conversations.id, id))
+    const updateData: Partial<Conversation> = { messages };
+    if (actionItems !== undefined) {
+      updateData.actionItems = actionItems;
+    }
+
+    const results = await db
+      .update(conversations)
+      .set(updateData)
+      .where(eq(conversations.id, id))
+      .returning();
+
+    if (results.length === 0) {
+      throw new Error(`Conversation with id ${id} not found`);
+    }
+
+    return results[0];
+  }
+
+  async getUserSettings(userId: string): Promise<UserSettings | undefined> {
+    if (!db) return undefined;
+    
+    try {
+      const results = await db
+        .select()
+        .from(userSettings)
+        .where(eq(userSettings.userId, userId))
+        .limit(1);
+      
+      return results[0];
+    } catch (error) {
+      console.error("Error fetching user settings:", error);
+      return undefined;
+    }
+  }
+
+  async saveUserSettings(settings: InsertUserSettings): Promise<UserSettings> {
+    if (!db) throw new Error("Database not initialized");
+    
+    try {
+      const existingSettings = await this.getUserSettings(settings.userId);
+      
+      if (existingSettings) {
+        return this.updateUserSettings(settings.userId, settings);
+      }
+      
+      const results = await db
+        .insert(userSettings)
+        .values(settings)
         .returning();
       
-      return result[0];
+      return results[0];
     } catch (error) {
-      console.error(`Error updating conversation ${id}:`, error);
-      throw error;
+      console.error("Error saving user settings:", error);
+      throw new Error(`Failed to save user settings: ${error}`);
+    }
+  }
+
+  async updateUserSettings(userId: string, settings: Partial<InsertUserSettings>): Promise<UserSettings> {
+    if (!db) throw new Error("Database not initialized");
+    
+    try {
+      // Ensure we're not updating the userId
+      const { userId: _, ...updateValues } = settings;
+      
+      const results = await db
+        .update(userSettings)
+        .set(updateValues)
+        .where(eq(userSettings.userId, userId))
+        .returning();
+      
+      if (results.length === 0) {
+        throw new Error(`No settings found for user ${userId}`);
+      }
+      
+      return results[0];
+    } catch (error) {
+      console.error("Error updating user settings:", error);
+      throw new Error(`Failed to update user settings: ${error}`);
     }
   }
 }
 
-// Factory function to determine which storage to use
-export function createStorage(): IStorage {
-  // Always use memory storage if DATABASE_URL is not set
-  if (!process.env.DATABASE_URL) {
-    console.log("No DATABASE_URL found, using in-memory storage");
-    return new MemStorage();
-  }
-  
-  // Use database storage if DATABASE_URL is set
-  try {
-    console.log("DATABASE_URL found, using database storage");
-    return new DbStorage();
-  } catch (error) {
-    console.error("Failed to initialize database storage:", error);
-    console.warn("Falling back to in-memory storage");
-    return new MemStorage();
-  }
-}
+export const storage = process.env.DATABASE_URL
+  ? new DbStorage()
+  : new MemStorage();
 
-// Export storage instance
-export const storage = createStorage();
+export function createStorage(): IStorage {
+  return storage;
+}
