@@ -1,259 +1,74 @@
-import { useState, useEffect } from "react";
-import { ReflectionInput } from "@/components/ReflectionInput";
-import { ConversationView } from "@/components/ConversationView";
-import { ActionItems } from "@/components/ActionItems";
-import { useToast } from "@/hooks/use-toast";
-import { useLocation } from "wouter";
-import { Button } from "@/components/ui/button";
+import { useState } from "react";
+import { Layout } from "@/components/Layout";
 import { LoadingAnimation } from "@/components/LoadingAnimation";
-import type { Message } from "@shared/schema";
-
-// Type for conversation data
-interface ConversationData {
-  id: number;
-  messages: { role: "user" | "assistant"; content: string }[];
-  questions: string[];
-  actionItems: string[];
-}
+import { ConversationList } from "@/components/ConversationList";
+import { Button } from "@/components/ui/button";
+import { useLocation } from "wouter";
+import { PlusCircle, BookOpen, Clock } from "lucide-react";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
 export default function Home() {
-  const [conversationId, setConversationId] = useState<number | null>(null);
-  const [messages, setMessages] = useState<{ role: "user" | "assistant"; content: string }[]>([]);
-  const [questions, setQuestions] = useState<string[]>([]);
-  const [actionItems, setActionItems] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const { toast } = useToast();
   const [, setLocation] = useLocation();
 
-  // Load session from localStorage
-  useEffect(() => {
-    try {
-      const savedSession = localStorage.getItem("ramadanReflectionSession");
-      if (savedSession) {
-        const parsedSession = JSON.parse(savedSession);
-        if (parsedSession.conversationId && parsedSession.messages) {
-          setConversationId(parsedSession.conversationId);
-          setMessages(parsedSession.messages);
-          setQuestions(parsedSession.questions || []);
-          setActionItems(parsedSession.actionItems || []);
-          
-          console.log("Loaded saved session:", parsedSession);
-        }
-      }
-    } catch (error) {
-      console.error("Error loading session:", error);
-      // Clear local storage if corrupted
-      localStorage.removeItem("ramadanReflectionSession");
-      
-      toast({
-        title: "Session Error",
-        description: "Could not load your previous session. Starting fresh.",
-        variant: "destructive",
-      });
-    }
-  }, []);
-
-  // Save session to localStorage
-  useEffect(() => {
-    if (conversationId) {
-      try {
-        const sessionData = {
-          conversationId,
-          messages,
-          questions,
-          actionItems,
-        };
-        localStorage.setItem("ramadanReflectionSession", JSON.stringify(sessionData));
-      } catch (error) {
-        console.error("Error saving session:", error);
-        toast({
-          title: "Session Error",
-          description: "Could not save session data.",
-          variant: "destructive",
-        });
-      }
-    }
-  }, [conversationId, messages, questions, actionItems]);
-
-  // Function to start a new reflection
-  const startNewReflection = () => {
-    // Clear local storage
-    localStorage.removeItem("ramadanReflectionSession");
-    
-    // Reset state
-    setConversationId(null);
-    setMessages([]);
-    setQuestions([]);
-    setActionItems([]);
-    
-    toast({
-      title: "New Reflection",
-      description: "Started a new reflection session.",
-    });
-  };
-
-  // Navigate to home page
-  const goToHome = () => {
-    setLocation("/");
-  };
-
-  const handleReflectionComplete = (data: any) => {
-    console.log("Reflection complete:", data);
-    setConversationId(data.conversation.id);
-    setMessages(data.conversation.messages);
-    
-    // Extract questions from the assistant's message
-    try {
-      const assistantMessage = data.conversation.messages.find(
-        (m: any) => m.role === "assistant"
-      );
-      
-      if (assistantMessage) {
-        try {
-          const parsedQuestions = JSON.parse(assistantMessage.content);
-          setQuestions(Array.isArray(parsedQuestions) ? parsedQuestions : []);
-        } catch (error) {
-          console.error("Error parsing questions:", error);
-          setQuestions(data.questions || []);
-        }
-      } else {
-        setQuestions(data.questions || []);
-      }
-    } catch (error) {
-      console.error("Error extracting questions:", error);
-      setQuestions(data.questions || []);
-    }
-    
-    setActionItems(data.conversation.actionItems || []);
-  };
-
-  const handleResponse = (data: any) => {
-    console.log("Response data:", data);
-    setMessages(data.conversation.messages);
-    
-    // Extract questions from the last assistant message
-    try {
-      const assistantMessages = data.conversation.messages.filter(
-        (m: any) => m.role === "assistant"
-      );
-      
-      if (assistantMessages.length > 0) {
-        const lastAssistantMessage = assistantMessages[assistantMessages.length - 1];
-        
-        try {
-          const parsedQuestions = JSON.parse(lastAssistantMessage.content);
-          if (Array.isArray(parsedQuestions)) {
-            console.log("Setting questions to:", parsedQuestions);
-            setQuestions(parsedQuestions);
-          } else {
-            console.warn("Assistant message is not an array of questions:", lastAssistantMessage.content);
-            setQuestions(data.questions || []);
-          }
-        } catch (error) {
-          console.error("Error parsing questions from:", lastAssistantMessage.content);
-          console.error("Parse error:", error);
-          setQuestions(data.questions || []);
-        }
-      } else {
-        setQuestions(data.questions || []);
-      }
-    } catch (error) {
-      console.error("Error extracting questions:", error);
-      setQuestions(data.questions || []);
-    }
-    
-    setActionItems(data.conversation.actionItems || []);
-  };
-
-  const handleGenerateActionItems = async () => {
-    if (!conversationId) return;
-    
-    setIsLoading(true);
-    try {
-      const response = await fetch(`/api/conversation/${conversationId}/action-items`, {
-        method: "POST",
-      });
-      
-      if (!response.ok) {
-        throw new Error("Failed to generate action items");
-      }
-      
-      const data = await response.json();
-      setActionItems(data.actionItems);
-      setMessages(data.conversation.messages);
-      
-      toast({
-        title: "Action Items Generated",
-        description: "Your personalized action items have been created.",
-      });
-    } catch (error) {
-      console.error("Error generating action items:", error);
-      toast({
-        title: "Error",
-        description: "Failed to generate action items. Please try again.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   return (
-    <div className="min-h-screen bg-background">
-      {isLoading && <LoadingAnimation message="Generating action items..." />}
+    <Layout title="Ramadan Reflection Space">
+      {isLoading && <LoadingAnimation message="Loading..." />}
       
-      <header className="fixed top-0 left-0 right-0 h-16 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="container h-full flex items-center justify-between">
-          <h1 
-            className="text-xl font-semibold cursor-pointer hover:text-primary transition-colors" 
-            onClick={goToHome}
-          >
-            Ramadan Reflections
-          </h1>
-          {conversationId && (
+      <div className="container max-w-4xl mx-auto py-8 px-4">
+        {/* Welcome Section with Call-to-Action */}
+        <div className="mb-10 animate-slide-in">
+          <div className="text-center max-w-xl mx-auto mb-8">
+            <h1 className="text-3xl font-bold tracking-tight">Welcome to Your Ramadan Reflection Space</h1>
+            <p className="mt-3 text-muted-foreground">
+              A private space to document your spiritual journey, gain insights, and track your growth through Ramadan.
+            </p>
+          </div>
+          
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-lg mx-auto">
+            <Button 
+              size="lg" 
+              className="w-full py-6 h-auto flex flex-col items-center gap-2" 
+              onClick={() => setLocation('/new')}
+            >
+              <PlusCircle className="h-6 w-6" />
+              <div>
+                <div className="font-semibold">New Reflection</div>
+                <div className="text-xs font-normal">Share your thoughts and experiences</div>
+              </div>
+            </Button>
+            
             <Button 
               variant="outline" 
-              onClick={startNewReflection}
+              size="lg" 
+              className="w-full py-6 h-auto flex flex-col items-center gap-2"
+              onClick={() => setLocation('/halaqa')}
             >
-              New Reflection
+              <BookOpen className="h-6 w-6" />
+              <div>
+                <div className="font-semibold">HalaqaHelper</div>
+                <div className="text-xs font-normal">Track your Islamic learnings</div>
+              </div>
             </Button>
-          )}
+          </div>
         </div>
-      </header>
-
-      <main className="container pt-20 pb-24">
-        {conversationId ? (
-          <div className="grid gap-6 md:grid-cols-[2fr,1fr]">
-            <ConversationView
-              conversationId={conversationId}
-              messages={messages}
-              questions={questions}
-              onResponse={handleResponse}
-            />
-            <ActionItems
-              items={actionItems}
-              onGenerate={handleGenerateActionItems}
-              isGenerating={isLoading}
-            />
-          </div>
-        ) : (
-          <div className="flex flex-col items-center justify-center min-h-[60vh] gap-6">
-            <div className="max-w-md text-center space-y-4">
-              <h2 className="text-2xl font-semibold">Welcome to Your Reflection Space</h2>
-              <p className="text-muted-foreground">
-                Share your thoughts, feelings, or experiences during Ramadan.
-                Whether through voice or text, take a moment to reflect on your
-                spiritual journey.
-              </p>
-            </div>
-            <ReflectionInput 
-              onReflectionComplete={handleReflectionComplete} 
-              isLoading={isLoading}
-              setIsLoading={setIsLoading}
-            />
-          </div>
-        )}
-      </main>
-    </div>
+        
+        {/* Past Reflections */}
+        <Card className="animate-slide-in transition-all" style={{ animationDelay: "100ms" }}>
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2">
+              <Clock className="h-5 w-5 text-primary" />
+              Your Reflections
+            </CardTitle>
+            <CardDescription>
+              Continue your spiritual journey with previous reflections
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ConversationList />
+          </CardContent>
+        </Card>
+      </div>
+    </Layout>
   );
 }

@@ -61,13 +61,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Default questions in case API fails
       let questions: string[] = ["How would you like to expand on your reflection?"];
+      let understanding = "Thank you for sharing your reflection.";
       
       try {
         // Use transcription for audio reflections
         const content = data.type === "audio" ? data.transcription! : data.content;
-        const generatedQuestions = await generateFollowUpQuestions(content);
-        if (generatedQuestions && generatedQuestions.length > 0) {
-          questions = generatedQuestions;
+        const generatedResponse = await generateFollowUpQuestions(content);
+        if (generatedResponse && generatedResponse.questions && generatedResponse.questions.length > 0) {
+          questions = generatedResponse.questions;
+          understanding = generatedResponse.understanding;
           console.log("Generated questions:", questions);
         } else {
           console.warn("Empty questions array returned, using default");
@@ -85,13 +87,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
             role: "user", 
             content: data.type === "audio" ? data.transcription! : data.content 
           },
-          { role: "assistant", content: JSON.stringify(questions) },
+          { 
+            role: "assistant", 
+            content: JSON.stringify({
+              understanding: understanding,
+              questions: questions
+            })
+          },
         ],
         actionItems: [],
       });
       console.log("Created conversation:", conversation.id);
 
-      res.json({ reflection, conversation, questions });
+      res.json({ 
+        reflection, 
+        conversation, 
+        understanding,
+        questions 
+      });
     } catch (error) {
       console.error("Error in /api/reflection:", error);
       if (error instanceof ZodError) {
@@ -131,16 +144,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         "What aspects of your spiritual journey would you like to explore further?",
         "Is there anything specific from today that you'd like to reflect on more deeply?"
       ];
+      let understanding = "Thank you for sharing your thoughts.";
 
       try {
         // Get all previous user messages for context
         const previousMessages = conversation.messages
           .map((msg: Message) => `${msg.role}: ${msg.content}`)
-          .filter((msg: string) => !msg.includes('["')); // Filter out the question arrays
+          .filter((msg: string) => !msg.includes('{"understanding":')); // Filter out the response objects
 
-        const generatedQuestions = await generateFollowUpQuestions(content, previousMessages);
-        if (generatedQuestions && generatedQuestions.length > 0) {
-          questions = generatedQuestions;
+        const generatedResponse = await generateFollowUpQuestions(content, previousMessages);
+        if (generatedResponse && generatedResponse.questions && generatedResponse.questions.length > 0) {
+          questions = generatedResponse.questions;
+          understanding = generatedResponse.understanding;
           console.log("Generated follow-up questions:", questions);
         } else {
           console.warn("Empty questions array returned from API, using fallback questions");
@@ -151,7 +166,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.log("Using fallback questions due to API error");
       }
 
-      messages.push({ role: "assistant" as const, content: JSON.stringify(questions) });
+      // Add messages to the conversation
+      messages.push({ 
+        role: "assistant" as const, 
+        content: JSON.stringify({
+          understanding: understanding,
+          questions: questions
+        })
+      });
 
       try {
         const updatedConversation = await storage.updateConversation(
@@ -262,23 +284,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
         "What aspects of your spiritual journey would you like to explore further?",
         "Is there anything specific from today that you'd like to reflect on more deeply?"
       ];
+      let understanding = "Thank you for sharing your thoughts.";
 
       try {
         // Get all previous user messages for context
         const previousMessages = conversation.messages
           .map((msg: Message) => `${msg.role}: ${msg.content}`)
-          .filter((msg: string) => !msg.includes('["')); // Filter out the question arrays
+          .filter((msg: string) => !msg.includes('{"understanding":')); // Filter out the response objects
 
-        const generatedQuestions = await generateFollowUpQuestions(content, previousMessages);
-        if (generatedQuestions && generatedQuestions.length > 0) {
-          questions = generatedQuestions;
+        const generatedResponse = await generateFollowUpQuestions(content, previousMessages);
+        if (generatedResponse && generatedResponse.questions && generatedResponse.questions.length > 0) {
+          questions = generatedResponse.questions;
+          understanding = generatedResponse.understanding;
+          console.log("Generated follow-up questions:", questions);
+        } else {
+          console.warn("Empty questions array returned from API, using fallback questions");
         }
       } catch (error) {
         console.error("Error generating follow-up questions:", error);
         // Continue with default questions
       }
 
-      messages.push({ role: "assistant" as const, content: JSON.stringify(questions) });
+      // Add messages to the conversation
+      messages.push({ 
+        role: "assistant" as const, 
+        content: JSON.stringify({
+          understanding: understanding,
+          questions: questions
+        })
+      });
 
       const updatedConversation = await storage.updateConversation(
         conversationId,
@@ -331,11 +365,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         
         // Default questions in case API fails
         let questions: string[] = ["How would you like to expand on your reflection?"];
+        let understanding = "Thank you for sharing your reflection.";
         
         try {
-          const generatedQuestions = await generateFollowUpQuestions(transcription);
-          if (generatedQuestions && generatedQuestions.length > 0) {
-            questions = generatedQuestions;
+          const generatedResponse = await generateFollowUpQuestions(transcription);
+          if (generatedResponse && generatedResponse.questions && generatedResponse.questions.length > 0) {
+            questions = generatedResponse.questions;
+            understanding = generatedResponse.understanding;
             console.log("Generated questions for audio reflection:", questions);
           } else {
             console.warn("Empty questions array returned, using default");
@@ -350,13 +386,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
           reflectionId: reflection.id,
           messages: [
             { role: "user", content: transcription },
-            { role: "assistant", content: JSON.stringify(questions) },
+            { 
+              role: "assistant", 
+              content: JSON.stringify({
+                understanding: understanding,
+                questions: questions
+              })
+            },
           ],
           actionItems: [],
         });
         console.log(`Created conversation for audio with ID: ${conversation.id}`);
         
-        res.json({ reflection, conversation, transcription, questions });
+        res.json({ 
+          reflection, 
+          conversation, 
+          transcription, 
+          understanding,
+          questions 
+        });
       } catch (error) {
         console.error("Error in audio transcription:", error);
         res.status(500).json({ 

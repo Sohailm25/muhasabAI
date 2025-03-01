@@ -74,7 +74,7 @@ router.post("/reflection", async (req, res) => {
   }
 });
 
-// Post a new reflection - voice input
+// Post a new reflection - audio input
 router.post("/reflection/audio", upload.single("audio"), async (req, res) => {
   try {
     if (!req.file) {
@@ -102,9 +102,17 @@ router.post("/reflection/audio", upload.single("audio"), async (req, res) => {
 
     // Generate follow-up questions
     let questions: string[] = [];
+    let understanding = "Thank you for sharing your reflection.";
     try {
-      questions = await generateFollowUpQuestions(transcription);
-      console.log(`Generated ${questions.length} follow-up questions for audio`);
+      const generatedResponse = await generateFollowUpQuestions(transcription);
+      if (generatedResponse && generatedResponse.questions && generatedResponse.questions.length > 0) {
+        questions = generatedResponse.questions;
+        understanding = generatedResponse.understanding;
+        console.log(`Generated ${questions.length} follow-up questions for audio`);
+      } else {
+        console.error("Error generating questions for audio: no valid response received");
+        questions = ["How would you like to expand on your reflection?"];
+      }
     } catch (error) {
       console.error("Error generating questions for audio:", error);
       questions = ["How would you like to expand on your reflection?"];
@@ -115,13 +123,25 @@ router.post("/reflection/audio", upload.single("audio"), async (req, res) => {
       reflectionId: reflection.id,
       messages: [
         { role: "user", content: transcription },
-        { role: "assistant", content: JSON.stringify(questions) },
+        { 
+          role: "assistant", 
+          content: JSON.stringify({
+            understanding: understanding,
+            questions: questions
+          })
+        },
       ],
       actionItems: [],
     });
     console.log(`Created conversation for audio with ID: ${conversation.id}`);
 
-    res.json({ reflection, conversation, transcription, questions });
+    res.json({ 
+      reflection, 
+      conversation, 
+      transcription, 
+      understanding,
+      questions 
+    });
   } catch (error) {
     console.error("Error in /reflection/audio endpoint:", error);
     res.status(500).json({ 

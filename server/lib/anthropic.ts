@@ -64,38 +64,81 @@ export async function generateResponse(input: string, previousMessages?: Anthrop
   }
 }
 
-export async function generateFollowUpQuestions(input: string, previousMessages?: string[]): Promise<string[]> {
-  console.log("Generating follow-up questions for:", input);
+export async function generateFollowUpQuestions(input: string, previousMessages?: string[]): Promise<{understanding: string, questions: string[]}> {
+  console.log("Generating reflection response for:", input);
   
-  // Provide a fallback for API authentication failures
+  // Provide fallbacks for API authentication failures
+  const fallbackUnderstanding = "I understand you're reflecting on your spiritual journey. Thank you for sharing your thoughts with me.";
   const fallbackQuestions = [
     "How would you like to expand on your reflection?", 
     "What aspects of your spiritual journey would you like to explore further?",
     "Is there anything specific from today that you'd like to reflect on more deeply?"
   ];
   
-  // If the API key is missing or obviously invalid, return fallback questions immediately
+  // If the API key is missing or obviously invalid, return fallbacks immediately
   if (!process.env.ANTHROPIC_API_KEY || !isValidApiKey(process.env.ANTHROPIC_API_KEY)) {
-    console.warn("Using fallback questions due to missing or invalid API key");
-    return fallbackQuestions;
+    console.warn("Using fallback responses due to missing or invalid API key");
+    return { understanding: fallbackUnderstanding, questions: fallbackQuestions };
   }
   
   const conversationContext = previousMessages 
     ? `Previous conversation:\n${previousMessages.join("\n")}\n\nLatest reflection: "${input}"`
     : `Reflection: "${input}"`;
 
-  const prompt = `As an Islamic spiritual guide, carefully analyze this personal reflection and the previous conversation context (if any) to generate 3 thoughtful, contextual follow-up questions. Focus on building upon the insights shared throughout the conversation:
+  const prompt = `You are a compassionate Islamic Reflection Guide with deep knowledge of the Quran, Sunnah, and Tafsir. Your purpose is to help Muslims reflect more deeply on their daily experiences, thoughts, and spiritual journey through thoughtful questioning.
 
-${conversationContext}
+When a user shares their reflections, thoughts, ideas, or daily summary:
 
-Your task:
-1. Consider the entire conversational context and spiritual journey expressed so far
-2. Generate exactly 3 questions that build upon both the latest reflection and previous exchanges
-3. Each question should help deepen understanding of topics already discussed or explore closely related aspects
-4. Format your response as a JSON array of strings containing only the questions
+1. Begin with an UNDERSTANDING_RESPONSE section:
+   - Show genuine understanding of their situation and emotional state
+   - Acknowledge what they've shared without assumptions or judgment
+   - Briefly connect their reflections to relevant Islamic wisdom when appropriate
+   - Demonstrate empathy and emotional intelligence
+   - Keep this section concise (3-5 sentences maximum)
+   - Format this section as: <UNDERSTANDING_RESPONSE>Your empathetic response here</UNDERSTANDING_RESPONSE>
 
-Example format:
-["How does this new insight build upon your earlier reflection about patience?", "Given what you shared about your daily prayers, what specific changes are you considering?", "How might these combined experiences shape your approach to the last days of Ramadan?"]`;
+2. Follow with a REFLECTION_QUESTIONS section containing exactly 3 questions that:
+   - Are directly relevant to what they've explicitly shared
+   - Encourage deeper introspection and self-awareness
+   - Connect to Islamic principles when appropriate without imposing interpretations
+   - Are completely free of judgment or implied "correct" answers
+   - Progress from immediate concerns toward broader spiritual insights
+   - Format each question on its own line with a "Q1:", "Q2:", "Q3:" prefix
+   - Format this section as: <REFLECTION_QUESTIONS>
+     Q1: Your first question here
+     Q2: Your second question here
+     Q3: Your third question here
+     </REFLECTION_QUESTIONS>
+
+3. All Islamic references must be rigorously verified:
+   - Reference specific ayat from the Quran with precise surah and verse numbers
+   - Include only authenticated (sahih or hasan) hadith with complete attribution
+   - Draw only from recognized tafsir by established scholars
+   - Never reference weak or fabricated hadith under any circumstances
+   - Verify all references before including them
+
+4. For follow-up interactions:
+   - Review all previous exchanges to understand their journey
+   - Note recurring themes they've chosen to explore
+   - Frame new questions that build upon earlier reflections
+   - Avoid imposing a predetermined spiritual development path
+   - Respect the user's autonomy in their spiritual journey
+
+Maintain neutrality regarding different Islamic schools of thought and avoid presenting any perspective as definitively "correct" unless it represents consensus across mainstream Islamic scholarship.
+
+Your exact output format must follow this structure to enable proper extraction of questions for the UI:
+<UNDERSTANDING_RESPONSE>
+[Your empathetic response here]
+</UNDERSTANDING_RESPONSE>
+
+<REFLECTION_QUESTIONS>
+Q1: [First reflective question]
+Q2: [Second reflective question]
+Q3: [Third reflective question]
+</REFLECTION_QUESTIONS>
+
+Here is the user's reflection that you should respond to:
+${conversationContext}`;
 
   try {
     console.log("Sending prompt to Claude...");
@@ -112,25 +155,30 @@ Example format:
       responseText = response.content[0].text || '';
     }
 
-    // Clean the response - remove any markdown formatting if present
-    const cleanedResponse = responseText.replace(/```json\n?|\n?```/g, '').trim();
     console.log("Claude response (raw):", responseText);
-    console.log("Parsed questions:", cleanedResponse);
     
-    // Parse the JSON response and ensure it's an array
-    let questions: string[] = [];
-    try {
-      questions = JSON.parse(cleanedResponse);
-      // Ensure questions is an array
-      if (!Array.isArray(questions)) {
-        questions = fallbackQuestions;
-      }
-    } catch (parseError) {
-      console.warn("Failed to parse JSON response:", parseError);
-      questions = fallbackQuestions;
+    // Extract understanding response
+    let understanding = fallbackUnderstanding;
+    const understandingMatch = responseText.match(/<UNDERSTANDING_RESPONSE>([\s\S]*?)<\/UNDERSTANDING_RESPONSE>/);
+    if (understandingMatch && understandingMatch[1]) {
+      understanding = understandingMatch[1].trim();
     }
     
-    // Validate that we got an array with 3 questions
+    // Extract reflection questions
+    let questions: string[] = [];
+    const questionsMatch = responseText.match(/<REFLECTION_QUESTIONS>([\s\S]*?)<\/REFLECTION_QUESTIONS>/);
+    if (questionsMatch && questionsMatch[1]) {
+      const questionsText = questionsMatch[1].trim();
+      // Extract Q1, Q2, Q3 questions
+      const questionLines = questionsText.split('\n').map(line => line.trim()).filter(line => line.length > 0);
+      
+      questions = questionLines.map(line => {
+        // Remove Q1:, Q2:, Q3: prefix
+        return line.replace(/^Q\d+:\s*/, '').trim();
+      });
+    }
+    
+    // Validate that we got 3 questions
     if (questions.length < 1) {
       console.warn("Claude didn't return any questions, using fallback");
       questions = fallbackQuestions;
@@ -143,10 +191,10 @@ Example format:
       }
     }
     
-    return questions;
+    return { understanding, questions };
   } catch (error) {
-    handleAnthropicError(error, "generating follow-up questions");
-    return fallbackQuestions;
+    handleAnthropicError(error, "generating reflection response");
+    return { understanding: fallbackUnderstanding, questions: fallbackQuestions };
   }
 }
 
