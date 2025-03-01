@@ -8,7 +8,7 @@ import { ThemeProvider } from "./components/theme-provider";
 import Home from "@/pages/home";
 import NewReflection from "@/pages/new";
 import Chat from "@/pages/chat";
-import HalaqaHelper from "@/pages/halaqa";
+import HalaqaHelper from "@/pages/halaqa"; // Halaqa Helper component
 import Help from "@/pages/help";
 import Profile from "@/pages/profile";
 import NotFound from "@/pages/not-found";

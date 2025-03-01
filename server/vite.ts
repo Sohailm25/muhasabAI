@@ -26,7 +26,7 @@ export async function setupVite(app: Express, server: Server) {
   const serverOptions = {
     middlewareMode: true,
     hmr: { server },
-    allowedHosts: 'all',
+    allowedHosts: ['all'],
   };
 
   const vite = await createViteServer({
@@ -72,6 +72,7 @@ export async function setupVite(app: Express, server: Server) {
 
 export function serveStatic(app: Express) {
   const distPath = path.resolve(__dirname, "../dist");
+  const publicPath = path.resolve(distPath, "public");
 
   if (!fs.existsSync(distPath)) {
     log(`WARNING: Build directory not found: ${distPath}`, "express");
@@ -88,8 +89,48 @@ export function serveStatic(app: Express) {
     }
   }
 
+  // Check if the public directory exists (this is where Vite builds the client files)
+  if (!fs.existsSync(publicPath)) {
+    log(`WARNING: Public directory not found: ${publicPath}`, "express");
+    log("The client files may not have been built correctly.", "express");
+    log("Creating an empty public directory and index.html as fallback...", "express");
+    
+    try {
+      fs.mkdirSync(publicPath, { recursive: true });
+      
+      // Create a basic index.html file as fallback
+      const fallbackHtml = `
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+          <meta charset="UTF-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>MuhasabAI</title>
+          <style>
+            body { font-family: Arial, sans-serif; padding: 2rem; text-align: center; }
+            .message { margin: 2rem 0; }
+            .error { color: #e53e3e; }
+          </style>
+        </head>
+        <body>
+          <h1>MuhasabAI</h1>
+          <div class="message">
+            <p>The application is running, but the client-side files were not found.</p>
+            <p class="error">Please make sure to run a complete build with 'npm run build'.</p>
+          </div>
+        </body>
+        </html>
+      `;
+      
+      fs.writeFileSync(path.join(publicPath, "index.html"), fallbackHtml);
+      log("Created fallback index.html", "express");
+    } catch (error) {
+      log(`ERROR: Failed to create fallback files: ${error}`, "express");
+    }
+  }
+
   // Serve static files with proper caching headers
-  app.use(express.static(distPath, {
+  app.use(express.static(publicPath, {
     etag: true,
     lastModified: true,
     setHeaders: (res, filePath) => {
@@ -105,7 +146,7 @@ export function serveStatic(app: Express) {
   // fall through to index.html if the file doesn't exist
   app.use("*", (req, res, next) => {
     try {
-      const indexPath = path.resolve(distPath, "index.html");
+      const indexPath = path.resolve(publicPath, "index.html");
       if (fs.existsSync(indexPath)) {
         res.sendFile(indexPath);
       } else {

@@ -19,4 +19,10 @@ cmds = [
   "python3 -m pip install -U openai-whisper",
   "chmod +x ./install-whisper.sh",
   "./install-whisper.sh"
+]
+
+# Ensure the build directory structure is correct
+[nixpacks.build]
+cmds = [
+  "chmod +x ./fix-build.js"
 ] 

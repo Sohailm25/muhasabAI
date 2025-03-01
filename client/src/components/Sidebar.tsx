@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { 
   Home, 
@@ -19,9 +19,10 @@ import { ThemeToggle } from "./theme-toggle";
 
 interface SidebarProps {
   className?: string;
+  onCollapseChange?: (isCollapsed: boolean) => void;
 }
 
-export function Sidebar({ className }: SidebarProps) {
+export function Sidebar({ className, onCollapseChange }: SidebarProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [location, setLocation] = useLocation();
@@ -31,8 +32,20 @@ export function Sidebar({ className }: SidebarProps) {
   };
 
   const toggleCollapse = () => {
-    setIsCollapsed(!isCollapsed);
+    const newCollapsedState = !isCollapsed;
+    setIsCollapsed(newCollapsedState);
+    // Notify parent component of collapse state change
+    if (onCollapseChange) {
+      onCollapseChange(newCollapsedState);
+    }
   };
+
+  // Notify parent component of initial collapse state
+  useEffect(() => {
+    if (onCollapseChange) {
+      onCollapseChange(isCollapsed);
+    }
+  }, []);
 
   const closeSidebar = () => {
     setIsOpen(false);
@@ -125,10 +138,10 @@ export function Sidebar({ className }: SidebarProps) {
                 isCollapsed ? "justify-center px-2" : "justify-start"
               )} 
               onClick={() => navigateTo('/halaqa')}
-              title="HalaqaHelper"
+              title="Halaqa Helper"
             >
               <Book className={cn("h-4 w-4", !isCollapsed && "mr-2")} />
-              {!isCollapsed && "HalaqaHelper"}
+              {!isCollapsed && "Halaqa Helper"}
             </Button>
 
             <Button 

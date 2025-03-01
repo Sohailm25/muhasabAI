@@ -11,11 +11,11 @@ import { Button } from "@/components/ui/button";
 import { PlusCircle, BookOpen, Bookmark } from "lucide-react";
 
 export default function HalaqaHelper() {
-  // This is a placeholder for the HalaqaHelper page
+  // This is a placeholder for the Halaqa Helper page
   // In a full implementation, this would have state management and API calls
   
   return (
-    <Layout title="HalaqaHelper">
+    <Layout title="Halaqa Helper">
       <div className="container max-w-4xl mx-auto py-8 px-4">
         <div className="flex flex-col space-y-6">
           <div className="flex flex-col space-y-2">
