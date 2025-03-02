@@ -9,6 +9,7 @@ import { fromZodError } from "zod-validation-error";
 import multer from "multer";
 import { testConnection } from "./db";
 import masjidiRouter from "./masjidi-routes";
+import profileRouter from "./routes/profile-routes";
 import express from "express";
 
 // Configure multer for in-memory storage
@@ -46,6 +47,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Mount the Masjidi API routes
   app.use("/api", masjidiRouter);
+  
+  // Mount the Profile API routes
+  app.use("/api", profileRouter);
 
   app.post("/api/reflection", async (req: Request, res: Response) => {
     try {

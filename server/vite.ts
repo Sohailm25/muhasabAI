@@ -9,18 +9,65 @@ import { type Server } from "http";
 import viteConfig from "../vite.config";
 import { nanoid } from "nanoid";
 
-const viteLogger = createLogger();
+/**
+ * Development server utilities
+ */
 
-export function log(message: string, source = "express") {
-  const formattedTime = new Date().toLocaleTimeString("en-US", {
-    hour: "numeric",
-    minute: "2-digit",
-    second: "2-digit",
-    hour12: true,
-  });
+// Log levels for different environments
+const LOG_LEVELS = {
+  development: ['info', 'warn', 'error', 'debug', 'database'] as const,
+  production: ['info', 'warn', 'error', 'database'] as const,
+  test: ['error'] as const,
+};
 
-  console.log(`${formattedTime} [${source}] ${message}`);
+// Create union type from all possible log levels
+type LogLevel = 'info' | 'warn' | 'error' | 'debug' | 'database';
+type LogCategory = LogLevel | string;
+
+// Get current environment
+const NODE_ENV = process.env.NODE_ENV || 'development';
+
+// Determine active log levels based on environment
+const ACTIVE_LOG_LEVELS: readonly string[] = 
+  LOG_LEVELS[NODE_ENV as keyof typeof LOG_LEVELS] || LOG_LEVELS.development;
+
+// Log colors for console
+const LOG_COLORS = {
+  info: '\x1b[36m%s\x1b[0m',    // Cyan
+  warn: '\x1b[33m%s\x1b[0m',    // Yellow
+  error: '\x1b[31m%s\x1b[0m',   // Red
+  debug: '\x1b[35m%s\x1b[0m',   // Magenta
+  database: '\x1b[32m%s\x1b[0m', // Green
+  default: '\x1b[37m%s\x1b[0m'  // White
+};
+
+/**
+ * Log a message to the console if the log level is enabled for the current environment
+ * @param message The message to log
+ * @param category The log category/level
+ */
+export function log(message: string, category: LogCategory = 'info'): void {
+  // Skip logging if this level is not active in current environment
+  if (!ACTIVE_LOG_LEVELS.includes(category)) {
+    return;
+  }
+
+  const timestamp = new Date().toISOString();
+  const color = LOG_COLORS[category as keyof typeof LOG_COLORS] || LOG_COLORS.default;
+  
+  // Format: [TIMESTAMP] [CATEGORY] Message
+  console.log(color, `[${timestamp}] [${category.toUpperCase()}] ${message}`);
 }
+
+/**
+ * Development server utilities
+ */
+
+export const isDevelopment = process.env.NODE_ENV === 'development';
+export const isProduction = process.env.NODE_ENV === 'production';
+export const isTest = process.env.NODE_ENV === 'test';
+
+const viteLogger = createLogger();
 
 export async function setupVite(app: Express, server: Server) {
   const serverOptions = {

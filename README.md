@@ -253,4 +253,159 @@ For voice reflections, this application uses OpenAI's Whisper for transcription.
    ./whisper-wrapper.sh <audio-file> --model base --language en
    ```
 
-The wrapper script automatically activates the correct Python environment and passes all arguments to Whisper. 
+The wrapper script automatically activates the correct Python environment and passes all arguments to Whisper.
+
+# Security Personalization System
+
+## Overview
+
+The Security Personalization System is a privacy-focused implementation designed to provide personalized experiences for users while ensuring their sensitive data remains secure and private. This implementation follows a "privacy by design" approach, allowing users to control their data sharing preferences and encrypting sensitive information end-to-end.
+
+## Features
+
+- **End-to-End Encryption**: Private user data is encrypted locally using the Web Crypto API
+- **Flexible Privacy Settings**: Users control which data is stored locally vs. synced to the server
+- **AI-Ready Profiles**: Generate AI context from profiles while respecting privacy settings
+- **Secure Key Management**: Keys are generated, stored, and backed up securely
+- **Versioned Profiles**: Support for conflict resolution and synchronization
+
+## Architecture
+
+### Core Components
+
+1. **Profile System**
+   - `PublicProfile`: Basic user preferences and settings, stored unencrypted
+   - `PrivateProfile`: Sensitive personal data, stored with encryption
+   - `EncryptedProfileData`: Container for encrypted private profile data
+
+2. **Security Layer**
+   - Encryption module: AES-GCM cryptography for private data
+   - Key management: Secure generation, storage, and backup of encryption keys
+
+3. **API Layer**
+   - Profile API client: Interface for CRUD operations on profiles
+   - Security-aware routing: Server routes with authentication and authorization
+
+4. **UI Components**
+   - Privacy Settings: User interface for controlling privacy preferences
+   - Profile Management: Components for viewing and editing profile data
+
+5. **Data Flow**
+   - Local storage → Encryption → API → Server Database
+   - Server Database → API → Decryption → Local rendering
+
+## Implementation
+
+### Client-Side
+
+The implementation uses React hooks for state management and API interactions:
+
+- `useProfile`: Custom hook for loading, updating, and managing user profiles
+- `reflectionAnalysis`: Module for analyzing user reflections with privacy controls
+- `profileSync`: Module for secure profile synchronization across devices
+
+### Server-Side
+
+The server provides secure routes for profile management:
+
+- Authentication middleware ensures only authorized users access profiles
+- Encrypted data is stored without server-side decryption capabilities
+- Version tracking prevents data loss through conflict resolution
+
+### Security Features
+
+- **Encryption**: AES-GCM 256-bit encryption for all private data
+- **Key Management**: Keys never leave the client device unencrypted
+- **Backup & Recovery**: Secure key backup with password protection
+- **Privacy Controls**: Granular user controls for data sharing
+
+## Getting Started
+
+### Prerequisites
+
+- Node.js 14+ and npm/yarn
+- Modern browser with Web Crypto API support
+
+### Installation
+
+```bash
+npm install
+npm run build
+npm start
+```
+
+### Usage Example
+
+```typescript
+// Using the profile hook in a component
+import { useProfile } from './hooks/useProfile';
+
+const ProfileComponent = ({ userId }) => {
+  const { 
+    publicProfile, 
+    privateProfile, 
+    updatePublicProfile, 
+    updatePrivateProfile,
+    isLoading,
+    error
+  } = useProfile(userId);
+
+  // Example of updating profiles
+  const handlePreferenceChange = (newPreferences) => {
+    updatePublicProfile({ generalPreferences: newPreferences });
+  };
+
+  // Render UI based on profile data
+  return (
+    <div>
+      {isLoading ? (
+        <Loading />
+      ) : error ? (
+        <ErrorDisplay message={error} />
+      ) : (
+        <>
+          <PublicProfileDisplay profile={publicProfile} onChange={handlePreferenceChange} />
+          {privateProfile && (
+            <PrivateProfileDisplay profile={privateProfile} />
+          )}
+          <PrivacySettings profile={publicProfile} onChange={handlePreferenceChange} />
+        </>
+      )}
+    </div>
+  );
+};
+```
+
+## Testing
+
+The implementation includes comprehensive tests:
+
+```bash
+# Run all tests
+npm test
+
+# Run specific test suites
+npm test -- --testPathPattern=encryption
+npm test -- --testPathPattern=profileApi
+```
+
+## Security Considerations
+
+- Encryption keys are generated and stored in browser local storage
+- For multi-device sync, users must securely transfer their encryption key
+- All private data is encrypted before transmission over the network
+- Profile data is versioned to prevent conflicts and unauthorized changes
+
+## Privacy Policy
+
+The system is designed with these privacy principles:
+
+1. **Data Minimization**: Only collect what's necessary
+2. **User Control**: Give users control over their data
+3. **Transparency**: Clear visibility into what data is stored and how
+4. **Security**: Protect data with strong encryption
+5. **Local-First**: Prefer local processing over server transmission
+
+## License
+
+MIT License - See [LICENSE](LICENSE) file for details. 

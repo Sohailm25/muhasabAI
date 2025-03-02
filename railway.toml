@@ -1,13 +1,17 @@
 [build]
-builder = "nixpacks"
+builder = "NIXPACKS"
 buildCommand = "npm run build"
 
 [deploy]
-startCommand = "npm run start"
-healthcheckPath = "/health"
-healthcheckTimeout = 100
-restartPolicy = "always"
-restartPolicyMaxRetries = 10
+startCommand = "node scripts/deploy.js"
+healthcheckPath = "/api/health"
+healthcheckTimeout = 90
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 3
+
+[deploy.envs]
+NODE_ENV = "production"
+USE_DATABASE = "true"
 
 [nixpacks]
 nodejs-version = "20"
@@ -25,4 +29,14 @@ cmds = [
 [nixpacks.build]
 cmds = [
   "chmod +x ./fix-build.js"
-] 
+]
+
+# Configure environment variables for PostgreSQL
+[variables]
+DATABASE_URL.fromService = { service = "postgresql", type = "connectionString" }
+PGHOST.fromService = { service = "postgresql", name = "host" }
+PGDATABASE.fromService = { service = "postgresql", name = "database" }
+PGUSER.fromService = { service = "postgresql", name = "username" }
+PGPASSWORD.fromService = { service = "postgresql", name = "password" }
+PGPORT.fromService = { service = "postgresql", name = "port" }
+NODE_ENV = "production" 

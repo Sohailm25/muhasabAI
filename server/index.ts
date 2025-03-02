@@ -4,6 +4,11 @@ import 'dotenv/config';
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
+import { initializeDatabase } from "./db";
+
+// Import route modules
+import profileRoutes from './routes/profile-routes';
+import healthRoutes from './routes/health-routes';
 
 // Check for required environment variables
 function checkRequiredEnvVars() {
@@ -20,9 +25,6 @@ function checkRequiredEnvVars() {
     }
   }
 }
-
-// Run the check
-checkRequiredEnvVars();
 
 const app = express();
 app.use(express.json({ limit: '50mb' }));
@@ -59,12 +61,31 @@ app.use((req, res, next) => {
 });
 
 (async () => {
+  // Check environment variables
+  checkRequiredEnvVars();
+  
+  // Initialize database for Railway deployment
+  if (process.env.NODE_ENV === 'production') {
+    try {
+      await initializeDatabase();
+      log('Database initialization completed successfully', 'database');
+    } catch (error) {
+      log(`Database initialization error: ${error instanceof Error ? error.message : String(error)}`, 'error');
+      // Don't exit on database error - allow fallback to in-memory storage
+    }
+  }
+  
+  // Register main routes
   const server = await registerRoutes(app);
+
+  // Register additional routes for security personalization feature
+  app.use('/api', profileRoutes);
+  app.use('/api', healthRoutes);
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
     const message = err.message || "Internal Server Error";
-    log(`Error: ${err.stack || err}`);
+    log(`Error: ${err.stack || err}`, 'error');
     res.status(status).json({ error: message });
   });
 
@@ -81,6 +102,6 @@ app.use((req, res, next) => {
     host: "0.0.0.0",
     reusePort: true,
   }, () => {
-    log(`serving on port ${port}`);
+    log(`Server running on port ${port}`, 'info');
   });
 })();
