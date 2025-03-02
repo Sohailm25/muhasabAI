@@ -12,7 +12,8 @@ import {
   ChevronRight,
   ClipboardList,
   Landmark,
-  LogOut
+  LogOut,
+  Loader2
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -29,6 +30,7 @@ export function Sidebar({ className, onCollapseChange }: SidebarProps) {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [location, setLocation] = useLocation();
   const { logout } = useAuth();
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   const toggleSidebar = () => {
     setIsOpen(!isOpen);
@@ -68,10 +70,20 @@ export function Sidebar({ className, onCollapseChange }: SidebarProps) {
 
   const handleLogout = async () => {
     try {
+      // Set logging out state to true
+      setIsLoggingOut(true);
+      
+      // Call logout and wait for it to complete
       await logout();
-      window.location.href = '/';
+      
+      // Directly go to the login page, bypassing any protected routes
+      // This prevents RequireAuth from adding a return_to parameter
+      window.location.href = '/login';
+      
+      // Remove timeout as it's not needed anymore
     } catch (err) {
       console.error("Error logging out:", err);
+      setIsLoggingOut(false);
     }
   };
 
@@ -233,10 +245,20 @@ export function Sidebar({ className, onCollapseChange }: SidebarProps) {
                 isCollapsed ? "w-auto p-2" : "w-full"
               )}
               onClick={handleLogout}
+              disabled={isLoggingOut}
               title="Sign Out"
             >
-              <LogOut className="h-4 w-4" />
-              {!isCollapsed && "Sign Out"}
+              {isLoggingOut ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  {!isCollapsed && "Signing out..."}
+                </>
+              ) : (
+                <>
+                  <LogOut className="h-4 w-4" />
+                  {!isCollapsed && "Sign Out"}
+                </>
+              )}
             </Button>
           </div>
         </div>

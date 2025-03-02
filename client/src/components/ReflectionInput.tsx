@@ -1,30 +1,37 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useLocation } from "wouter"; // Replace Next.js router with wouter
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
-import { apiRequest } from "@/lib/queryClient";
 import { AudioRecorder } from "@/components/AudioRecorder";
 import { LoadingAnimation } from "@/components/LoadingAnimation";
+import { useReflectionService } from "@/services/reflectionService";
 
 export interface ReflectionInputProps {
   onReflectionComplete: (data: any) => void;
   isLoading?: boolean;
   setIsLoading?: React.Dispatch<React.SetStateAction<boolean>>;
+  redirectToChat?: boolean; // Add option to control redirect behavior
 }
 
 export function ReflectionInput({ 
   onReflectionComplete,
   isLoading = false,
-  setIsLoading
+  setIsLoading,
+  redirectToChat = true, // Default to true for backward compatibility
 }: ReflectionInputProps) {
   const [text, setText] = useState("");
   const [activeTab, setActiveTab] = useState("text");
   const [localLoading, setLocalLoading] = useState(false);
   const { toast } = useToast();
+  const [, setLocation] = useLocation(); // Use wouter's location setter
+  
+  // Get the personalized reflection service
+  const { submitReflection, isPersonalizationEnabled } = useReflectionService();
 
-  // Use either the provided loading state or the local one
-  const loading = isLoading || localLoading;
+  // Use a single loading state, preferring the external one if provided
+  const loading = setIsLoading ? isLoading : localLoading;
   const updateLoading = setIsLoading || setLocalLoading;
 
   const handleTextSubmit = async () => {
@@ -39,20 +46,48 @@ export function ReflectionInput({
 
     updateLoading(true);
     try {
-      console.log("Submitting text reflection");
-      const response = await apiRequest("POST", "/api/reflection", {
-        content: text,
-        type: "text",
-      });
-
-      const data = await response.json();
-      onReflectionComplete(data);
+      console.log(`Submitting ${isPersonalizationEnabled() ? "personalized" : "standard"} text reflection`);
+      
+      // Use our personalized reflection service
+      const response = await submitReflection(text);
+      console.log("API response:", response);
+      
+      // Handle the API response which could be in different formats
+      let reflectionData;
+      let reflectionId;
+      
+      // Handle both possible response formats
+      if (response && response.reflection) {
+        // New format with nested reflection object
+        reflectionData = response.reflection;
+        reflectionId = reflectionData.id;
+      } else if (response && response.id) {
+        // Direct format where response has the ID
+        reflectionData = response;
+        reflectionId = response.id;
+      } else {
+        console.error("Invalid response format:", response);
+        throw new Error("Invalid response format from server");
+      }
+      
+      // Pass the COMPLETE response to the parent component, not just reflectionData
+      // This ensures that top-level fields like understanding and questions are available
+      onReflectionComplete(response);
       setText("");
       
       toast({
         title: "Reflection submitted",
-        description: "Your reflection has been saved.",
+        description: `Your ${isPersonalizationEnabled() ? "personalized " : ""}reflection has been saved.`,
       });
+      
+      // Handle redirection to chat page if enabled
+      if (redirectToChat && reflectionId) {
+        console.log(`Redirecting to /chat/${reflectionId} in 1 second`);
+        // Short delay to allow toast to be visible
+        setTimeout(() => {
+          setLocation(`/chat/${reflectionId}`);
+        }, 1000);
+      }
     } catch (error) {
       console.error("Error submitting reflection:", error);
       toast({
@@ -85,12 +120,39 @@ export function ReflectionInput({
       }
 
       const data = await response.json();
+      console.log("Audio API response:", data);
+      
+      // Handle both possible response formats
+      let reflectionData;
+      let reflectionId;
+      
+      if (data && data.reflection) {
+        reflectionData = data.reflection;
+        reflectionId = reflectionData.id;
+      } else if (data && data.id) {
+        reflectionData = data;
+        reflectionId = data.id;
+      } else {
+        console.error("Invalid response format:", data);
+        throw new Error("Invalid response format from server");
+      }
+      
+      // Pass the complete response to the parent, not just reflectionData
       onReflectionComplete(data);
       
       toast({
         title: "Audio reflection submitted",
         description: "Your audio reflection has been transcribed and saved.",
       });
+      
+      // Handle redirection to chat page if enabled
+      if (redirectToChat && reflectionId) {
+        console.log(`Redirecting to /chat/${reflectionId} in 1 second`);
+        // Short delay to allow toast to be visible
+        setTimeout(() => {
+          setLocation(`/chat/${reflectionId}`);
+        }, 1000);
+      }
     } catch (error) {
       console.error("Error submitting audio reflection:", error);
       toast({
@@ -105,7 +167,7 @@ export function ReflectionInput({
 
   return (
     <>
-      {loading && <LoadingAnimation message={activeTab === "voice" ? "Processing your audio..." : "Processing your reflection..."} />}
+      {loading && <LoadingAnimation message={activeTab === "voice" ? "Processing your audio..." : `${isPersonalizationEnabled() ? "Personalizing" : "Processing"} your reflection...`} />}
       
       <div className="w-full max-w-md">
         <Tabs
@@ -120,13 +182,20 @@ export function ReflectionInput({
           </TabsList>
           <TabsContent value="text" className="space-y-4 mt-4">
             <Textarea
-              placeholder="Share your Ramadan reflections, thoughts, or experiences..."
+              placeholder={isPersonalizationEnabled() 
+                ? "Share your thoughts for a personalized Islamic reflection..."
+                : "Share your Ramadan reflections, thoughts, or experiences..."}
               value={text}
               onChange={(e) => setText(e.target.value)}
               rows={6}
               disabled={loading}
               className="resize-none"
             />
+            {isPersonalizationEnabled() && (
+              <div className="text-xs text-muted-foreground italic">
+                Your reflection will be personalized based on your preferences.
+              </div>
+            )}
             <Button 
               onClick={handleTextSubmit} 
               className="w-full" 

@@ -14,9 +14,23 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { InlineLoading } from "./InlineLoading";
 import { useProfile } from "@/hooks/useProfile";
 import { useAuth } from "@/hooks/useAuth";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 // Define steps in the personalization process
-type Step = "intro" | "preferences" | "knowledge" | "topics" | "privacy" | "complete";
+type Step = 
+  | "intro" 
+  | "preferences" 
+  | "knowledge" 
+  | "spiritual-journey" 
+  | "life-stage" 
+  | "community" 
+  | "culture" 
+  | "reflection-style" 
+  | "topics" 
+  | "goals" 
+  | "guidance" 
+  | "privacy" 
+  | "complete";
 
 export function PersonalizationModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { updateProfile } = useProfile();
@@ -28,8 +42,23 @@ export function PersonalizationModal({ open, onClose }: { open: boolean; onClose
   const [enablePersonalization, setEnablePersonalization] = useState(true);
   const [knowledgeLevel, setKnowledgeLevel] = useState<string>("beginner");
   const [selectedTopics, setSelectedTopics] = useState<string[]>([]);
+  const [primaryGoals, setPrimaryGoals] = useState<string[]>([]);
   const [spiritualJourney, setSpiritualJourney] = useState<string>("exploring");
+  const [lifeStage, setLifeStage] = useState<string>("");
+  const [communityConnection, setCommunityConnection] = useState<string>("");
+  const [culturalBackground, setCulturalBackground] = useState<string>("");
+  const [reflectionStyle, setReflectionStyle] = useState<string>("balanced");
+  const [guidancePreferences, setGuidancePreferences] = useState<string[]>(["practical", "spiritual"]);
   const [privacyRead, setPrivacyRead] = useState(false);
+  
+  // Track whether a field was skipped
+  const [skippedFields, setSkippedFields] = useState<string[]>([]);
+
+  // Handle skip option for a field
+  const skipCurrentField = () => {
+    setSkippedFields([...skippedFields, currentStep]);
+    goToNextStep();
+  };
   
   const topics = [
     { id: "quran", label: "Quran Study" },
@@ -42,6 +71,25 @@ export function PersonalizationModal({ open, onClose }: { open: boolean; onClose
     { id: "daily_practice", label: "Daily Islamic Practice" },
     { id: "community", label: "Community & Family" },
   ];
+  
+  const goals = [
+    { id: "strengthen_faith", label: "Strengthen Faith" },
+    { id: "improve_prayer", label: "Improve Prayer" },
+    { id: "learn_quran", label: "Learn Quran" },
+    { id: "build_community", label: "Build Community" },
+    { id: "family_development", label: "Family Development" },
+    { id: "personal_growth", label: "Personal Growth" },
+    { id: "islamic_education", label: "Islamic Education" },
+  ];
+  
+  const guidanceOptions = [
+    { id: "practical", label: "Practical" },
+    { id: "spiritual", label: "Spiritual" },
+    { id: "scholarly", label: "Scholarly" },
+    { id: "reflective", label: "Reflective" },
+    { id: "action-oriented", label: "Action-Oriented" },
+    { id: "community-focused", label: "Community-Focused" },
+  ];
 
   // Handle topic selection
   const toggleTopic = (topic: string) => {
@@ -49,6 +97,24 @@ export function PersonalizationModal({ open, onClose }: { open: boolean; onClose
       prev.includes(topic)
         ? prev.filter((t) => t !== topic)
         : [...prev, topic]
+    );
+  };
+  
+  // Handle goal selection
+  const toggleGoal = (goal: string) => {
+    setPrimaryGoals((prev) =>
+      prev.includes(goal)
+        ? prev.filter((g) => g !== goal)
+        : [...prev, goal]
+    );
+  };
+  
+  // Handle guidance preference selection
+  const toggleGuidance = (guidance: string) => {
+    setGuidancePreferences((prev) =>
+      prev.includes(guidance)
+        ? prev.filter((g) => g !== guidance)
+        : [...prev, guidance]
     );
   };
 
@@ -59,6 +125,25 @@ export function PersonalizationModal({ open, onClose }: { open: boolean; onClose
     setIsSubmitting(true);
     
     try {
+      console.log("Saving personalization data with the following values:", {
+        privacySettings: {
+          allowPersonalization: enablePersonalization,
+          localStorageOnly: true,
+          enableSync: false,
+        },
+        privateProfile: {
+          knowledgeLevel,
+          topicsOfInterest: selectedTopics,
+          primaryGoals,
+          spiritualJourneyStage: spiritualJourney,
+          lifeStage,
+          communityConnection,
+          culturalBackground,
+          reflectionStyle,
+          guidancePreferences,
+        }
+      });
+      
       // Update public profile
       await updateProfile(
         {
@@ -70,14 +155,19 @@ export function PersonalizationModal({ open, onClose }: { open: boolean; onClose
         },
         enablePersonalization ? {
           // Only update private profile if personalization is enabled
-          knowledgeLevel,
-          topicsOfInterest: selectedTopics,
-          spiritualJourneyStage: spiritualJourney,
-          primaryGoals: [],
-          reflectionStyle: "balanced",
-          guidancePreferences: ["practical", "spiritual"],
+          knowledgeLevel: skippedFields.includes("knowledge") ? "" : knowledgeLevel,
+          topicsOfInterest: skippedFields.includes("topics") ? [] : selectedTopics,
+          spiritualJourneyStage: skippedFields.includes("spiritual-journey") ? "" : spiritualJourney,
+          primaryGoals: skippedFields.includes("goals") ? [] : primaryGoals,
+          lifeStage: skippedFields.includes("life-stage") ? "" : lifeStage,
+          communityConnection: skippedFields.includes("community") ? "" : communityConnection,
+          culturalBackground: skippedFields.includes("culture") ? "" : culturalBackground,
+          reflectionStyle: skippedFields.includes("reflection-style") ? "" : reflectionStyle,
+          guidancePreferences: skippedFields.includes("guidance") ? [] : guidancePreferences,
         } : undefined
       );
+      
+      console.log("Personalization data saved successfully");
       
       // Mark user as no longer first login
       // This would normally update the user in the database
@@ -105,9 +195,30 @@ export function PersonalizationModal({ open, onClose }: { open: boolean; onClose
         }
         break;
       case "knowledge":
+        setCurrentStep("spiritual-journey");
+        break;
+      case "spiritual-journey":
+        setCurrentStep("life-stage");
+        break;
+      case "life-stage":
+        setCurrentStep("community");
+        break;
+      case "community":
+        setCurrentStep("culture");
+        break;
+      case "culture":
+        setCurrentStep("reflection-style");
+        break;
+      case "reflection-style":
         setCurrentStep("topics");
         break;
       case "topics":
+        setCurrentStep("goals");
+        break;
+      case "goals":
+        setCurrentStep("guidance");
+        break;
+      case "guidance":
         setCurrentStep("privacy");
         break;
       case "privacy":
@@ -128,15 +239,32 @@ export function PersonalizationModal({ open, onClose }: { open: boolean; onClose
       case "knowledge":
         setCurrentStep("preferences");
         break;
-      case "topics":
+      case "spiritual-journey":
         setCurrentStep("knowledge");
         break;
+      case "life-stage":
+        setCurrentStep("spiritual-journey");
+        break;
+      case "community":
+        setCurrentStep("life-stage");
+        break;
+      case "culture":
+        setCurrentStep("community");
+        break;
+      case "reflection-style":
+        setCurrentStep("culture");
+        break;
+      case "topics":
+        setCurrentStep("reflection-style");
+        break;
+      case "goals":
+        setCurrentStep("topics");
+        break;
+      case "guidance":
+        setCurrentStep("goals");
+        break;
       case "privacy":
-        if (enablePersonalization) {
-          setCurrentStep("topics");
-        } else {
-          setCurrentStep("preferences");
-        }
+        setCurrentStep(enablePersonalization ? "guidance" : "preferences");
         break;
       case "complete":
         setCurrentStep("privacy");
@@ -238,34 +366,40 @@ export function PersonalizationModal({ open, onClose }: { open: boolean; onClose
               </DialogDescription>
             </DialogHeader>
             
-            <div className="py-6 space-y-4">
-              <p className="mb-4">
-                This helps us provide explanations and references at the right level of detail.
-              </p>
-              
+            <div className="py-6">
               <RadioGroup value={knowledgeLevel} onValueChange={setKnowledgeLevel}>
-                <div className="space-y-3">
+                <div className="flex flex-col gap-3">
                   <div className="flex items-start space-x-3 space-y-0 rounded-md border p-3">
                     <RadioGroupItem value="beginner" id="beginner" />
                     <div className="space-y-1">
-                      <Label htmlFor="beginner" className="font-medium">Beginner</Label>
-                      <p className="text-sm text-muted-foreground">New to Islamic teachings or returning to practice</p>
+                      <Label htmlFor="beginner" className="font-medium">
+                        Beginner
+                      </Label>
+                      <p className="text-sm text-muted-foreground">
+                        I'm new to Islamic studies or still learning the basics
+                      </p>
                     </div>
                   </div>
-                  
                   <div className="flex items-start space-x-3 space-y-0 rounded-md border p-3">
                     <RadioGroupItem value="intermediate" id="intermediate" />
                     <div className="space-y-1">
-                      <Label htmlFor="intermediate" className="font-medium">Intermediate</Label>
-                      <p className="text-sm text-muted-foreground">Familiar with basic concepts and practices</p>
+                      <Label htmlFor="intermediate" className="font-medium">
+                        Intermediate
+                      </Label>
+                      <p className="text-sm text-muted-foreground">
+                        I have a good understanding of core Islamic concepts
+                      </p>
                     </div>
                   </div>
-                  
                   <div className="flex items-start space-x-3 space-y-0 rounded-md border p-3">
                     <RadioGroupItem value="advanced" id="advanced" />
                     <div className="space-y-1">
-                      <Label htmlFor="advanced" className="font-medium">Advanced</Label>
-                      <p className="text-sm text-muted-foreground">Deeply familiar with Islamic teachings and scholarly works</p>
+                      <Label htmlFor="advanced" className="font-medium">
+                        Advanced
+                      </Label>
+                      <p className="text-sm text-muted-foreground">
+                        I have deep knowledge of Islamic teachings and scholarship
+                      </p>
                     </div>
                   </div>
                 </div>
@@ -273,9 +407,309 @@ export function PersonalizationModal({ open, onClose }: { open: boolean; onClose
             </div>
             
             <DialogFooter className="flex justify-between flex-row">
-              <Button variant="outline" onClick={goToPreviousStep}>
-                Back
+              <div className="flex gap-2">
+                <Button variant="outline" onClick={goToPreviousStep}>
+                  Back
+                </Button>
+                <Button variant="ghost" onClick={skipCurrentField}>
+                  Skip
+                </Button>
+              </div>
+              <Button onClick={goToNextStep}>
+                Continue
               </Button>
+            </DialogFooter>
+          </>
+        )}
+
+        {/* Spiritual Journey Step */}
+        {currentStep === "spiritual-journey" && (
+          <>
+            <DialogHeader>
+              <DialogTitle>Spiritual Journey</DialogTitle>
+              <DialogDescription>
+                Help us understand your spiritual journey
+              </DialogDescription>
+            </DialogHeader>
+            
+            <div className="py-6 space-y-6">
+              <div className="space-y-4">
+                <Label>Spiritual Journey Stage</Label>
+                <RadioGroup value={spiritualJourney} onValueChange={setSpiritualJourney}>
+                  <div className="flex flex-col gap-3">
+                    <div className="flex items-start space-x-3 space-y-0 rounded-md border p-3">
+                      <RadioGroupItem value="exploring" id="exploring" />
+                      <div className="space-y-1">
+                        <Label htmlFor="exploring" className="font-medium">
+                          Exploring
+                        </Label>
+                        <p className="text-sm text-muted-foreground">
+                          I'm learning about Islam and exploring its teachings
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-start space-x-3 space-y-0 rounded-md border p-3">
+                      <RadioGroupItem value="practicing" id="practicing" />
+                      <div className="space-y-1">
+                        <Label htmlFor="practicing" className="font-medium">
+                          Practicing
+                        </Label>
+                        <p className="text-sm text-muted-foreground">
+                          I'm actively working to implement Islam in my daily life
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-start space-x-3 space-y-0 rounded-md border p-3">
+                      <RadioGroupItem value="deepening" id="deepening" />
+                      <div className="space-y-1">
+                        <Label htmlFor="deepening" className="font-medium">
+                          Deepening
+                        </Label>
+                        <p className="text-sm text-muted-foreground">
+                          I'm working to deepen my spiritual connection and understanding
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-start space-x-3 space-y-0 rounded-md border p-3">
+                      <RadioGroupItem value="guiding" id="guiding" />
+                      <div className="space-y-1">
+                        <Label htmlFor="guiding" className="font-medium">
+                          Guiding Others
+                        </Label>
+                        <p className="text-sm text-muted-foreground">
+                          I'm at a stage where I help guide others in their journey
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </RadioGroup>
+              </div>
+            </div>
+            
+            <DialogFooter className="flex justify-between flex-row">
+              <div className="flex gap-2">
+                <Button variant="outline" onClick={goToPreviousStep}>
+                  Back
+                </Button>
+                <Button variant="ghost" onClick={skipCurrentField}>
+                  Skip
+                </Button>
+              </div>
+              <Button onClick={goToNextStep}>
+                Continue
+              </Button>
+            </DialogFooter>
+          </>
+        )}
+
+        {/* Life Stage Step */}
+        {currentStep === "life-stage" && (
+          <>
+            <DialogHeader>
+              <DialogTitle>Life Stage</DialogTitle>
+              <DialogDescription>
+                Help us understand your life stage
+              </DialogDescription>
+            </DialogHeader>
+            
+            <div className="py-6 space-y-6">
+              <div className="space-y-4">
+                <Label>Life Stage</Label>
+                <Select value={lifeStage} onValueChange={setLifeStage}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select your life stage" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="student">Student</SelectItem>
+                    <SelectItem value="young-adult">Young Adult</SelectItem>
+                    <SelectItem value="parent">Parent</SelectItem>
+                    <SelectItem value="mid-career">Mid-Career</SelectItem>
+                    <SelectItem value="elder">Elder</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            
+            <DialogFooter className="flex justify-between flex-row">
+              <div className="flex gap-2">
+                <Button variant="outline" onClick={goToPreviousStep}>
+                  Back
+                </Button>
+                <Button variant="ghost" onClick={skipCurrentField}>
+                  Skip
+                </Button>
+              </div>
+              <Button onClick={goToNextStep}>
+                Continue
+              </Button>
+            </DialogFooter>
+          </>
+        )}
+
+        {/* Community Connection Step */}
+        {currentStep === "community" && (
+          <>
+            <DialogHeader>
+              <DialogTitle>Community Connection</DialogTitle>
+              <DialogDescription>
+                Help us understand your community connection
+              </DialogDescription>
+            </DialogHeader>
+            
+            <div className="py-6 space-y-6">
+              <div className="space-y-4">
+                <Label>Community Connection</Label>
+                <Select value={communityConnection} onValueChange={setCommunityConnection}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select your community connection" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="isolated">Isolated/Minimal</SelectItem>
+                    <SelectItem value="occasional">Occasional Attendance</SelectItem>
+                    <SelectItem value="regular">Regular Participation</SelectItem>
+                    <SelectItem value="active">Active Member</SelectItem>
+                    <SelectItem value="leader">Community Leader</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            
+            <DialogFooter className="flex justify-between flex-row">
+              <div className="flex gap-2">
+                <Button variant="outline" onClick={goToPreviousStep}>
+                  Back
+                </Button>
+                <Button variant="ghost" onClick={skipCurrentField}>
+                  Skip
+                </Button>
+              </div>
+              <Button onClick={goToNextStep}>
+                Continue
+              </Button>
+            </DialogFooter>
+          </>
+        )}
+
+        {/* Cultural Background Step */}
+        {currentStep === "culture" && (
+          <>
+            <DialogHeader>
+              <DialogTitle>Cultural Background</DialogTitle>
+              <DialogDescription>
+                Help us understand your cultural background
+              </DialogDescription>
+            </DialogHeader>
+            
+            <div className="py-6 space-y-6">
+              <div className="space-y-4">
+                <Label>Cultural Background</Label>
+                <Select value={culturalBackground} onValueChange={setCulturalBackground}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select your cultural background" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="south-asian">South Asian</SelectItem>
+                    <SelectItem value="middle-eastern">Middle Eastern</SelectItem>
+                    <SelectItem value="african">African</SelectItem>
+                    <SelectItem value="southeast-asian">Southeast Asian</SelectItem>
+                    <SelectItem value="western">Western</SelectItem>
+                    <SelectItem value="convert">Convert</SelectItem>
+                    <SelectItem value="mixed">Mixed Background</SelectItem>
+                    <SelectItem value="other">Other</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            
+            <DialogFooter className="flex justify-between flex-row">
+              <div className="flex gap-2">
+                <Button variant="outline" onClick={goToPreviousStep}>
+                  Back
+                </Button>
+                <Button variant="ghost" onClick={skipCurrentField}>
+                  Skip
+                </Button>
+              </div>
+              <Button onClick={goToNextStep}>
+                Continue
+              </Button>
+            </DialogFooter>
+          </>
+        )}
+
+        {/* Reflection Style Step */}
+        {currentStep === "reflection-style" && (
+          <>
+            <DialogHeader>
+              <DialogTitle>Reflection Style</DialogTitle>
+              <DialogDescription>
+                Help us understand your preferred reflection style
+              </DialogDescription>
+            </DialogHeader>
+            
+            <div className="py-6 space-y-6">
+              <div className="space-y-4">
+                <Label>Reflection Style</Label>
+                <RadioGroup value={reflectionStyle} onValueChange={setReflectionStyle}>
+                  <div className="flex flex-col gap-3">
+                    <div className="flex items-start space-x-3 space-y-0 rounded-md border p-3">
+                      <RadioGroupItem value="analytical" id="analytical" />
+                      <div className="space-y-1">
+                        <Label htmlFor="analytical" className="font-medium">
+                          Analytical
+                        </Label>
+                        <p className="text-sm text-muted-foreground">
+                          I prefer logical and structured thinking
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-start space-x-3 space-y-0 rounded-md border p-3">
+                      <RadioGroupItem value="emotional" id="emotional" />
+                      <div className="space-y-1">
+                        <Label htmlFor="emotional" className="font-medium">
+                          Emotional
+                        </Label>
+                        <p className="text-sm text-muted-foreground">
+                          I connect through feelings and emotions
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-start space-x-3 space-y-0 rounded-md border p-3">
+                      <RadioGroupItem value="practical" id="practical" />
+                      <div className="space-y-1">
+                        <Label htmlFor="practical" className="font-medium">
+                          Practical
+                        </Label>
+                        <p className="text-sm text-muted-foreground">
+                          I focus on real-world applications
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-start space-x-3 space-y-0 rounded-md border p-3">
+                      <RadioGroupItem value="balanced" id="balanced" />
+                      <div className="space-y-1">
+                        <Label htmlFor="balanced" className="font-medium">
+                          Balanced
+                        </Label>
+                        <p className="text-sm text-muted-foreground">
+                          I appreciate a mix of different approaches
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </RadioGroup>
+              </div>
+            </div>
+            
+            <DialogFooter className="flex justify-between flex-row">
+              <div className="flex gap-2">
+                <Button variant="outline" onClick={goToPreviousStep}>
+                  Back
+                </Button>
+                <Button variant="ghost" onClick={skipCurrentField}>
+                  Skip
+                </Button>
+              </div>
               <Button onClick={goToNextStep}>
                 Continue
               </Button>
@@ -318,10 +752,115 @@ export function PersonalizationModal({ open, onClose }: { open: boolean; onClose
             </div>
             
             <DialogFooter className="flex justify-between flex-row">
-              <Button variant="outline" onClick={goToPreviousStep}>
-                Back
+              <div className="flex gap-2">
+                <Button variant="outline" onClick={goToPreviousStep}>
+                  Back
+                </Button>
+                <Button variant="ghost" onClick={skipCurrentField}>
+                  Skip
+                </Button>
+              </div>
+              <Button onClick={goToNextStep} disabled={selectedTopics.length === 0 && !skippedFields.includes("topics")}>
+                Continue
               </Button>
-              <Button onClick={goToNextStep} disabled={selectedTopics.length === 0}>
+            </DialogFooter>
+          </>
+        )}
+
+        {/* Goals Step */}
+        {currentStep === "goals" && (
+          <>
+            <DialogHeader>
+              <DialogTitle>Primary Goals</DialogTitle>
+              <DialogDescription>
+                Select your primary goals for your spiritual journey
+              </DialogDescription>
+            </DialogHeader>
+            
+            <div className="py-6">
+              <p className="mb-4">
+                These goals will help us tailor your reflections to your needs.
+              </p>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {goals.map((goal) => (
+                  <div 
+                    key={goal.id}
+                    className="flex items-center space-x-2 rounded-md border p-3"
+                  >
+                    <Checkbox 
+                      id={goal.id} 
+                      checked={primaryGoals.includes(goal.id)}
+                      onCheckedChange={() => toggleGoal(goal.id)}
+                    />
+                    <Label htmlFor={goal.id} className="font-medium cursor-pointer">
+                      {goal.label}
+                    </Label>
+                  </div>
+                ))}
+              </div>
+            </div>
+            
+            <DialogFooter className="flex justify-between flex-row">
+              <div className="flex gap-2">
+                <Button variant="outline" onClick={goToPreviousStep}>
+                  Back
+                </Button>
+                <Button variant="ghost" onClick={skipCurrentField}>
+                  Skip
+                </Button>
+              </div>
+              <Button onClick={goToNextStep} disabled={primaryGoals.length === 0 && !skippedFields.includes("goals")}>
+                Continue
+              </Button>
+            </DialogFooter>
+          </>
+        )}
+
+        {/* Guidance Preferences Step */}
+        {currentStep === "guidance" && (
+          <>
+            <DialogHeader>
+              <DialogTitle>Guidance Preferences</DialogTitle>
+              <DialogDescription>
+                Select the types of guidance you'd like to receive
+              </DialogDescription>
+            </DialogHeader>
+            
+            <div className="py-6">
+              <p className="mb-4">
+                Choose the types of guidance that resonate with you.
+              </p>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {guidanceOptions.map((guidance) => (
+                  <div 
+                    key={guidance.id}
+                    className="flex items-center space-x-2 rounded-md border p-3"
+                  >
+                    <Checkbox 
+                      id={guidance.id} 
+                      checked={guidancePreferences.includes(guidance.id)}
+                      onCheckedChange={() => toggleGuidance(guidance.id)}
+                    />
+                    <Label htmlFor={guidance.id} className="font-medium cursor-pointer">
+                      {guidance.label}
+                    </Label>
+                  </div>
+                ))}
+              </div>
+            </div>
+            
+            <DialogFooter className="flex justify-between flex-row">
+              <div className="flex gap-2">
+                <Button variant="outline" onClick={goToPreviousStep}>
+                  Back
+                </Button>
+                <Button variant="ghost" onClick={skipCurrentField}>
+                  Skip
+                </Button>
+              </div>
+              <Button onClick={goToNextStep} disabled={guidancePreferences.length === 0 && !skippedFields.includes("guidance")}>
                 Continue
               </Button>
             </DialogFooter>

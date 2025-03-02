@@ -47,7 +47,7 @@ router.post('/register', async (req, res) => {
     }
     
     // Hash password
-    const hashedPassword = await hashPassword(password);
+    const hashedPassword = await hashPassword(password as string);
     
     // Create user
     const newUser = await createUser({
@@ -101,6 +101,9 @@ router.post('/login', async (req, res) => {
     
     // Generate token
     const token = generateToken(user.id);
+    
+    // Store token in database
+    await storeToken(user.id, token);
     
     // Return user info (excluding password) and token
     const { password: _, ...userWithoutPassword } = user;
@@ -191,13 +194,18 @@ router.post('/logout', async (req, res) => {
  * Google OAuth initialization
  */
 router.get('/google', (req, res) => {
+  // Get the action parameter (login or signup)
+  const action = req.query.action as string || 'login';
+  
   const authUrl = googleClient.generateAuthUrl({
     access_type: 'offline',
     scope: [
       'https://www.googleapis.com/auth/userinfo.profile',
       'https://www.googleapis.com/auth/userinfo.email'
     ],
-    prompt: 'consent'
+    prompt: 'consent',
+    // Pass action as state parameter to be used in callback
+    state: action
   });
   
   res.redirect(authUrl);
@@ -208,14 +216,15 @@ router.get('/google', (req, res) => {
  */
 router.get('/google/callback', async (req, res) => {
   try {
-    const { code } = req.query;
+    const { code, state } = req.query;
+    const action = (state as string) || 'login';
     
     if (!code || typeof code !== 'string') {
       console.error('OAuth callback: Missing or invalid authorization code');
       return res.status(400).send('Authorization code missing');
     }
     
-    console.log('OAuth callback: Got authorization code, exchanging for tokens');
+    console.log(`OAuth callback: Got authorization code, exchanging for tokens (action: ${action})`);
     
     // Exchange code for tokens
     try {
@@ -247,13 +256,26 @@ router.get('/google/callback', async (req, res) => {
       console.log('OAuth callback: Checking if user exists in database');
       let user = await getUserByEmail(userInfo.email);
       
+      // If signup action but user already exists, return error
+      if (action === 'signup' && user) {
+        console.log('OAuth callback: Signup attempt for existing user');
+        return res.send(`
+          <script>
+            window.opener.postMessage({
+              error: "An account with this email already exists. Please use the login option instead."
+            }, "${process.env.CLIENT_URL || window.location.origin}");
+            window.close();
+          </script>
+        `);
+      }
+      
       if (user) {
         console.log('OAuth callback: User exists in database');
         // User exists, update Google ID if needed
         // (implementation depends on your database structure)
       } else {
+        // Only create user if action is signup or if login is attempted with non-existent account
         console.log('OAuth callback: Creating new user in database');
-        // Create new user
         try {
           user = await createUser({
             email: userInfo.email,

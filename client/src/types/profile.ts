@@ -23,16 +23,23 @@ export interface PublicProfile {
 export interface PrivateProfile {
   knowledgeLevel?: string;
   topicsOfInterest?: string[];
-  spiritualJourneyStage?: string;
   primaryGoals?: string[];
+  spiritualJourneyStage?: string;
+  lifeStage?: string;
+  communityConnection?: string;
+  culturalBackground?: string;
   reflectionStyle?: string;
   guidancePreferences?: string[];
-  customPreferences?: Record<string, any>;
 }
 
 /**
  * Combined user profile type
  */
 export interface ProfileType extends PublicProfile {
+  privateProfile?: PrivateProfile;
+}
+
+export interface Profile {
+  privacySettings?: PrivacySettings;
   privateProfile?: PrivateProfile;
 } 

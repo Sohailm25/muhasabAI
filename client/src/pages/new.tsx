@@ -15,32 +15,87 @@ export default function NewReflection() {
   const handleReflectionComplete = (data: any) => {
     console.log("Reflection complete:", data);
     
-    if (data.conversation && data.conversation.id) {
-      // Save the conversation data to localStorage with timestamp
-      try {
-        const sessionData = {
-          conversationId: data.conversation.id,
-          messages: data.conversation.messages,
-          questions: data.questions || [],
-          actionItems: data.conversation.actionItems || [],
-          timestamp: new Date().toISOString()
-        };
-        localStorage.setItem(`ramadanReflection_${data.conversation.id}`, JSON.stringify(sessionData));
-      } catch (error) {
-        console.error("Error saving session:", error);
-        toast({
-          title: "Session Error",
-          description: "Could not save session data.",
-          variant: "destructive",
-        });
+    // Enhanced debugging - log all top-level keys in the response
+    console.log("API response top-level keys:", Object.keys(data));
+    
+    // Specifically check for understanding and questions at the top level
+    console.log("Understanding is present at top level:", !!data.understanding);
+    console.log("Questions are present at top level:", !!data.questions && Array.isArray(data.questions));
+    
+    if (data.understanding) {
+      console.log("Top-level understanding preview:", data.understanding.substring(0, 50) + "...");
+    }
+    
+    if (data.questions && Array.isArray(data.questions)) {
+      console.log("Top-level questions count:", data.questions.length);
+      if (data.questions.length > 0) {
+        console.log("First question:", data.questions[0]);
+      }
+    }
+    
+    // Handle the response from the API
+    // We need to handle both old and new response formats
+    try {
+      let reflectionId;
+      let reflectionData;
+      
+      // Check format of data
+      if (data && data.id) {
+        // Direct format
+        reflectionId = data.id;
+        reflectionData = data;
+      } else if (data && data.reflection && data.reflection.id) {
+        // Nested reflection format
+        reflectionId = data.reflection.id;
+        reflectionData = data.reflection;
+      } else if (data && data.reflection) {
+        // New format from API route without ID
+        reflectionData = data.reflection;
+        // Generate a random ID for localStorage if none exists
+        reflectionId = Math.floor(Math.random() * 1000000);
+      } else {
+        throw new Error("Invalid response format");
       }
       
-      // Navigate to the chat page for this conversation
-      setLocation(`/chat/${data.conversation.id}`);
-    } else {
+      // Ensure reflectionId is set
+      if (!reflectionId) {
+        reflectionId = Math.floor(Math.random() * 1000000);
+      }
+      
+      // First, check if understanding and questions are at the top level of the response
+      const understanding = data.understanding || "";
+      const questions = data.questions || [];
+      
+      console.log("Direct from API response - understanding:", understanding ? understanding.substring(0, 50) + "..." : "None");
+      console.log("Direct from API response - questions:", questions.length > 0 ? questions : "None");
+      
+      // Extract all needed data - now also checks for top-level understanding and questions
+      const sessionData = {
+        id: reflectionId,
+        reflectionId: reflectionId,
+        original: reflectionData.original || data.content || reflectionData.content || "",
+        understanding: understanding || reflectionData.understanding || "",
+        questions: questions.length > 0 ? questions : (reflectionData.questions || []),
+        actionItems: reflectionData.actionItems || data.actionItems || [],
+        insights: reflectionData.insights || data.insights || [],
+        timestamp: reflectionData.timestamp || new Date().toISOString()
+      };
+      
+      console.log("Saving reflection data to localStorage:", sessionData);
+      // Log understanding and questions to verify they're being saved correctly
+      console.log("Understanding:", sessionData.understanding ? sessionData.understanding.substring(0, 50) + "..." : "None");
+      console.log("Questions:", sessionData.questions.length > 0 ? sessionData.questions : "None");
+      
+      localStorage.setItem(`ramadanReflection_${reflectionId}`, JSON.stringify(sessionData));
+      
+      // Navigate to the chat page for this reflection
+      console.log(`Navigating to chat page: /chat/${reflectionId}`);
+      setLocation(`/chat/${reflectionId}`);
+    } catch (error) {
+      console.error("Error processing reflection data:", error);
       toast({
         title: "Error",
-        description: "Could not create conversation.",
+        description: "Could not process reflection data properly.",
         variant: "destructive",
       });
     }
@@ -79,53 +134,44 @@ export default function NewReflection() {
                 <div>
                   <h3 className="font-medium text-sm mb-2 flex items-center gap-1">
                     <Lightbulb className="h-4 w-4 text-primary" />
-                    Helpful prompts:
+                    Tips for meaningful reflection:
                   </h3>
-                  <div className="space-y-2 text-sm text-muted-foreground">
-                    <p>"Today I felt closest to Allah when..."</p>
-                    <p>"A challenge I'm facing in my spiritual journey is..."</p>
-                    <p>"One Islamic teaching I'd like to understand better is..."</p>
-                    <p>"I'm grateful to Allah for..."</p>
-                  </div>
+                  <ul className="space-y-2 text-sm text-muted-foreground list-disc list-inside">
+                    <li>Be honest and authentic in your thoughts</li>
+                    <li>Focus on your intentions and feelings</li>
+                    <li>Consider how your actions align with Islamic values</li>
+                    <li>Think about areas where you'd like to grow spiritually</li>
+                  </ul>
                 </div>
-              </CardContent>
-            </Card>
-            
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="flex items-center gap-2 text-base">
-                  <BookOpen className="h-4 w-4 text-primary" />
-                  Benefits of Regular Reflection
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="text-sm text-muted-foreground">
-                <ul className="space-y-1 list-disc list-inside">
-                  <li>Strengthens your connection with Allah</li>
-                  <li>Provides clarity and focus in your spiritual journey</li>
-                  <li>Helps identify areas for personal growth</li>
-                  <li>Creates a record of your spiritual development</li>
-                </ul>
+
+                <div>
+                  <h3 className="font-medium text-sm mb-2 flex items-center gap-1">
+                    <BookOpen className="h-4 w-4 text-primary" />
+                    Islamic perspective:
+                  </h3>
+                  <p className="text-sm text-muted-foreground">
+                    "Whoever knows himself, knows his Lord." 
+                    <span className="block mt-1 italic">- Traditional Islamic wisdom</span>
+                  </p>
+                  <p className="text-sm text-muted-foreground mt-2">
+                    Self-reflection (muhasabah) is highly encouraged in Islam as a means to spiritual growth and nearness to Allah.
+                  </p>
+                </div>
               </CardContent>
             </Card>
           </div>
           
           {/* Reflection input area */}
-          <div className="animate-slide-in" style={{ animationDelay: "100ms" }}>
-            <Card>
-              <CardHeader>
-                <CardTitle>Begin Your Reflection</CardTitle>
-                <CardDescription>
-                  Take a moment to reflect on your spiritual journey
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <ReflectionInput 
-                  onReflectionComplete={handleReflectionComplete} 
-                  isLoading={isLoading}
-                  setIsLoading={setIsLoading}
-                />
-              </CardContent>
-            </Card>
+          <div className="flex flex-col items-center justify-start">
+            <div className="w-full animate-fade-in">
+              <h1 className="text-2xl font-bold mb-6 text-center">Share Your Reflection</h1>
+              <ReflectionInput 
+                onReflectionComplete={handleReflectionComplete} 
+                isLoading={isLoading} 
+                setIsLoading={setIsLoading}
+                redirectToChat={false} // We'll handle redirection in this component
+              />
+            </div>
           </div>
         </div>
       </div>

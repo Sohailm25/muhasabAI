@@ -76,6 +76,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/reflection", async (req: Request, res: Response) => {
     try {
+      console.log("\n\n🚨🚨🚨 EXPRESS HANDLER: Request received at /api/reflection 🚨🚨🚨");
+      console.log("Request headers:", req.headers);
+      console.log("Request body:", req.body);
+      console.log("Has personalizationContext:", !!req.body.personalizationContext);
+      if (req.body.personalizationContext) {
+        console.log("personalizationContext keys:", Object.keys(req.body.personalizationContext));
+      }
+      
       console.log("Reflection request body:", {
         type: req.body.type,
         contentLength: req.body.content?.length,
@@ -121,7 +129,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       try {
         // Use transcription for audio reflections
         const content = data.type === "audio" ? data.transcription! : data.content;
-        const generatedResponse = await generateFollowUpQuestions(content);
+        
+        // Pass the personalizationContext to the generateFollowUpQuestions function
+        const generatedResponse = await generateFollowUpQuestions(
+          content, 
+          undefined, // No previous messages
+          req.body.personalizationContext // Pass personalization context
+        );
+        
         if (generatedResponse && generatedResponse.questions && generatedResponse.questions.length > 0) {
           questions = generatedResponse.questions;
           understanding = generatedResponse.understanding;

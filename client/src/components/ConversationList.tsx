@@ -27,15 +27,30 @@ export function ConversationList() {
         conversationKeys.forEach(key => {
           try {
             const data = JSON.parse(localStorage.getItem(key) || '');
-            if (data.conversationId && data.messages && data.messages.length > 0) {
-              const firstUserMessage = data.messages.find((m: any) => m.role === 'user');
+            
+            // Extract the ID from the key (ramadanReflection_ID)
+            const idMatch = key.match(/ramadanReflection_(\d+)/);
+            const id = idMatch ? parseInt(idMatch[1]) : null;
+            
+            if (id === null) {
+              console.warn(`Could not extract ID from key: ${key}`);
+              return;
+            }
+            
+            // Handle both old and new data formats
+            if (data.original || (data.messages && data.messages.length > 0)) {
+              // New format with original content
+              const firstMessage = data.original || 
+                                  (data.messages && data.messages.length > 0 ? 
+                                    data.messages.find((m: any) => m.role === 'user')?.content : '');
+              
               savedConversations.push({
-                id: data.conversationId,
+                id: id,
                 timestamp: data.timestamp || new Date().toISOString(),
-                firstMessage: firstUserMessage ? 
-                  (firstUserMessage.content.length > 100 ? 
-                    firstUserMessage.content.substring(0, 100) + '...' : 
-                    firstUserMessage.content) : 
+                firstMessage: firstMessage ? 
+                  (firstMessage.length > 100 ? 
+                    firstMessage.substring(0, 100) + '...' : 
+                    firstMessage) : 
                   'Reflection'
               });
             }

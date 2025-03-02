@@ -63,6 +63,11 @@ const AppContent = () => {
             <ReflectionsPage />
           </RequireAuth>
         </Route>
+        <Route path="/chat/:id">
+          <RequireAuth>
+            <Chat />
+          </RequireAuth>
+        </Route>
         <Route path="/chat">
           <RequireAuth>
             <Chat />

@@ -121,9 +121,20 @@ const FollowUpQuestions = React.memo(({
   onQuestionSelect: (q: string) => void;
   isVisible: boolean;
 }) => {
-  // If not visible yet, don't render anything
-  if (!isVisible) return null;
+  // Log every render of this component with full props info
+  console.log(`[DEBUG] FollowUpQuestions component received props:`, {
+    questionsCount: questions.length,
+    isVisible: isVisible,
+    firstQuestionPreview: questions.length > 0 ? questions[0].substring(0, 30) + '...' : 'none',
+  });
   
+  // If not visible yet, don't render anything
+  if (!isVisible) {
+    console.log('[DEBUG] FollowUpQuestions not visible, returning null');
+    return null;
+  }
+  
+  console.log('[DEBUG] FollowUpQuestions is visible, rendering buttons');
   return (
     <div className="space-y-2 mt-4">
       {questions.map((q, i) => {
@@ -153,8 +164,10 @@ const FollowUpQuestions = React.memo(({
   );
 }, (prevProps, nextProps) => {
   // Only re-render if questions change or visibility changes
-  return prevProps.isVisible === nextProps.isVisible && 
-         prevProps.questions === nextProps.questions;
+  const shouldUpdate = prevProps.isVisible !== nextProps.isVisible || 
+                       prevProps.questions !== nextProps.questions;
+  console.log(`[DEBUG] FollowUpQuestions memoization - shouldUpdate: ${shouldUpdate}`);
+  return !shouldUpdate;
 });
 
 // Single message component to prevent re-renders of other messages
@@ -273,6 +286,20 @@ export function ConversationView({
   isFirstSubmission = true,
   selectedQuestion: propSelectedQuestion = null,
 }: ConversationViewProps) {
+  console.log(`[DEBUG] ConversationView render - conversationId: ${conversationId}, messages: ${messages.length}, questions: ${questions?.length}, isFirstSubmission: ${isFirstSubmission}`);
+  // Log detailed question information for debugging
+  if (questions && questions.length > 0) {
+    console.log(`[DEBUG] Questions content:`, questions.slice(0, 3));
+    console.log(`[DEBUG] All questions:`, questions);
+  } else {
+    console.log(`[DEBUG] No questions available or questions array is empty`);
+  }
+  // Log message roles to check pattern
+  if (messages.length > 0) {
+    console.log(`[DEBUG] Message roles sequence:`, messages.map(m => m.role).join(', '));
+    console.log(`[DEBUG] Last message role: ${messages[messages.length-1].role}`);
+  }
+  
   // Use the prop value if provided, otherwise use local state
   const [localSelectedQuestion, setLocalSelectedQuestion] = useState<string | null>(null);
   // Use the prop value if provided, otherwise fall back to local state
@@ -280,7 +307,7 @@ export function ConversationView({
   
   const [response, setResponse] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [showQuestions, setShowQuestions] = useState(false);
+  const [showQuestionsOriginal, setShowQuestionsOriginal] = useState(false);
   const [initialLoad, setInitialLoad] = useState(true);
   const [lastMessageId, setLastMessageId] = useState<number | null>(null);
   const [isInitialRender, setIsInitialRender] = useState(true);
@@ -293,6 +320,58 @@ export function ConversationView({
   const scrollRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
   
+  // Wrap setShowQuestions to add debugging
+  const setShowQuestions = (value: boolean) => {
+    console.log(`[DEBUG] setShowQuestions called with value: ${value}`);
+    console.log(`[DEBUG] Current state - messages: ${messages.length}, isFirstSubmission: ${isFirstSubmission}, initialLoad: ${initialLoad}`);
+    console.trace(`[DEBUG] setShowQuestions stack trace`);
+    setShowQuestionsOriginal(value);
+  };
+  
+  // Debug state changes
+  useEffect(() => {
+    console.log(`[DEBUG] STATE CHANGE - showQuestions: ${showQuestionsOriginal}, initialLoad: ${initialLoad}, isFirstSubmission: ${isFirstSubmission}, messagesCount: ${messages.length}`);
+  }, [showQuestionsOriginal, initialLoad, isFirstSubmission, messages.length]);
+  
+  // Debug logging for questions
+  useEffect(() => {
+    if (questions && questions.length > 0) {
+      console.log('Questions available for display:', questions.length);
+      console.log('First question:', questions[0]);
+    } else {
+      console.log('No questions available for display');
+    }
+  }, [questions]);
+  
+  // Debug logging for conversation load from localStorage
+  useEffect(() => {
+    if (conversationId) {
+      try {
+        const savedSession = localStorage.getItem(`ramadanReflection_${conversationId}`);
+        if (savedSession) {
+          const parsedSession = JSON.parse(savedSession);
+          console.log("ConversationView - Loaded from localStorage:", {
+            id: conversationId,
+            hasUnderstanding: !!parsedSession.understanding,
+            questionsCount: parsedSession.questions?.length || 0,
+            messageCount: messages.length
+          });
+        }
+      } catch (error) {
+        console.error("Error loading session:", error);
+      }
+    }
+  }, [conversationId, messages.length]);
+  
+  // Handle the case where we have just one user message (first submission)
+  useEffect(() => {
+    if (messages.length === 1 && messages[0].role === "user" && questions && questions.length > 0) {
+      console.log("[DEBUG] First submission special case useEffect triggered - one user message with questions");
+      console.log("[DEBUG] Setting showQuestions to true for first submission with questions");
+      setShowQuestions(true);
+    }
+  }, [messages, questions]);
+  
   // Stabilize initial render
   useEffect(() => {
     // Set initial render flag once on mount
@@ -302,6 +381,25 @@ export function ConversationView({
     
     return () => clearTimeout(timer);
   }, []);
+  
+  // Stabilize initial render
+  useEffect(() => {
+    // Set initial render flag once on mount
+    const timer = setTimeout(() => {
+      setIsInitialRender(false);
+      
+      // Set showQuestions after a slight delay on initial mount
+      // This ensures questions are shown on first page load
+      if (questions && questions.length > 0) {
+        console.log("Initial page load, will show questions shortly");
+        setTimeout(() => {
+          setShowQuestions(true);
+        }, 1000); // Give enough time for animations to complete
+      }
+    }, 100);
+    
+    return () => clearTimeout(timer);
+  }, [questions]);
   
   // Reset states when conversation ID changes
   useEffect(() => {
@@ -358,18 +456,29 @@ export function ConversationView({
     if (initialLoad) {
       const timer = setTimeout(() => {
         setInitialLoad(false);
+        
+        // Show questions after initial load is complete
+        if (messages.length >= 2 && questions && questions.length > 0) {
+          console.log("Initial load complete, showing questions");
+          setShowQuestions(true);
+        }
       }, 300);
       
       return () => clearTimeout(timer);
     }
-  }, [conversationId, messages, initialLoad, lastMessageId]);
+  }, [conversationId, messages, initialLoad, lastMessageId, questions]);
 
   // Auto-scroll to bottom when messages change or when new questions appear
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [messages, showQuestions, isSubmitting]);
+  }, [messages, showQuestionsOriginal, isSubmitting]);
+
+  // Log when submission state changes
+  useEffect(() => {
+    console.log(`[DEBUG] Submission state changed - isSubmitting: ${isSubmitting}, isFirstSubmission: ${isFirstSubmission}`);
+  }, [isSubmitting, isFirstSubmission]);
 
   // Memoized and stable function to check if we should skip animation
   const shouldSkipAnimation = useCallback((index: number): boolean => {
@@ -385,6 +494,15 @@ export function ConversationView({
     if (initialLoad) {
       console.log(`Animation WILL RUN for message ${index} (initial load)`);
       animatedMessageIdsRef.current.add(messageKey);
+      
+      // This is the last message and it's the AI's response, show questions after animation
+      if (index === messages.length - 1 && index % 2 === 1) {
+        console.log("Last AI message detected, will show questions after animation");
+        // Add a small delay before showing questions
+        setTimeout(() => {
+          setShowQuestions(true);
+        }, 300);
+      }
       return false;
     }
     
@@ -546,6 +664,12 @@ export function ConversationView({
         if (onNewMessage) {
           onNewMessage(furtherUpdatedMessages);
         }
+        
+        // Set showQuestions to true to display follow-up questions after response
+        console.log("[DEBUG] Setting showQuestions to true after receiving assistant response");
+        setTimeout(() => {
+          setShowQuestions(true);
+        }, 200); // Short delay to allow rendering to complete
       }
       
       // Reset selected question
@@ -642,8 +766,15 @@ export function ConversationView({
     isInitialRender
   ]);
 
+  // Return the complete conversation view
   return (
     <>
+      {/* Debug info for mounting/unmounting */}
+      {(() => {
+        console.log(`[DEBUG] ConversationView rendering with ${messages.length} messages, showQuestions: ${showQuestionsOriginal}`);
+        return null; // Return null so it doesn't affect the rendering
+      })()}
+      
       {/* Full screen loading animation ONLY for first-time submissions */}
       {isSubmitting && isFirstSubmission && <LoadingAnimation message="Processing your response..." />}
       
@@ -662,6 +793,171 @@ export function ConversationView({
                 <MasjidLoadingAnimation />
               </div>
             )}
+            
+            {/* Special case - Always show questions immediately for first message if they exist */}
+            {(() => {
+              // Log the condition check without returning the log result in JSX
+              console.log(`[DEBUG] First-message special case condition check:`, {
+                isNotSubmitting: !isSubmitting,
+                isFirstSubmission: isFirstSubmission,
+                hasQuestions: !!(questions && questions.length > 0),
+                hasOneMessage: messages.length === 1,
+                firstMessageIsUser: messages.length > 0 ? messages[0].role === "user" : false,
+                hasTwoMessages: messages.length === 2,
+                lastMessageIsAssistant: messages.length > 0 ? messages[messages.length - 1].role === "assistant" : false,
+                allConditionsMet: !isSubmitting && isFirstSubmission && questions && questions.length > 0 && messages.length === 1 && 
+                                 (messages.length > 0 ? messages[0].role === "user" : false)
+              });
+              
+              // First case: single user message
+              const firstCaseCondition = !isSubmitting && isFirstSubmission && 
+                questions && questions.length > 0 && 
+                messages.length === 1 && messages[0].role === "user";
+              
+              // Second case: user message followed by assistant message in first submission
+              const secondCaseCondition = !isSubmitting && isFirstSubmission && 
+                questions && questions.length > 0 && 
+                messages.length === 2 && 
+                messages[0].role === "user" && messages[1].role === "assistant";
+              
+              // Show follow-up questions if either condition is met
+              return (firstCaseCondition || secondCaseCondition) && (
+                <div className="flex justify-start w-full mt-2 md:mt-4">
+                  <Card className="max-w-[90%] sm:max-w-[80%] bg-muted">
+                    <CardContent className="p-3 md:p-4 text-sm md:text-base">
+                      <div className="space-y-4">
+                        {/* Use IIFE pattern to log without returning log in JSX */}
+                        {(() => {
+                          console.log('[DEBUG] Special case - Rendering first message follow-up questions');
+                          return (
+                            <FollowUpQuestions 
+                              questions={questions}
+                              onQuestionSelect={handleQuestionSelect}
+                              isVisible={true} 
+                            />
+                          );
+                        })()}
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+              );
+            })()}
+            
+            {/* Display follow-up questions even if no AI message contains them - original case */}
+            {(() => {
+              // Log the general case condition
+              console.log(`[DEBUG] General follow-up questions condition check:`, {
+                isNotSubmitting: !isSubmitting,
+                isNotFirstSubmission: !isFirstSubmission,
+                hasQuestions: !!(questions && questions.length > 0),
+                hasMessages: messages.length > 0,
+                lastMessageRole: messages.length > 0 ? messages[messages.length-1].role : 'none'
+              });
+              
+              // Check if the last assistant message contains its own questions in JSON format
+              const lastAssistantHasQuestions = (() => {
+                if (messages.length > 0 && messages[messages.length-1].role === "assistant") {
+                  try {
+                    const content = JSON.parse(messages[messages.length-1].content);
+                    return content.questions && Array.isArray(content.questions) && content.questions.length > 0;
+                  } catch (e) {
+                    return false;
+                  }
+                }
+                return false;
+              })();
+              
+              console.log(`[DEBUG] Last assistant message has questions: ${lastAssistantHasQuestions}`);
+              
+              // First case: last message is from user (original case)
+              const userLastCondition = !isSubmitting && 
+                questions && questions.length > 0 && 
+                messages.length > 0 && 
+                messages[messages.length-1].role === "user" && 
+                !isFirstSubmission;
+                
+              // Second case: last message is from assistant, we're not in first submission, 
+              // and the message does NOT contain questions in JSON format
+              const assistantLastCondition = !isSubmitting && 
+                questions && questions.length > 0 && 
+                messages.length >= 2 && 
+                messages[messages.length-1].role === "assistant" && 
+                !isFirstSubmission &&
+                !lastAssistantHasQuestions; // Only show if assistant message doesn't have its own questions
+                
+              // Show questions if either condition is met
+              return (userLastCondition || assistantLastCondition) && (
+                <div className="flex justify-start w-full mt-2 md:mt-4">
+                  <Card className="max-w-[90%] sm:max-w-[80%] bg-muted">
+                    <CardContent className="p-3 md:p-4 text-sm md:text-base">
+                      <div className="space-y-4">
+                        {/* If there's no AI response yet but the first message is the user's reflection, 
+                            add an AI message based on data from localStorage */}
+                        {messages.length === 1 && messages[0].role === "user" && (
+                          <div>
+                            {(() => {
+                              // Try to get the understanding from localStorage
+                              let understandingFromStorage = null;
+                              
+                              try {
+                                if (conversationId) {
+                                  const savedSession = localStorage.getItem(`ramadanReflection_${conversationId}`);
+                                  if (savedSession) {
+                                    const parsedSession = JSON.parse(savedSession);
+                                    // Log separately to avoid returning void in JSX
+                                    console.log("Looking for understanding in localStorage:", 
+                                      parsedSession.understanding ? 
+                                        parsedSession.understanding.substring(0, 50) + "..." : 
+                                        "Not found");
+                                    
+                                    if (parsedSession.understanding) {
+                                      console.log("Displaying understanding from localStorage");
+                                      understandingFromStorage = parsedSession.understanding;
+                                    }
+                                  }
+                                }
+                              } catch (error) {
+                                console.error("Error getting understanding from localStorage:", error);
+                              }
+                              
+                              // Now return the appropriate JSX based on what we found
+                              if (understandingFromStorage) {
+                                return (
+                                  <div className="understanding-text">
+                                    <TypingAnimation 
+                                      text={understandingFromStorage} 
+                                      skipAnimation={false}
+                                      messageId={`understanding-${conversationId}`}
+                                      onComplete={() => {
+                                        console.log("Understanding animation completed, showing questions");
+                                        setShowQuestions(true);
+                                      }}
+                                    />
+                                  </div>
+                                );
+                              } else {
+                                // For first message, return null (removed fixed text)
+                                return null;
+                              }
+                            })()}
+                          </div>
+                        )}
+                        
+                        {/* Always show questions for the first user message, or when triggered by animation */}
+                        {((messages.length === 1 && messages[0].role === "user") || showQuestionsOriginal) && (
+                          <FollowUpQuestions 
+                            questions={questions}
+                            onQuestionSelect={handleQuestionSelect}
+                            isVisible={true} 
+                          />
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+              );
+            })()}
           </div>
         </ScrollArea>
         

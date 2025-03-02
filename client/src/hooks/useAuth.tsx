@@ -16,7 +16,7 @@ interface AuthContextType {
   error: string | null;
   login: (email: string, password: string, rememberMe?: boolean) => Promise<void>;
   register: (email: string, password: string, name: string) => Promise<void>;
-  loginWithGoogle: () => Promise<void>;
+  loginWithGoogle: (action?: 'login' | 'signup') => Promise<void>;
   logout: () => Promise<void>;
 }
 
@@ -45,6 +45,37 @@ export function AuthProvider({ children }: AuthProviderProps) {
           // Validate token on server
           const userData = await api.get('/auth/validate');
           setUser(userData);
+          
+          // Check if profile exists
+          try {
+            console.log('Checking for user profile on app load...');
+            await api.get('/api/profile');
+            console.log('Profile exists');
+          } catch (error) {
+            const profileError = error as { status?: number };
+            // If profile doesn't exist (404), create a new one
+            if (profileError.status === 404 && userData) {
+              console.log('Profile not found on app load, creating new profile');
+              try {
+                await api.post('/api/profile', {
+                  userId: userData.id,
+                  generalPreferences: {
+                    inputMethod: 'text',
+                    reflectionFrequency: 'daily',
+                    languagePreferences: 'english'
+                  },
+                  privacySettings: {
+                    localStorageOnly: false,
+                    allowPersonalization: true,
+                    enableSync: true
+                  }
+                });
+                console.log('Profile created successfully on app load');
+              } catch (createError) {
+                console.error('Error creating profile on app load:', createError);
+              }
+            }
+          }
         }
       } catch (err) {
         // Invalid token or server error, clear local storage
@@ -79,6 +110,41 @@ export function AuthProvider({ children }: AuthProviderProps) {
       }
       
       setUser(user);
+      
+      // Check if profile exists and create one if needed
+      try {
+        console.log('Checking for user profile after login...');
+        // First try to fetch existing profile
+        const profileResponse = await api.get('/api/profile');
+        console.log('Profile exists, no need to create one');
+      } catch (error) {
+        // If profile doesn't exist (404), create a new one
+        const profileError = error as { status?: number };
+        if (profileError.status === 404) {
+          console.log('Profile not found, creating new profile after login');
+          try {
+            const createResponse = await api.post('/api/profile', {
+              userId: user.id,
+              generalPreferences: {
+                inputMethod: 'text',
+                reflectionFrequency: 'daily',
+                languagePreferences: 'english'
+              },
+              privacySettings: {
+                localStorageOnly: false,
+                allowPersonalization: true,
+                enableSync: true
+              }
+            });
+            console.log('Profile created successfully:', createResponse);
+          } catch (createError) {
+            console.error('Error creating profile after login:', createError);
+            // Don't fail the login if profile creation fails
+          }
+        } else {
+          console.error('Error checking for profile:', profileError);
+        }
+      }
     } catch (err) {
       setError((err as Error).message || 'Login failed. Please check your credentials.');
       throw err;
@@ -101,6 +167,29 @@ export function AuthProvider({ children }: AuthProviderProps) {
       localStorage.setItem('auth_token', token);
       
       setUser(user);
+      
+      // Create user profile after successful registration
+      try {
+        console.log('Creating user profile after successful registration...');
+        const profileResponse = await api.post('/api/profile', {
+          userId: user.id,
+          generalPreferences: {
+            inputMethod: 'text',
+            reflectionFrequency: 'daily',
+            languagePreferences: 'english'
+          },
+          privacySettings: {
+            localStorageOnly: false,
+            allowPersonalization: true,
+            enableSync: true
+          }
+        });
+        
+        console.log('Profile created successfully:', profileResponse);
+      } catch (profileError) {
+        console.error('Error creating profile:', profileError);
+        // Don't fail the registration if profile creation fails
+      }
     } catch (err) {
       setError((err as Error).message || 'Registration failed. Please try again.');
       throw err;
@@ -110,14 +199,14 @@ export function AuthProvider({ children }: AuthProviderProps) {
   }, []);
   
   // Login with Google
-  const loginWithGoogle = useCallback(async () => {
+  const loginWithGoogle = useCallback(async (action?: 'login' | 'signup') => {
     try {
       setError(null);
-      console.log('Starting Google login flow...');
+      console.log(`Starting Google ${action} flow...`);
       
-      // Open Google OAuth popup
+      // Open Google OAuth popup with action parameter
       const googleAuthWindow = window.open(
-        `/auth/google`,
+        `/auth/google?action=${action}`,
         'googleAuth',
         'width=500,height=600'
       );
@@ -138,6 +227,17 @@ export function AuthProvider({ children }: AuthProviderProps) {
         if (googleAuthWindow) {
           console.log('Closing Google auth window');
           googleAuthWindow.close();
+        }
+        
+        // Check for error from Google auth
+        if (event.data.error) {
+          console.error('Google auth error:', event.data.error);
+          setError(event.data.error || 'Google authentication failed');
+          setIsLoading(false);
+          
+          // Remove event listener on error
+          window.removeEventListener('message', handleMessage);
+          return;
         }
         
         // Log the data received from the popup
@@ -264,13 +364,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
             // Remove event listener on error
             window.removeEventListener('message', handleMessage);
           }
-        } else if (event.data.error) {
-          console.error('Google auth error:', event.data.error);
-          setError(event.data.error || 'Google authentication failed');
-          setIsLoading(false);
-          
-          // Remove event listener on error
-          window.removeEventListener('message', handleMessage);
         }
       };
       

@@ -10,7 +10,7 @@ import type { Message } from "@shared/schema";
 
 export default function Chat() {
   const [, params] = useRoute<{ id: string }>("/chat/:id");
-  const conversationId = params ? parseInt(params.id) : null;
+  const reflectionId = params ? parseInt(params.id) : null;
   
   const [messages, setMessages] = useState<Message[]>([]);
   const [questions, setQuestions] = useState<string[]>([]);
@@ -26,64 +26,151 @@ export default function Chat() {
   // Track if insights can be generated (3+ follow-up questions answered)
   const canGenerateInsights = followUpCount >= 3;
 
-  // Load conversation data from localStorage
+  // Load reflection data from localStorage
   useEffect(() => {
-    if (conversationId) {
+    if (reflectionId) {
       try {
-        const savedSession = localStorage.getItem(`ramadanReflection_${conversationId}`);
+        console.log(`Loading reflection data for ID: ${reflectionId}`);
+        const savedSession = localStorage.getItem(`ramadanReflection_${reflectionId}`);
+        
         if (savedSession) {
           const parsedSession = JSON.parse(savedSession);
+          console.log("Loaded session data:", parsedSession);
           
-          // Ensure messages are properly formatted with the correct types
-          const formattedMessages = parsedSession.messages?.map((msg: any) => ({
-            role: msg.role || "user",
-            content: msg.content || ""
-          })) || [];
+          // Define empty arrays for missing data to avoid undefined errors
+          const emptyArray: any[] = [];
           
-          setMessages(formattedMessages);
-          setQuestions(parsedSession.questions || []);
-          setActionItems(parsedSession.actionItems || []);
-          setInsights(parsedSession.insights || []);
-          setFollowUpCount(parsedSession.followUpCount || 0);
+          // Check if we have direct API response data
+          if (parsedSession.understanding || parsedSession.questions?.length > 0) {
+            console.log("Found direct API response data:");
+            console.log("- Understanding:", parsedSession.understanding ? "Yes" : "No");
+            console.log("- Questions:", parsedSession.questions?.length || 0);
+          }
           
-          console.log("Loaded saved conversation:", parsedSession);
+          // First, check for new format with understanding and original content
+          if (parsedSession.understanding && parsedSession.original) {
+            console.log("Using new reflection format with understanding and original");
+            // Convert to message format for ConversationView
+            const initialMessages: Message[] = [
+              { role: "user", content: parsedSession.original || "" },
+              { role: "assistant", content: parsedSession.understanding || "" }
+            ];
+            
+            setMessages(initialMessages);
+            setQuestions(parsedSession.questions || emptyArray);
+            setActionItems(parsedSession.actionItems || emptyArray);
+            setInsights(parsedSession.insights || emptyArray);
+            
+            // Log the extracted questions to verify they're loaded correctly
+            console.log("Loaded questions:", parsedSession.questions || emptyArray);
+          } 
+          // Then check for old format with messages array
+          else if (parsedSession.messages && parsedSession.messages.length > 0) {
+            console.log("Using old conversation format with messages array");
+            // Old format - ensure messages are properly formatted with the correct types
+            const formattedMessages = parsedSession.messages?.map((msg: any) => ({
+              role: msg.role || "user",
+              content: msg.content || ""
+            }));
+            
+            setMessages(formattedMessages || []);
+            setQuestions(parsedSession.questions || emptyArray);
+            setActionItems(parsedSession.actionItems || emptyArray);
+            setInsights(parsedSession.insights || emptyArray);
+          }
+          // Finally check if we have individual message fields but not in an array
+          else if (parsedSession.original) {
+            console.log("Using extracted individual fields");
+            // Construct messages from individual fields
+            const initialMessages: Message[] = [
+              { role: "user", content: parsedSession.original || "" }
+            ];
+            
+            // Add assistant message if we have an understanding
+            if (parsedSession.understanding) {
+              initialMessages.push({ role: "assistant", content: parsedSession.understanding });
+              console.log("Added assistant understanding message:", parsedSession.understanding);
+            } else {
+              console.warn("No understanding found in session data");
+            }
+            
+            setMessages(initialMessages);
+            
+            // Make sure to extract questions if they exist
+            if (parsedSession.questions && parsedSession.questions.length > 0) {
+              console.log("Found questions in session data:", parsedSession.questions);
+              setQuestions(parsedSession.questions);
+            } else {
+              console.warn("No questions found in session data");
+              setQuestions(emptyArray);
+            }
+            
+            setActionItems(parsedSession.actionItems || emptyArray);
+            setInsights(parsedSession.insights || emptyArray);
+          }
+          
+          // Count existing follow-up questions
+          countFollowUps();
         } else {
-          // Try to fetch from server if not in localStorage
-          fetchConversationFromServer(conversationId);
+          // If not in localStorage, try to fetch from server
+          console.log("No data in localStorage, trying server fetch");
+          fetchReflectionFromServer(reflectionId);
         }
       } catch (error) {
-        console.error("Error loading conversation:", error);
+        console.error("Error loading session:", error);
         toast({
           title: "Error",
-          description: "Could not load conversation data. Please try again.",
+          description: "Could not load the saved session.",
           variant: "destructive",
         });
       }
     }
-  }, [conversationId, toast]);
+  }, [reflectionId]); // Only run when reflectionId changes
 
-  // Fetch conversation data from server (fallback if not in localStorage)
-  const fetchConversationFromServer = async (id: number) => {
+  // Fetch reflection data from server (fallback if not in localStorage)
+  const fetchReflectionFromServer = async (id: number) => {
     setIsLoading(true);
     try {
-      const response = await fetch(`/api/conversation/${id}`);
+      // First try the new reflection endpoint
+      const response = await fetch(`/api/reflection/${id}`);
+      
       if (!response.ok) {
-        throw new Error("Failed to fetch conversation");
+        // If that fails, try the old conversation endpoint
+        const oldResponse = await fetch(`/api/conversation/${id}`);
+        
+        if (!oldResponse.ok) {
+          throw new Error("Failed to fetch reflection data");
+        }
+        
+        const data = await oldResponse.json();
+        setMessages(data.messages || []);
+        setQuestions(data.questions || []);
+        setActionItems(data.actionItems || []);
+        setInsights(data.insights || []);
+        
+        console.log("Fetched conversation from server:", data);
+      } else {
+        // Handle new reflection data format
+        const data = await response.json();
+        
+        // Convert to message format
+        const initialMessages: Message[] = [
+          { role: "user", content: data.original || "" },
+          { role: "assistant", content: data.understanding || "" }
+        ];
+        
+        setMessages(initialMessages);
+        setQuestions(data.questions || []);
+        setActionItems(data.actionItems || []);
+        setInsights(data.insights || []);
+        
+        console.log("Fetched reflection from server:", data);
       }
-      
-      const data = await response.json();
-      setMessages(data.messages || []);
-      setQuestions(data.questions || []);
-      setActionItems(data.actionItems || []);
-      setInsights(data.insights || []);
-      setFollowUpCount(data.followUpCount || 0);
-      
-      console.log("Fetched conversation from server:", data);
     } catch (error) {
-      console.error("Error fetching conversation:", error);
+      console.error("Error fetching data:", error);
       toast({
         title: "Error",
-        description: "Could not fetch conversation from server.",
+        description: "Could not fetch data from server.",
         variant: "destructive",
       });
     } finally {
@@ -92,7 +179,7 @@ export default function Chat() {
   };
 
   // Count follow-up questions in messages
-  useEffect(() => {
+  const countFollowUps = () => {
     // Find user messages that are responding to follow-up questions
     // Format: "Q: [question]\n\nA: [answer]"
     const followUpResponses = messages.filter(msg => 
@@ -102,61 +189,57 @@ export default function Chat() {
     );
     
     setFollowUpCount(followUpResponses.length);
+  };
+  
+  // When messages change, recount follow-ups
+  useEffect(() => {
+    countFollowUps();
   }, [messages]);
 
-  // Save conversation data to localStorage
+  // Save the conversation data to localStorage
   const saveConversation = (
     updatedMessages: Message[], 
     updatedActionItems: string[] = actionItems,
     updatedInsights: string[] = insights
   ) => {
-    if (conversationId) {
-      try {
-        const sessionData = {
-          conversationId,
-          messages: updatedMessages,
-          questions,
-          actionItems: updatedActionItems,
-          insights: updatedInsights,
-          followUpCount,
-          timestamp: new Date().toISOString()
-        };
-        localStorage.setItem(`ramadanReflection_${conversationId}`, JSON.stringify(sessionData));
-      } catch (error) {
-        console.error("Error saving session:", error);
-        toast({
-          title: "Session Error",
-          description: "Could not save session data.",
-          variant: "destructive",
-        });
-      }
+    if (!reflectionId) return;
+    
+    try {
+      const sessionData = {
+        reflectionId: reflectionId,
+        messages: updatedMessages,
+        questions: questions,
+        actionItems: updatedActionItems,
+        insights: updatedInsights,
+        timestamp: new Date().toISOString()
+      };
+      
+      localStorage.setItem(`ramadanReflection_${reflectionId}`, JSON.stringify(sessionData));
+      console.log("Saved session to localStorage");
+    } catch (error) {
+      console.error("Error saving session:", error);
+      toast({
+        title: "Session Error",
+        description: "Could not save session data.",
+        variant: "destructive",
+      });
     }
   };
 
+  // Handle new messages being added to the conversation
   const handleNewMessage = (newMessages: Message[]) => {
+    console.log("Updating messages:", newMessages);
     setMessages(newMessages);
+    saveConversation(newMessages);
     
-    // Reset the selected question after it's been used
-    setSelectedQuestion(null);
-    
-    // If we just answered a third follow-up question, automatically generate insights
-    const newFollowUpResponses = newMessages.filter(msg => 
+    // Update follow-up count based on new messages
+    const followUpResponses = newMessages.filter(msg => 
       msg.role === "user" && 
       msg.content.startsWith("Q: ") && 
       msg.content.includes("\n\nA: ")
     );
     
-    const newFollowUpCount = newFollowUpResponses.length;
-    
-    // If we just hit 3 follow-ups and don't have insights yet, generate them
-    if (newFollowUpCount >= 3 && followUpCount < 3 && insights.length === 0) {
-      // Delay slightly to allow UI to update first
-      setTimeout(() => {
-        handleGenerateInsights();
-      }, 1000);
-    }
-    
-    saveConversation(newMessages, actionItems, insights);
+    setFollowUpCount(followUpResponses.length);
   };
 
   const handleActionItemsChange = (newActionItems: string[]) => {
@@ -179,29 +262,64 @@ export default function Chat() {
   const [selectedQuestion, setSelectedQuestion] = useState<string | null>(null);
 
   const handleGenerateActionItems = async () => {
-    if (!conversationId) return;
+    if (!reflectionId) return;
     
     setIsGeneratingItems(true);
     try {
-      const response = await fetch(`/api/conversation/${conversationId}/action-items`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
+      // Get personalization context if available
+      let personalizationContext = null;
+      try {
+        // Try to get personalization context from localStorage
+        const profileData = localStorage.getItem('userProfile');
+        if (profileData) {
+          const parsedProfile = JSON.parse(profileData);
+          // Check if personalization is enabled
+          if (parsedProfile.privacySettings?.allowPersonalization) {
+            personalizationContext = parsedProfile.privateProfile || null;
+            console.log("Using personalization for action items");
+          }
         }
+      } catch (error) {
+        console.error("Error getting personalization context:", error);
+      }
+      
+      // Convert messages to a string representation for the API
+      const conversationText = messages.map(msg => 
+        `${msg.role === 'user' ? 'User' : 'AI'}: ${msg.content}`
+      ).join('\n\n');
+      
+      const response = await fetch("/api/generate/action-items", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          conversation: conversationText,
+          personalizationContext
+        }),
       });
       
       if (!response.ok) {
-        throw new Error('Failed to generate action items');
+        throw new Error("Failed to generate action items");
       }
       
       const data = await response.json();
-      setActionItems(data.actionItems || []);
-      saveConversation(messages, data.actionItems || [], insights);
+      console.log("Generated action items:", data);
       
-      toast({
-        title: "Action Items Generated",
-        description: "Your personalized action items have been created.",
-      });
+      if (data.actionItems && Array.isArray(data.actionItems)) {
+        const newActionItems = data.actionItems;
+        setActionItems(newActionItems);
+        
+        // Save to localStorage
+        saveConversation(messages, newActionItems, insights);
+        
+        toast({
+          title: "Action Items Generated",
+          description: "Your personalized action plan has been created.",
+        });
+      } else {
+        throw new Error("Invalid response format");
+      }
     } catch (error) {
       console.error("Error generating action items:", error);
       toast({
@@ -215,85 +333,64 @@ export default function Chat() {
   };
 
   const handleGenerateInsights = async () => {
-    if (!conversationId || followUpCount < 3) return;
+    if (!reflectionId) return;
     
     setIsGeneratingInsights(true);
     try {
-      // Create a formatted message with all the conversation context
-      const prompt = `
-You are an insightful Islamic Reflection Analyst with deep scholarly knowledge of the Quran, Sunnah, and authentic Tafsir. Your role is to provide meaningful spiritual insights after carefully observing a user's reflection journey through multiple exchanges.
-
-When analyzing a conversation that includes at least 3 question-and-answer exchanges:
-
-1. ASSESSMENT PHASE:
-   - Review the complete conversation history thoroughly
-   - Count the number of question-answer exchanges that have occurred
-   - Only proceed to generate insights if 3+ complete exchanges have taken place
-   - If fewer than 3 exchanges have occurred, continue with standard reflection questions instead
-
-2. ANALYSIS PHASE (when 3+ exchanges completed):
-   - Identify recurring themes, challenges, spiritual states, and patterns in the user's reflections
-   - Note specific areas where the user shows growth, insight, or struggle
-   - Connect these observations to relevant Islamic concepts and principles
-   - Prepare references from primary Islamic sources that relate to their specific situation
-
-3. INSIGHT GENERATION:
-   - Create 3-5 meaningful insights that synthesize your observations
-   - Format each insight with:
-     * A clear statement of the pattern or understanding you've observed
-     * A connection to Islamic wisdom through authenticated sources
-     * A practical spiritual consideration or action the user might contemplate
-   - Each insight must include at least one specific reference to Quran, authentic hadith, or established scholarly interpretation
-
-4. VERIFICATION PROCESS:
-   - For every Quranic reference:
-     * Verify the surah and verse number
-     * Ensure the interpretation aligns with mainstream tafsir
-     * Double-check that the application to the user's situation is appropriate
-   - For every hadith reference:
-     * Confirm it comes from authentic collections (Bukhari, Muslim, etc.)
-     * Verify attribution to narrator and authenticity grading
-     * Ensure the context of usage respects the original meaning
-   - For scholarly interpretations:
-     * Only include widely accepted interpretations from recognized authorities
-     * Avoid controversial opinions or minority positions
-     * Note if multiple valid interpretations exist on a matter
-
-5. PRESENTATION:
-   - Begin with a gentle transition acknowledging their reflection journey
-   - Present each insight individually with clear spacing
-   - Conclude with encouragement that respects their agency and spiritual journey
-   - Maintain a tone that is wise, thoughtful, and supportive rather than preachy
-
-Your insights should offer new perspectives that help the user integrate their personal experiences with Islamic wisdom, revealing connections they might not have recognized on their own.
-
-Here is the conversation history to analyze:
-${messages.map(msg => `[${msg.role.toUpperCase()}]: ${msg.content}`).join('\n\n')}
-
-Respond with only a JSON array of 3-5 insights, with each insight as a string in the array.
-      `;
+      // Get personalization context if available
+      let personalizationContext = null;
+      try {
+        // Try to get personalization context from localStorage
+        const profileData = localStorage.getItem('userProfile');
+        if (profileData) {
+          const parsedProfile = JSON.parse(profileData);
+          // Check if personalization is enabled
+          if (parsedProfile.privacySettings?.allowPersonalization) {
+            personalizationContext = parsedProfile.privateProfile || null;
+            console.log("Using personalization for insights");
+          }
+        }
+      } catch (error) {
+        console.error("Error getting personalization context:", error);
+      }
       
-      // Call the conversation endpoint with our custom prompt
-      const response = await fetch(`/api/conversation/${conversationId}/insights`, {
-        method: 'POST',
+      // Convert messages to a string representation for the API
+      const conversationText = messages.map(msg => 
+        `${msg.role === 'user' ? 'User' : 'AI'}: ${msg.content}`
+      ).join('\n\n');
+      
+      const response = await fetch("/api/generate/insights", {
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json'
+          "Content-Type": "application/json",
         },
-        body: JSON.stringify({ prompt })
+        body: JSON.stringify({
+          conversation: conversationText,
+          personalizationContext
+        }),
       });
       
       if (!response.ok) {
-        throw new Error('Failed to generate insights');
+        throw new Error("Failed to generate insights");
       }
       
       const data = await response.json();
-      setInsights(data.insights || []);
-      saveConversation(messages, actionItems, data.insights || []);
+      console.log("Generated insights:", data);
       
-      toast({
-        title: "Spiritual Insights Generated",
-        description: "Insights based on your reflection journey have been created.",
-      });
+      if (data.insights && Array.isArray(data.insights)) {
+        const newInsights = data.insights;
+        setInsights(newInsights);
+        
+        // Save to localStorage
+        saveConversation(messages, actionItems, newInsights);
+        
+        toast({
+          title: "Insights Generated",
+          description: "Your personalized spiritual insights have been created.",
+        });
+      } else {
+        throw new Error("Invalid response format");
+      }
     } catch (error) {
       console.error("Error generating insights:", error);
       toast({
@@ -328,7 +425,7 @@ Respond with only a JSON array of 3-5 insights, with each insight as a string in
                 onChange={handleActionItemsChange}
                 onGenerate={handleGenerateActionItems}
                 isGenerating={isGeneratingItems}
-                conversationId={conversationId?.toString() || ""}
+                conversationId={reflectionId?.toString() || ""}
                 conversationTitle={displayTitle}
               />
             </div>
@@ -349,7 +446,7 @@ Respond with only a JSON array of 3-5 insights, with each insight as a string in
           {/* Conversation View (Right on desktop, Top on mobile) */}
           <div className="w-full order-1 md:order-2 mb-4 md:mb-0">
             <ConversationView 
-              conversationId={conversationId || undefined}
+              conversationId={reflectionId || undefined}
               messages={messages} 
               onNewMessage={handleNewMessage}
               questions={questions}

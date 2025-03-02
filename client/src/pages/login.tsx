@@ -88,9 +88,9 @@ export default function LoginPage() {
   };
 
   // Handle Google authentication
-  const handleGoogleAuth = async () => {
+  const handleGoogleAuth = async (action: 'login' | 'signup' = 'login') => {
     try {
-      await loginWithGoogle();
+      await loginWithGoogle(action);
       // Redirection will be handled by the loginWithGoogle function
       // No need to set location here since we're redirecting in the hook
     } catch (err) {
@@ -170,7 +170,7 @@ export default function LoginPage() {
                   type="button" 
                   variant="outline" 
                   className="w-full" 
-                  onClick={handleGoogleAuth}
+                  onClick={() => handleGoogleAuth('login')}
                   disabled={isLoading}
                 >
                   <svg className="mr-2 h-4 w-4" viewBox="0 0 24 24">
@@ -259,7 +259,7 @@ export default function LoginPage() {
                   type="button" 
                   variant="outline" 
                   className="w-full" 
-                  onClick={handleGoogleAuth}
+                  onClick={() => handleGoogleAuth('signup')}
                   disabled={isLoading}
                 >
                   <svg className="mr-2 h-4 w-4" viewBox="0 0 24 24">
