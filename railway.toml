@@ -3,7 +3,7 @@ builder = "NIXPACKS"
 buildCommand = "npm run build"
 
 [deploy]
-startCommand = "node scripts/deploy.js"
+startCommand = "npm run deploy"
 healthcheckPath = "/api/health"
 healthcheckTimeout = 90
 restartPolicyType = "ON_FAILURE"

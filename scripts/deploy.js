@@ -6,8 +6,13 @@
  * It handles database setup and application startup
  */
 
-const { execSync } = require('child_process');
-const path = require('path');
+import { execSync } from 'child_process';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+// Get current file directory with ES modules
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // Ensure we're in the project root
 const projectRoot = path.resolve(__dirname, '..');
