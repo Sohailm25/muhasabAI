@@ -20,6 +20,9 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 import fs from 'fs';
+// Import pg library correctly for ESM
+import pkg from 'pg';
+const { Pool } = pkg;
 
 // Get current file directory with ES modules
 const __filename = fileURLToPath(import.meta.url);
@@ -63,8 +66,7 @@ async function runDatabaseSetup() {
       throw new Error('Build directory not found');
     }
     
-    // Connection setup - direct PostgreSQL approach instead of using the imported module
-    const { Pool } = await import('pg');
+    // Connection setup - direct PostgreSQL approach
     const pool = new Pool({
       connectionString: DATABASE_URL,
       ssl: NODE_ENV === 'production' ? { rejectUnauthorized: false } : undefined

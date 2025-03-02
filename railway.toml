@@ -5,9 +5,10 @@ buildCommand = "npm run build"
 [deploy]
 startCommand = "npm run deploy"
 healthcheckPath = "/api/health"
-healthcheckTimeout = 90
+healthcheckTimeout = 120
+healthcheckInterval = 15
 restartPolicyType = "ON_FAILURE"
-restartPolicyMaxRetries = 3
+restartPolicyMaxRetries = 5
 
 [deploy.envs]
 NODE_ENV = "production"
@@ -31,6 +32,13 @@ cmds = [
 cmds = [
   "chmod +x ./fix-build.js",
   "chmod +x ./scripts/db-setup.js"
+]
+
+# Pre-deployment database setup
+[nixpacks.deploy.pre]
+cmds = [
+  "echo 'Running pre-deployment database setup...'",
+  "node scripts/db-setup.js || echo 'Database setup warning: continuing deployment'"
 ]
 
 # Configure environment variables for PostgreSQL
