@@ -1,8 +1,8 @@
 /**
  * PostgreSQL implementation for user profile storage
  */
-import pkg from 'pg';
-const { Pool } = pkg;
+import pg from 'pg';
+const { Pool } = pg;
 import { UserProfile, EncryptedProfileData } from './operations';
 import { log } from '../vite';
 
