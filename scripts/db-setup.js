@@ -19,6 +19,7 @@ process.env.USE_DATABASE = 'true';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
+import fs from 'fs';
 
 // Get current file directory with ES modules
 const __filename = fileURLToPath(import.meta.url);
@@ -55,13 +56,70 @@ async function runDatabaseSetup() {
   try {
     console.log('\x1b[36m%s\x1b[0m', '🛠️ Initializing database tables...');
     
-    // Import and use the initializer from the codebase
-    const { initializeDatabase } = await import('../dist/server/db/index.js');
+    // Check if the dist directory exists
+    const distPath = path.resolve(__dirname, '../dist');
+    if (!fs.existsSync(distPath)) {
+      console.error('\x1b[31m%s\x1b[0m', '❌ Error: dist directory not found. Please build the project first.');
+      throw new Error('Build directory not found');
+    }
     
-    // Initialize the database
-    await initializeDatabase();
+    // Connection setup - direct PostgreSQL approach instead of using the imported module
+    const { Pool } = await import('pg');
+    const pool = new Pool({
+      connectionString: DATABASE_URL,
+      ssl: NODE_ENV === 'production' ? { rejectUnauthorized: false } : undefined
+    });
     
-    console.log('\x1b[32m%s\x1b[0m', '✅ Database tables created successfully');
+    console.log('\x1b[36m%s\x1b[0m', '🔌 Connecting to PostgreSQL database...');
+    const client = await pool.connect();
+    console.log('\x1b[32m%s\x1b[0m', '✅ Connected to database');
+    
+    try {
+      // Create tables directly
+      console.log('\x1b[36m%s\x1b[0m', '📝 Creating or updating database tables...');
+      
+      // Start transaction
+      await client.query('BEGIN');
+      
+      // Create user_profiles table
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS user_profiles (
+          user_id TEXT PRIMARY KEY,
+          preferences JSONB NOT NULL DEFAULT '{}',
+          sharing_preferences JSONB NOT NULL DEFAULT '{}',
+          version INTEGER NOT NULL DEFAULT 1,
+          created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+          updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+        )
+      `);
+      
+      // Create encrypted_profile_data table
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS encrypted_profile_data (
+          user_id TEXT PRIMARY KEY,
+          encrypted_data TEXT NOT NULL,
+          iv INTEGER[] NOT NULL,
+          version INTEGER NOT NULL DEFAULT 1,
+          created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+          updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
+          FOREIGN KEY (user_id) REFERENCES user_profiles(user_id) ON DELETE CASCADE
+        )
+      `);
+      
+      // Commit the transaction
+      await client.query('COMMIT');
+      console.log('\x1b[32m%s\x1b[0m', '✅ Database tables created successfully');
+    } catch (error) {
+      // Rollback the transaction on error
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      // Release the client
+      client.release();
+    }
+    
+    // Close the pool
+    await pool.end();
     
     return true;
   } catch (error) {

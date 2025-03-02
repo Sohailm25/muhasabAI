@@ -15,7 +15,7 @@ USE_DATABASE = "true"
 
 [nixpacks]
 nodejs-version = "20"
-apt-pkgs = ["ffmpeg", "python3", "python3-pip"]
+apt-pkgs = ["ffmpeg", "python3", "python3-pip", "postgresql-client"]
 installCommand = "npm ci --legacy-peer-deps"
 
 # Install OpenAI Whisper during the build phase
@@ -29,7 +29,8 @@ cmds = [
 # Ensure the build directory structure is correct
 [nixpacks.build]
 cmds = [
-  "chmod +x ./fix-build.js"
+  "chmod +x ./fix-build.js",
+  "chmod +x ./scripts/db-setup.js"
 ]
 
 # Configure environment variables for PostgreSQL
