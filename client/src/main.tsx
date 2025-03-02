@@ -1,3 +1,13 @@
+// Polyfill for process
+if (typeof window !== 'undefined' && !window.process) {
+  // @ts-ignore -- Intentionally providing a minimal process polyfill
+  window.process = {
+    env: {
+      NODE_ENV: import.meta.env.MODE || 'development'
+    }
+  };
+}
+
 import React, { Suspense, StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import App from "./App";

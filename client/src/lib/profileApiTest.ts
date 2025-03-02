@@ -12,7 +12,7 @@
 import { PublicProfile, PrivateProfile } from './types';
 import { getEncryptionKey, encryptData } from './encryption';
 
-const API_BASE_URL = process.env.NODE_ENV === 'production' 
+const API_BASE_URL = import.meta.env.MODE === 'production'
   ? '/api' 
   : 'http://localhost:3000/api';
 
@@ -27,11 +27,13 @@ interface ApiResponse<T> {
  * For admin/development use only
  */
 export async function fetchAllProfiles(): Promise<ApiResponse<PublicProfile[]>> {
+  // Prevent accidental use in production
+  if (import.meta.env.MODE === 'production') {
+    console.warn('API test utilities should not be used in production');
+    return { success: false, error: 'Test utilities disabled in production' };
+  }
+  
   try {
-    if (process.env.NODE_ENV === 'production') {
-      throw new Error('API test utilities are for development only');
-    }
-    
     const response = await fetch(`${API_BASE_URL}/profiles`, {
       method: 'GET',
       headers: {
@@ -71,11 +73,13 @@ export async function createProfileViaApi(
   publicProfile: Partial<PublicProfile>,
   privateProfile: Partial<PrivateProfile>
 ): Promise<ApiResponse<{ profileId: string }>> {
+  // Prevent accidental use in production
+  if (import.meta.env.MODE === 'production') {
+    console.warn('API test utilities should not be used in production');
+    return { success: false, error: 'Test utilities disabled in production' };
+  }
+  
   try {
-    if (process.env.NODE_ENV === 'production') {
-      throw new Error('API test utilities are for development only');
-    }
-    
     // Ensure required fields are present
     const fullPublicProfile: PublicProfile = {
       userId,
@@ -158,11 +162,13 @@ export async function createProfileViaApi(
  * Fetches a specific profile by user ID
  */
 export async function fetchProfileByUserId(userId: string): Promise<ApiResponse<PublicProfile>> {
+  // Prevent accidental use in production
+  if (import.meta.env.MODE === 'production') {
+    console.warn('API test utilities should not be used in production');
+    return { success: false, error: 'Test utilities disabled in production' };
+  }
+  
   try {
-    if (process.env.NODE_ENV === 'production') {
-      throw new Error('API test utilities are for development only');
-    }
-    
     const response = await fetch(`${API_BASE_URL}/profiles/user/${userId}`, {
       method: 'GET',
       headers: {
@@ -201,11 +207,13 @@ export async function updateProfileViaApi(
   publicProfileUpdates: Partial<PublicProfile>,
   privateProfileUpdates?: Partial<PrivateProfile>
 ): Promise<ApiResponse<{ success: boolean }>> {
+  // Prevent accidental use in production
+  if (import.meta.env.MODE === 'production') {
+    console.warn('API test utilities should not be used in production');
+    return { success: false, error: 'Test utilities disabled in production' };
+  }
+  
   try {
-    if (process.env.NODE_ENV === 'production') {
-      throw new Error('API test utilities are for development only');
-    }
-    
     // Prepare public profile updates
     const publicProfile = {
       ...publicProfileUpdates,
@@ -302,7 +310,7 @@ export async function updateProfileViaApi(
  */
 export async function deleteProfileViaApi(userId: string): Promise<ApiResponse<{ success: boolean }>> {
   try {
-    if (process.env.NODE_ENV === 'production') {
+    if (import.meta.env.MODE === 'production') {
       throw new Error('API test utilities are for development only');
     }
     
@@ -348,7 +356,7 @@ export async function runProfileApiTest(): Promise<{
   const errors: Record<string, string | undefined> = {};
   
   try {
-    if (process.env.NODE_ENV === 'production') {
+    if (import.meta.env.MODE === 'production') {
       throw new Error('API test utilities are for development only');
     }
     

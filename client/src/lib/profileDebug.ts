@@ -27,7 +27,7 @@ interface ProfileDebugInfo {
  */
 export async function getProfileDebugInfo(): Promise<ProfileDebugInfo> {
   // Check if we're in development mode
-  if (process.env.NODE_ENV === 'production') {
+  if (import.meta.env.MODE === 'production') {
     console.warn('Profile debug utilities should not be used in production');
     throw new Error('Debug utilities disabled in production');
   }
@@ -86,9 +86,9 @@ export async function getProfileDebugInfo(): Promise<ProfileDebugInfo> {
  */
 export async function createTestProfile(): Promise<void> {
   // Check if we're in development mode
-  if (process.env.NODE_ENV === 'production') {
-    console.warn('Profile debug utilities should not be used in production');
-    throw new Error('Debug utilities disabled in production');
+  if (import.meta.env.MODE === 'production') {
+    console.warn('Test utilities should not be used in production');
+    throw new Error('Test utilities disabled in production');
   }
   
   try {
@@ -201,8 +201,8 @@ export async function createTestProfile(): Promise<void> {
  */
 export function clearProfileData(): void {
   // Check if we're in development mode
-  if (process.env.NODE_ENV === 'production') {
-    console.warn('Profile debug utilities should not be used in production');
+  if (import.meta.env.MODE === 'production') {
+    console.warn('Debug utilities should not be used in production');
     throw new Error('Debug utilities disabled in production');
   }
   

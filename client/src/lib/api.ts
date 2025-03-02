@@ -1,18 +1,110 @@
 import { PublicProfile, EncryptedProfileData } from './types';
 
+// API base URL - adjust as needed for your environment
+const BASE_URL = import.meta.env.VITE_API_URL || '';
+
 export const api = {
-  // Create user profile
-  async createUserProfile(profile: Partial<PublicProfile>): Promise<PublicProfile> {
-    const response = await fetch('/api/profile', {
+  baseUrl: BASE_URL,
+
+  // Generic GET request
+  async get(endpoint: string, options = {}) {
+    const token = localStorage.getItem('auth_token');
+    
+    // Check if this is an endpoint requiring auth
+    const requiresAuth = endpoint.startsWith('/api/') || 
+                         (endpoint.includes('/auth/') && !endpoint.includes('/auth/validate'));
+                         
+    if (requiresAuth && !token) {
+      console.error(`Authentication required for ${endpoint} but no token found`);
+      throw new Error('Authentication required');
+    }
+    
+    const response = await fetch(`${BASE_URL}${endpoint}`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': token ? `Bearer ${token}` : ''
+      },
+      ...options
+    });
+
+    if (!response.ok) {
+      const status = response.status;
+      if (status === 401) {
+        throw new Error('Authentication required');
+      }
+      throw new Error(`API error: ${status}`);
+    }
+
+    return await response.json();
+  },
+
+  // Generic POST request
+  async post(endpoint: string, data = {}, options = {}) {
+    const token = localStorage.getItem('auth_token');
+    
+    // Check if this is an endpoint requiring auth
+    const requiresAuth = endpoint.startsWith('/api/') || 
+                        (endpoint.includes('/auth/') && 
+                         !endpoint.includes('/auth/login') && 
+                         !endpoint.includes('/auth/register'));
+                         
+    if (requiresAuth && !token) {
+      console.error(`Authentication required for ${endpoint} but no token found`);
+      throw new Error('Authentication required');
+    }
+    
+    const response = await fetch(`${BASE_URL}${endpoint}`, {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        'Authorization': token ? `Bearer ${token}` : ''
+      },
+      body: JSON.stringify(data),
+      ...options
+    });
+
+    if (!response.ok) {
+      const status = response.status;
+      if (status === 401) {
+        throw new Error('Authentication required');
+      }
+      throw new Error(`API error: ${status}`);
+    }
+
+    return await response.json();
+  },
+
+  // Create user profile
+  async createUserProfile(profile: Partial<PublicProfile>): Promise<PublicProfile> {
+    const token = localStorage.getItem('auth_token');
+    if (!token) {
+      console.error('Authentication token not found when creating profile');
+      throw new Error('Authentication token not found');
+    }
+    
+    console.log('Creating profile with token:', token ? 'Token exists' : 'No token');
+    
+    const response = await fetch(`${BASE_URL}/api/profile`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
       },
       body: JSON.stringify(profile)
     });
 
     if (!response.ok) {
-      throw new Error(`Failed to create profile: ${response.status}`);
+      const status = response.status;
+      if (status === 409) {
+        console.log('Profile already exists (409 status)');
+        throw new Error('Profile already exists');
+      }
+      if (status === 401) {
+        console.error('Authentication failed when creating profile');
+        throw new Error('Authentication required');
+      }
+      throw new Error(`Failed to create profile: ${status}`);
     }
 
     return await response.json();
@@ -20,11 +112,31 @@ export const api = {
 
   // Get user profile
   async getUserProfile(userId?: string): Promise<PublicProfile> {
+    const token = localStorage.getItem('auth_token');
+    if (!token) {
+      console.error('Authentication token not found when getting profile');
+      throw new Error('Authentication token not found');
+    }
+    
     const url = userId ? `/api/profile/${userId}` : '/api/profile';
-    const response = await fetch(url);
+    const response = await fetch(`${BASE_URL}${url}`, {
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      }
+    });
 
     if (!response.ok) {
-      throw new Error(`Failed to fetch profile: ${response.status}`);
+      const status = response.status;
+      if (status === 401) {
+        console.error('Authentication failed when fetching profile');
+        throw new Error('Failed to fetch profile: Authentication required');
+      }
+      if (status === 404) {
+        console.log('Profile not found');
+        throw new Error('Profile not found');
+      }
+      throw new Error(`Failed to fetch profile: ${status}`);
     }
 
     return await response.json();
@@ -32,16 +144,27 @@ export const api = {
 
   // Update user profile
   async updateUserProfile(profile: Partial<PublicProfile>): Promise<PublicProfile> {
-    const response = await fetch('/api/profile', {
+    const token = localStorage.getItem('auth_token');
+    if (!token) {
+      console.error('Authentication token not found when updating profile');
+      throw new Error('Authentication token not found');
+    }
+    
+    const response = await fetch(`${BASE_URL}/api/profile`, {
       method: 'PUT',
       headers: {
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
       },
       body: JSON.stringify(profile)
     });
 
     if (!response.ok) {
-      throw new Error(`Failed to update profile: ${response.status}`);
+      const status = response.status;
+      if (status === 401) {
+        throw new Error('Authentication required');
+      }
+      throw new Error(`Failed to update profile: ${status}`);
     }
 
     return await response.json();
@@ -49,12 +172,25 @@ export const api = {
 
   // Delete user profile
   async deleteUserProfile(): Promise<boolean> {
-    const response = await fetch('/api/profile', {
-      method: 'DELETE'
+    const token = localStorage.getItem('auth_token');
+    if (!token) {
+      console.error('Authentication token not found when deleting profile');
+      throw new Error('Authentication token not found');
+    }
+    
+    const response = await fetch(`${BASE_URL}/api/profile`, {
+      method: 'DELETE',
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
     });
 
     if (!response.ok) {
-      throw new Error(`Failed to delete profile: ${response.status}`);
+      const status = response.status;
+      if (status === 401) {
+        throw new Error('Authentication required');
+      }
+      throw new Error(`Failed to delete profile: ${status}`);
     }
 
     return true;
@@ -62,14 +198,28 @@ export const api = {
 
   // Get encrypted profile data
   async getEncryptedProfileData(userId: string): Promise<EncryptedProfileData> {
-    const response = await fetch(`/api/profile/${userId}/encrypted`);
+    const token = localStorage.getItem('auth_token');
+    if (!token) {
+      console.error('Authentication token not found when getting encrypted profile');
+      throw new Error('Authentication token not found');
+    }
+    
+    const response = await fetch(`${BASE_URL}/api/profile/${userId}/encrypted`, {
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    });
 
     if (!response.ok) {
       if (response.status === 404) {
         // No encrypted data found, return empty
         return { data: '', iv: [] };
       }
-      throw new Error(`Failed to fetch encrypted profile: ${response.status}`);
+      const status = response.status;
+      if (status === 401) {
+        throw new Error('Authentication required');
+      }
+      throw new Error(`Failed to fetch encrypted profile: ${status}`);
     }
 
     return await response.json();
@@ -83,7 +233,8 @@ export const api = {
     const response = await fetch(`/api/profile/${userId}/encrypted`, {
       method: 'PUT',
       headers: {
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${localStorage.getItem('auth_token') || ''}`
       },
       body: JSON.stringify(encryptedData)
     });

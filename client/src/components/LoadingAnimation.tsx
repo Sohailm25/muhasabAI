@@ -1,30 +1,28 @@
 import React from "react";
 import { Loader2 } from "lucide-react";
+import { cn } from "@/lib/utils";
 
-interface LoadingAnimationProps {
+type LoadingAnimationProps = {
   message?: string;
-}
+  fullScreen?: boolean;
+  className?: string;
+};
 
-export function LoadingAnimation({ message = "Processing your reflection..." }: LoadingAnimationProps) {
+export function LoadingAnimation({ 
+  message = "Loading...", 
+  fullScreen = false,
+  className 
+}: LoadingAnimationProps) {
+  const containerClass = cn(
+    "flex flex-col items-center justify-center p-8",
+    fullScreen ? "fixed inset-0 bg-background/80 backdrop-blur-sm z-50" : "h-full min-h-[200px]",
+    className
+  );
+  
   return (
-    <div className="fixed inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center z-50">
-      <div className="bg-card border rounded-lg shadow-lg p-6 max-w-md w-full flex flex-col items-center gap-4">
-        <div className="flex flex-col items-center gap-4">
-          <Loader2 className="h-12 w-12 animate-spin text-primary" />
-          <div className="text-center space-y-2">
-            <h3 className="text-lg font-medium">{message}</h3>
-            <p className="text-sm text-muted-foreground">
-              We're analyzing your reflection and generating thoughtful questions.
-            </p>
-          </div>
-        </div>
-        
-        <div className="w-full mt-4">
-          <div className="h-2 w-full bg-muted rounded-full overflow-hidden">
-            <div className="h-full bg-primary rounded-full animate-progress"></div>
-          </div>
-        </div>
-      </div>
+    <div className={containerClass}>
+      <div className="h-12 w-12 rounded-full border-4 border-primary border-t-transparent animate-spin mb-4"></div>
+      {message && <p className="text-muted-foreground text-center">{message}</p>}
     </div>
   );
 }

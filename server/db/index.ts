@@ -13,6 +13,25 @@ const USE_DATABASE = process.env.USE_DATABASE === 'true' || process.env.NODE_ENV
 // Log the database mode
 log(`Database mode: ${USE_DATABASE ? 'PostgreSQL' : 'In-Memory Storage'}`, 'database');
 
+// Define simplified in-memory data structures instead of using external DB libraries
+// These export stubs are needed by the auth.ts module
+export const db = {
+  // This is just a stub to satisfy imports
+};
+
+export const users = {
+  // These are just stubs
+  email: {},
+  id: {}
+};
+
+export const tokens = {
+  // These are just stubs
+  token: {},
+  userId: {},
+  isRevoked: {}
+};
+
 /**
  * Initialize the database connection and tables
  */

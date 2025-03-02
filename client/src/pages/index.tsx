@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
-import Link from 'next/link';
+import { Link } from 'wouter';
 import {
   Box,
   Container,
@@ -66,7 +66,7 @@ export default function Home() {
       <VStack spacing={8} align="stretch">
         <Flex justifyContent="space-between" alignItems="center">
           <Heading as="h1" size="2xl">MuhasabAI</Heading>
-          <Link href="/settings" passHref>
+          <Link href="/settings">
             <Button leftIcon={<SettingsIcon />} size="sm">
               Settings
             </Button>
@@ -103,7 +103,7 @@ export default function Home() {
           <Text mb={4}>
             Our new prayer times feature helps you stay on track with your daily prayers by showing athan and iqama times for your local masjid.
           </Text>
-          <Link href="/profile" passHref>
+          <Link href="/profile">
             <Button colorScheme="blue" mt={2}>
               Go to My Profile
             </Button>

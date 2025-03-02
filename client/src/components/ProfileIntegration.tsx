@@ -1,9 +1,10 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useProfile } from '../hooks/useProfile';
 import { syncProfileAcrossDevices } from '../lib/profileSync';
+import { useAuth } from '../hooks/useAuth';
+import { api } from '../lib/api';
 
 interface ProfileIntegrationProps {
-  userId: string | null;
   children: React.ReactNode;
 }
 
@@ -12,17 +13,82 @@ interface ProfileIntegrationProps {
  * with the rest of the application. It ensures profiles are loaded,
  * synchronized, and sets up any necessary global listeners.
  */
-export function ProfileIntegration({ userId, children }: ProfileIntegrationProps) {
+export function ProfileIntegration({ children }: ProfileIntegrationProps) {
+  const { isLoading: authLoading, user } = useAuth();
+  const userId = user?.id || null;
   const { isLoading, error, publicProfile, updateProfile } = useProfile();
+  const initializeAttempted = useRef(false);
+  const [initError, setInitError] = useState<string | null>(null);
 
   // Initialize profile on first load if needed
   useEffect(() => {
+    let isMounted = true;
+    let initTimeout: number | undefined;
+    
     async function initializeProfile() {
+      // Don't proceed if we're unmounted or already attempted initialization
+      if (!isMounted || initializeAttempted.current) return;
+      
+      // Don't attempt initialization if no user ID
       if (!userId) return;
       
-      // If no public profile exists, create one
-      if (!publicProfile && !isLoading) {
-        console.log('Creating initial user profile...');
+      // Don't attempt initialization if already loading
+      if (isLoading || authLoading) return;
+      
+      // Make sure to wait a moment after auth is completed before trying to initialize
+      // This gives time for the token to be properly stored
+      await new Promise(resolve => setTimeout(resolve, 1500));
+      
+      // Check again if we're still mounted
+      if (!isMounted) return;
+      
+      // Check if the auth token exists - extra safety check
+      const token = localStorage.getItem('auth_token');
+      if (!token) {
+        console.log('No auth token found, cannot initialize profile');
+        if (isMounted) {
+          setInitError('Authentication token not found. Please try logging in again.');
+        }
+        return;
+      }
+      
+      // Mark that we've attempted initialization to prevent multiple attempts
+      initializeAttempted.current = true;
+      
+      try {
+        console.log('Starting profile initialization...');
+        
+        // First, try to fetch an existing profile
+        try {
+          console.log('Checking for existing profile...');
+          const profile = await api.getUserProfile();
+          
+          if (profile && isMounted) {
+            console.log('Found existing profile, no need to create one');
+            return; // Profile exists, no need to create one
+          }
+        } catch (fetchErr) {
+          // Only proceed if this is a not-found error (404)
+          // If it's an auth error (401), we should fail
+          if (fetchErr instanceof Error) {
+            if (fetchErr.message.includes('Authentication')) {
+              console.error('Authentication error when fetching profile:', fetchErr);
+              if (isMounted) {
+                setInitError('Authentication error. Please try logging in again.');
+              }
+              return;
+            }
+            if (!fetchErr.message.includes('not found')) {
+              console.error('Unexpected error fetching profile:', fetchErr);
+              throw fetchErr;
+            }
+          }
+        }
+        
+        // Only proceed with profile creation if no profile was found
+        if (!isMounted) return;
+        
+        console.log('No existing profile found, creating initial user profile...');
         
         // Create default profile
         await updateProfile({
@@ -39,15 +105,44 @@ export function ProfileIntegration({ userId, children }: ProfileIntegrationProps
           }
         });
         
-        console.log('Initial profile created');
+        console.log('Initial profile created successfully');
+      } catch (error) {
+        console.error('Error initializing profile:', error);
+        
+        // Set a user-friendly error message
+        if (isMounted) {
+          setInitError(error instanceof Error 
+            ? error.message 
+            : 'Failed to initialize profile. Please try refreshing the page.');
+        }
+        
+        // Reset the attempt flag after a longer delay to prevent rapid retries
+        initTimeout = window.setTimeout(() => {
+          if (isMounted) {
+            initializeAttempted.current = false;
+          }
+        }, 10000);
       }
     }
     
-    initializeProfile();
-  }, [userId, publicProfile, isLoading, updateProfile]);
+    // Wait a moment after component mounts before attempting to initialize
+    // This helps avoid race conditions with authentication state
+    const timeout = setTimeout(() => {
+      initializeProfile();
+    }, 2000);
+    
+    // Cleanup function to prevent memory leaks
+    return () => {
+      isMounted = false;
+      clearTimeout(timeout);
+      if (initTimeout) clearTimeout(initTimeout);
+    };
+  }, [userId, publicProfile, isLoading, authLoading, updateProfile]);
   
   // Sync profile across devices if enabled
   useEffect(() => {
+    let syncInterval: number | undefined;
+    
     async function handleSync() {
       if (!publicProfile || !userId) return;
       
@@ -62,9 +157,11 @@ export function ProfileIntegration({ userId, children }: ProfileIntegrationProps
     handleSync();
     
     // Set up periodic sync
-    const syncInterval = setInterval(handleSync, 5 * 60 * 1000); // Every 5 minutes
+    syncInterval = window.setInterval(handleSync, 5 * 60 * 1000); // Every 5 minutes
     
-    return () => clearInterval(syncInterval);
+    return () => {
+      if (syncInterval) clearInterval(syncInterval);
+    };
   }, [publicProfile, userId]);
   
   // Listen for storage events (when another tab updates the profile)
@@ -86,8 +183,8 @@ export function ProfileIntegration({ userId, children }: ProfileIntegrationProps
     return () => window.removeEventListener('storage', handleStorageChange);
   }, []);
   
-  // Show loading state
-  if (isLoading) {
+  // Show loading state only for authenticated users
+  if (userId && (authLoading || isLoading)) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center">
@@ -98,13 +195,13 @@ export function ProfileIntegration({ userId, children }: ProfileIntegrationProps
     );
   }
   
-  // Show error state
-  if (error) {
+  // Show error state from profile system
+  if (error || initError) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="bg-destructive/10 p-6 rounded-lg max-w-md">
           <h2 className="text-xl font-bold text-destructive mb-2">Profile Error</h2>
-          <p className="mb-4">{error.message}</p>
+          <p className="mb-4">{error?.message || initError}</p>
           <button 
             className="bg-primary text-primary-foreground px-4 py-2 rounded"
             onClick={() => window.location.reload()}
@@ -114,6 +211,11 @@ export function ProfileIntegration({ userId, children }: ProfileIntegrationProps
         </div>
       </div>
     );
+  }
+  
+  // Public routes don't need a profile
+  if (!userId) {
+    return <>{children}</>;
   }
   
   // Render children when profile is ready

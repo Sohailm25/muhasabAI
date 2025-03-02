@@ -2,6 +2,7 @@ export interface PublicProfile {
   userId: string;
   createdAt: Date;
   updatedAt: Date;
+  version?: number;
   generalPreferences: {
     inputMethod: string;
     reflectionFrequency: string;
@@ -22,6 +23,7 @@ export interface PublicProfile {
 
 export interface PrivateProfile {
   // Personal context
+  version?: number;
   spiritualJourneyStage: string;
   primaryGoals: string[];
   knowledgeLevel: string;

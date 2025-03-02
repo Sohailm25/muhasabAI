@@ -11,7 +11,8 @@ import {
   text, 
   varchar,
   index,
-  type AnyPgColumn
+  type AnyPgColumn,
+  boolean
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { migrate } from 'drizzle-orm/node-postgres/migrator';
@@ -93,6 +94,37 @@ export const user_profiles = pgTable('user_profiles', {
   privacy_settings: text('privacy_settings').notNull().default('{}'),
   usage_stats: text('usage_stats').notNull().default('{}'),
   key_verification_hash: varchar('key_verification_hash', { length: 255 }),
+});
+
+// Add users table for authentication
+export const users = pgTable('users', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  email: varchar('email', { length: 255 }).notNull().unique(),
+  name: varchar('name', { length: 255 }).notNull(),
+  password: varchar('password', { length: 255 }),
+  google_id: varchar('google_id', { length: 255 }),
+  is_first_login: boolean('is_first_login').notNull().default(true),
+  created_at: timestamp('created_at').notNull().defaultNow(),
+  updated_at: timestamp('updated_at').notNull().defaultNow(),
+}, (table) => {
+  return {
+    emailIdx: index('email_idx').on(table.email),
+  };
+});
+
+// Add tokens table for JWT token management
+export const tokens = pgTable('tokens', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  user_id: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  token: text('token').notNull(),
+  created_at: timestamp('created_at').notNull().defaultNow(),
+  expires_at: timestamp('expires_at').notNull(),
+  is_revoked: boolean('is_revoked').notNull().default(false),
+}, (table) => {
+  return {
+    tokenIdx: index('token_idx').on(table.token),
+    userIdIdx: index('token_user_id_idx').on(table.user_id),
+  };
 });
 
 // Add encrypted_profiles table with proper references

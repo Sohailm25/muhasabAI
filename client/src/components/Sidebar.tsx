@@ -11,11 +11,13 @@ import {
   ChevronLeft,
   ChevronRight,
   ClipboardList,
-  Landmark
+  Landmark,
+  LogOut
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { ThemeToggle } from "./theme-toggle";
+import { useAuth } from "@/hooks/useAuth";
 
 interface SidebarProps {
   className?: string;
@@ -26,6 +28,7 @@ export function Sidebar({ className, onCollapseChange }: SidebarProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [location, setLocation] = useLocation();
+  const { logout } = useAuth();
 
   const toggleSidebar = () => {
     setIsOpen(!isOpen);
@@ -57,9 +60,19 @@ export function Sidebar({ className, onCollapseChange }: SidebarProps) {
   };
 
   const isActive = (path: string) => {
+    if (path === '/home' && location === '/home') return true;
     if (path === '/' && location === '/') return true;
-    if (path !== '/' && location.startsWith(path)) return true;
+    if (path !== '/' && path !== '/home' && location.startsWith(path)) return true;
     return false;
+  };
+
+  const handleLogout = async () => {
+    try {
+      await logout();
+      window.location.href = '/';
+    } catch (err) {
+      console.error("Error logging out:", err);
+    }
   };
 
   return (
@@ -119,12 +132,12 @@ export function Sidebar({ className, onCollapseChange }: SidebarProps) {
 
           <nav className="flex-1 p-4 space-y-1">
             <Button 
-              variant={isActive('/') ? "secondary" : "ghost"} 
+              variant={isActive('/home') ? "secondary" : "ghost"} 
               className={cn(
                 "w-full", 
                 isCollapsed ? "justify-center px-2" : "justify-start"
               )} 
-              onClick={() => navigateTo('/')}
+              onClick={() => navigateTo('/home')}
               title="Home"
             >
               <Home className={cn("h-4 w-4", !isCollapsed && "mr-2")} />
@@ -198,8 +211,8 @@ export function Sidebar({ className, onCollapseChange }: SidebarProps) {
           </nav>
 
           <div className={cn(
-            "p-4 border-t",
-            isCollapsed && "flex justify-center"
+            "p-4 border-t space-y-2",
+            isCollapsed && "flex flex-col items-center"
           )}>
             <Button 
               className={cn(
@@ -211,6 +224,19 @@ export function Sidebar({ className, onCollapseChange }: SidebarProps) {
             >
               <PlusCircle className="h-4 w-4" />
               {!isCollapsed && "New Reflection"}
+            </Button>
+            
+            <Button 
+              variant="outline"
+              className={cn(
+                "flex items-center gap-2",
+                isCollapsed ? "w-auto p-2" : "w-full"
+              )}
+              onClick={handleLogout}
+              title="Sign Out"
+            >
+              <LogOut className="h-4 w-4" />
+              {!isCollapsed && "Sign Out"}
             </Button>
           </div>
         </div>

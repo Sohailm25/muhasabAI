@@ -52,6 +52,35 @@ export async function generateEncryptionKey() {
   }
 }
 
+// Generate a new key (alias for generateEncryptionKey to match import)
+export const generateKey = generateEncryptionKey;
+
+// Export a key to JWK format
+export async function exportKey(key: CryptoKey): Promise<JsonWebKey> {
+  try {
+    return await window.crypto.subtle.exportKey('jwk', key);
+  } catch (error) {
+    console.error('Error exporting key:', error);
+    throw new Error('Failed to export encryption key.');
+  }
+}
+
+// Import a key from JWK format
+export async function importKey(jwk: JsonWebKey): Promise<CryptoKey> {
+  try {
+    return await window.crypto.subtle.importKey(
+      'jwk',
+      jwk,
+      { name: 'AES-GCM', length: 256 },
+      false,
+      ['encrypt', 'decrypt']
+    );
+  } catch (error) {
+    console.error('Error importing key:', error);
+    throw new Error('Failed to import encryption key.');
+  }
+}
+
 // Encrypt data
 export async function encryptData(data: string, key: CryptoKey, iv: Uint8Array) {
   try {

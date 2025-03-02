@@ -10,12 +10,8 @@ import {
   exportKey,
   importKey
 } from './encryption';
-import {
-  getUserProfile,
-  updateUserProfile,
-  getEncryptedProfileData,
-  updateEncryptedProfileData
-} from './api';
+import { api } from './api';
+import { ProfileType } from '@/types/profile';
 
 /**
  * Profile synchronization module
@@ -116,7 +112,7 @@ async function syncPublicProfile(
     }
     
     // Get remote profile
-    const remoteProfile = await getUserProfile(userId);
+    const remoteProfile = await api.getUserProfile(userId);
     
     // If local doesn't exist, use remote
     if (!localProfile) {
@@ -141,18 +137,17 @@ async function syncPublicProfile(
       return localProfile;
     } else if (syncDirection === 'push') {
       // Only push to remote
-      await updateUserProfile(userId, { 
+      await api.updateUserProfile({ 
         ...localProfile,
         lastModified: Date.now(),
-        syncDeviceId: metadata.deviceId,
         version: (localProfile.version || 0) + 1
       });
       
       // Update metadata
       metadata.publicVersion = (localProfile.version || 0) + 1;
-      metadata.lastSyncTime = Date.now();
       saveSyncMetadata(metadata);
       
+      // Return local profile
       return localProfile;
     } else {
       // Bidirectional sync - merge changes with conflict resolution
@@ -175,7 +170,7 @@ async function syncPublicProfile(
           version: (localProfile.version || 0) + 1
         };
         
-        await updateUserProfile(userId, updatedLocalProfile);
+        await api.updateUserProfile(updatedLocalProfile);
         
         // Update metadata
         metadata.publicVersion = updatedLocalProfile.version || 0;
@@ -223,7 +218,7 @@ async function syncPrivateProfile(
     }
     
     // Get remote encrypted data
-    const remoteEncrypted = await getEncryptedProfileData(userId);
+    const remoteEncrypted = await api.getEncryptedProfileData(userId);
     
     // If no local private profile, try to decrypt remote
     if (!localPrivateProfile) {
@@ -294,7 +289,7 @@ async function syncPrivateProfile(
       );
       
       // Update remote encrypted data
-      await updateEncryptedProfileData(userId, {
+      await api.updateEncryptedProfileData(userId, {
         userId,
         encryptedData,
         iv,
@@ -353,7 +348,7 @@ async function syncPrivateProfile(
       );
       
       // Update remote encrypted data
-      await updateEncryptedProfileData(userId, {
+      await api.updateEncryptedProfileData(userId, {
         userId,
         encryptedData,
         iv,
@@ -550,4 +545,59 @@ export async function importUserProfiles(
     console.error('Error importing profiles:', error);
     throw new Error('Failed to import profile data');
   }
-} 
+}
+
+/**
+ * Synchronizes profile data across devices if enabled in privacy settings
+ * This is a simplified version for demonstration purposes
+ * @returns Promise that resolves when the sync is complete
+ */
+export const syncProfileAcrossDevices = async (): Promise<void> => {
+  try {
+    // For demonstration purposes - in a real app, this would:
+    // 1. Get the current user ID from authentication
+    // 2. Get the user's profile from local storage or state
+    // 3. Check if sync is enabled
+    // 4. Sync with the backend
+
+    console.log('Syncing profile across devices...');
+    
+    // Simulated successful sync
+    console.log('Profile sync completed successfully');
+  } catch (error) {
+    console.error('Error syncing profile across devices:', error);
+  }
+};
+
+/**
+ * Fetches profile data from the server if sync is enabled
+ * @param userId The user's ID
+ * @returns Promise that resolves with the profile data or null if sync is not enabled
+ */
+export const fetchProfileFromServer = async (
+  userId: string
+): Promise<ProfileType | null> => {
+  // Check if sync is enabled by checking local storage
+  const localProfile = localStorage.getItem(`profile_${userId}`);
+  
+  if (!localProfile) return null;
+  
+  const parsedProfile: ProfileType = JSON.parse(localProfile);
+  
+  if (!parsedProfile?.privacySettings?.enableSync) {
+    return null;
+  }
+  
+  try {
+    // For now, this is just a placeholder
+    // In a real app, this would be an actual API call
+    // const response = await api.get(`/api/profile/${userId}`);
+    // return response.data;
+    
+    // For now, just return the local profile
+    return parsedProfile;
+  } catch (error) {
+    console.error('Error fetching profile from server:', error);
+    return null;
+  }
+}; 

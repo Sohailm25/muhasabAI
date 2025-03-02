@@ -23,7 +23,7 @@ import {
 } from '@chakra-ui/react';
 import { ArrowBackIcon } from '@chakra-ui/icons';
 import MasjidSearch from '../components/MasjidSearch';
-import { useRouter } from 'next/router';
+import { useLocation } from 'wouter';
 
 interface UserPreferences {
   emailNotifications: boolean;
@@ -53,10 +53,11 @@ export default function Settings() {
   const [activeTab, setActiveTab] = useState(0);
   
   const toast = useToast();
-  const router = useRouter();
+  const [location, setLocation] = useLocation();
   
-  // From URL query parameters - used for returning to previous page
-  const returnTo = typeof router.query.returnTo === 'string' ? router.query.returnTo : '/';
+  // Parse query parameters from URL
+  const searchParams = new URLSearchParams(window.location.search);
+  const returnTo = searchParams.get('returnTo') || '/';
   
   useEffect(() => {
     loadUserSettings();
@@ -132,7 +133,7 @@ export default function Settings() {
   };
   
   const handleDone = () => {
-    router.push(returnTo);
+    setLocation(returnTo);
   };
   
   return (

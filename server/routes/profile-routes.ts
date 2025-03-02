@@ -1,5 +1,6 @@
 import express from 'express';
 import { log } from '../vite';
+import jwt from 'jsonwebtoken';
 import { 
   getUserProfile,
   createUserProfile,
@@ -11,6 +12,7 @@ import {
 } from '../db/index'; // Import specific functions from db/index
 
 const router = express.Router();
+const JWT_SECRET = process.env.JWT_SECRET || 'muhasabai-secret-key';
 
 /**
  * Get current user profile
@@ -18,13 +20,60 @@ const router = express.Router();
  */
 router.get('/profile', async (req, res) => {
   try {
-    // Get authenticated user ID (implement based on your auth system)
-    // For now, we'll return an error since we need a userId
-    return res.status(401).json({ error: 'Authentication required' });
+    // Get token from authorization header
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
     
-    // When auth is implemented:
-    // const userId = req.user?.id;
-    // return await getUserProfileById(userId, req, res);
+    const token = authHeader.split(' ')[1];
+    
+    try {
+      // Verify token and extract userId
+      const decoded = jwt.verify(token, JWT_SECRET) as { userId: string };
+      const userId = decoded.userId;
+      
+      if (!userId) {
+        return res.status(401).json({ error: 'Invalid authentication token' });
+      }
+      
+      console.log(`Profile requested for authenticated user: ${userId}`);
+      
+      // Get user profile from database
+      const profile = await getUserProfile(userId);
+      
+      if (!profile) {
+        // If profile doesn't exist yet, return a 404 so client can create one
+        return res.status(404).json({ error: 'Profile not found' });
+      }
+      
+      // Transform from DB format to client expected format
+      const clientProfile = {
+        userId: profile.userId,
+        createdAt: profile.createdAt || new Date(),
+        updatedAt: profile.updatedAt || new Date(),
+        generalPreferences: profile.preferences || {
+          inputMethod: 'text',
+          reflectionFrequency: 'daily',
+          languagePreferences: 'english'
+        },
+        privacySettings: profile.sharingPreferences || {
+          localStorageOnly: false,
+          allowPersonalization: true,
+          enableSync: false
+        },
+        usageStats: {
+          reflectionCount: 0,
+          lastActiveDate: new Date(),
+          streakDays: 0
+        }
+      };
+      
+      res.json(clientProfile);
+    } catch (tokenError) {
+      console.error('Token validation error:', tokenError);
+      return res.status(401).json({ error: 'Invalid authentication token' });
+    }
   } catch (error) {
     log(`Error fetching profile: ${error instanceof Error ? error.message : String(error)}`, 'error');
     res.status(500).json({ error: 'Failed to fetch profile' });

@@ -10,7 +10,18 @@ import multer from "multer";
 import { testConnection } from "./db";
 import masjidiRouter from "./masjidi-routes";
 import profileRouter from "./routes/profile-routes";
+import authRouter from "./routes/auth-routes";
 import express from "express";
+import path from "path";
+import fs from "fs";
+import { fileURLToPath } from "url";
+
+// Import debug middleware
+import { authDebugMiddleware } from "./middleware/auth-debug";
+
+// Get current directory for ES modules (replacement for __dirname)
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // Configure multer for in-memory storage
 const upload = multer({
@@ -22,6 +33,15 @@ const upload = multer({
 
 export async function registerRoutes(app: Express): Promise<Server> {
   const httpServer = createServer(app);
+
+  // Create middleware directory if it doesn't exist
+  const middlewareDir = path.join(__dirname, 'middleware');
+  if (!fs.existsSync(middlewareDir)) {
+    fs.mkdirSync(middlewareDir, { recursive: true });
+  }
+  
+  // Apply auth debug middleware to all requests
+  app.use(authDebugMiddleware);
 
   // Health check endpoint for Railway
   app.get("/health", async (req: Request, res: Response) => {
@@ -50,6 +70,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   
   // Mount the Profile API routes
   app.use("/api", profileRouter);
+  
+  // Mount the Auth routes
+  app.use("/auth", authRouter);
 
   app.post("/api/reflection", async (req: Request, res: Response) => {
     try {
