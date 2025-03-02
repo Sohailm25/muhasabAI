@@ -30,4 +30,18 @@ temp
 *.suo
 *.ntvs*
 *.njsproj
-*.sln 
+*.sln
+
+# Test files (not needed in production)
+tests/
+__tests__/
+*.test.js
+*.test.ts
+*.test.tsx
+*.spec.js
+*.spec.ts
+*.spec.tsx
+jest.config.js
+test-setup.js
+run-tests.sh
+__mocks__/ 

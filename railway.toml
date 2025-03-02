@@ -16,6 +16,7 @@ USE_DATABASE = "true"
 [nixpacks]
 nodejs-version = "20"
 apt-pkgs = ["ffmpeg", "python3", "python3-pip"]
+installCommand = "npm ci --legacy-peer-deps"
 
 # Install OpenAI Whisper during the build phase
 [nixpacks.setup]
