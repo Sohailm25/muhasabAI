@@ -7,14 +7,17 @@ import { getUserByEmail, createUser, validateToken, invalidateToken, storeToken 
 
 const router = express.Router();
 const JWT_SECRET = process.env.JWT_SECRET || 'muhasabai-secret-key';
+
+// Get the Google OAuth credentials from environment variables
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '';
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || '';
+const GOOGLE_REDIRECT_URI = process.env.GOOGLE_REDIRECT_URI || 'http://localhost:3000/auth/google/callback';
 
-// Google OAuth client
-const googleClient = new OAuth2Client(
+// Create a new OAuth2 client
+const oAuth2Client = new OAuth2Client(
   GOOGLE_CLIENT_ID,
   GOOGLE_CLIENT_SECRET,
-  process.env.GOOGLE_REDIRECT_URI || 'http://localhost:5000/auth/google/callback'
+  GOOGLE_REDIRECT_URI
 );
 
 // Hash password utility
@@ -197,7 +200,7 @@ router.get('/google', (req, res) => {
   // Get the action parameter (login or signup)
   const action = req.query.action as string || 'login';
   
-  const authUrl = googleClient.generateAuthUrl({
+  const authUrl = oAuth2Client.generateAuthUrl({
     access_type: 'offline',
     scope: [
       'https://www.googleapis.com/auth/userinfo.profile',
@@ -228,8 +231,8 @@ router.get('/google/callback', async (req, res) => {
     
     // Exchange code for tokens
     try {
-      const { tokens } = await googleClient.getToken(code);
-      googleClient.setCredentials(tokens);
+      const { tokens } = await oAuth2Client.getToken(code);
+      oAuth2Client.setCredentials(tokens);
       console.log('OAuth callback: Successfully exchanged code for tokens');
     } catch (tokenError) {
       console.error('OAuth callback: Token exchange error:', tokenError);
@@ -239,7 +242,7 @@ router.get('/google/callback', async (req, res) => {
     // Get user info from Google
     try {
       console.log('OAuth callback: Requesting user info from Google');
-      const { data } = await googleClient.request({
+      const { data } = await oAuth2Client.request({
         url: 'https://www.googleapis.com/oauth2/v3/userinfo'
       });
       

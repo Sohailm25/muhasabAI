@@ -9,6 +9,8 @@ import { initializeDatabase } from "./db";
 // Import route modules
 import profileRoutes from './routes/profile-routes';
 import healthRoutes from './routes/health-routes';
+import halaqaRoutes from './routes/halaqa-routes';
+import wirdRoutes from './routes/wird-routes';
 
 // Check for required environment variables
 function checkRequiredEnvVars() {
@@ -82,6 +84,10 @@ app.use((req, res, next) => {
   app.use('/api', profileRoutes);
   app.use('/api', healthRoutes);
 
+  // Feature-specific API routes
+  app.use('/api/halaqas', halaqaRoutes);
+  app.use('/api/wird', wirdRoutes);
+
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
     const message = err.message || "Internal Server Error";
@@ -95,13 +101,9 @@ app.use((req, res, next) => {
     serveStatic(app);
   }
 
-  // Use Railway's PORT environment variable or fall back to 5000
-  const port = process.env.PORT || 5000;
-  server.listen({
-    port,
-    host: "0.0.0.0",
-    reusePort: true,
-  }, () => {
+  // Use Railway's PORT environment variable or fall back to 3000
+  const port = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
+  server.listen(port, "127.0.0.1", () => {
     log(`Server running on port ${port}`, 'info');
   });
 })();

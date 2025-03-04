@@ -163,10 +163,23 @@ export function Sidebar({ className, onCollapseChange }: SidebarProps) {
                 isCollapsed ? "justify-center px-2" : "justify-start"
               )} 
               onClick={() => navigateTo('/halaqa')}
-              title="Halaqa Helper"
+              title="HalaqAI"
             >
               <Book className={cn("h-4 w-4", !isCollapsed && "mr-2")} />
-              {!isCollapsed && "Halaqa Helper"}
+              {!isCollapsed && "HalaqAI"}
+            </Button>
+
+            <Button 
+              variant={isActive('/wird') ? "secondary" : "ghost"} 
+              className={cn(
+                "w-full", 
+                isCollapsed ? "justify-center px-2" : "justify-start"
+              )} 
+              onClick={() => navigateTo('/wird')}
+              title="WirdhAI"
+            >
+              <ClipboardList className={cn("h-4 w-4", !isCollapsed && "mr-2")} />
+              {!isCollapsed && "WirdhAI"}
             </Button>
 
             <Button 

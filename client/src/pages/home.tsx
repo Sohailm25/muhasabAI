@@ -5,7 +5,7 @@ import { LoadingAnimation } from "@/components/LoadingAnimation";
 import { ConversationList } from "@/components/ConversationList";
 import { Button } from "@/components/ui/button";
 import { useLocation } from "wouter";
-import { PlusCircle, BookOpen, Clock } from "lucide-react";
+import { PlusCircle, BookOpen, Clock, ClipboardList } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
 interface UserSettings {
@@ -84,8 +84,36 @@ export default function Home() {
             >
               <BookOpen className="h-6 w-6" />
               <div>
-                <div className="font-semibold">Halaqa Helper</div>
+                <div className="font-semibold">HalaqAI</div>
                 <div className="text-xs font-normal">Track your Islamic learnings</div>
+              </div>
+            </Button>
+          </div>
+          
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-lg mx-auto mt-4">
+            <Button 
+              variant="outline" 
+              size="lg" 
+              className="w-full py-6 h-auto flex flex-col items-center gap-2"
+              onClick={() => setLocation('/wird')}
+            >
+              <ClipboardList className="h-6 w-6" />
+              <div>
+                <div className="font-semibold">WirdhAI</div>
+                <div className="text-xs font-normal">Track your daily Islamic practices</div>
+              </div>
+            </Button>
+            
+            <Button 
+              variant="outline" 
+              size="lg" 
+              className="w-full py-6 h-auto flex flex-col items-center gap-2"
+              onClick={() => setLocation('/personal-action-plan')}
+            >
+              <ClipboardList className="h-6 w-6" />
+              <div>
+                <div className="font-semibold">Action Plan</div>
+                <div className="text-xs font-normal">Track your spiritual goals</div>
               </div>
             </Button>
           </div>

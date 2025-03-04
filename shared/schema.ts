@@ -1,4 +1,4 @@
-import { pgTable, text, serial, timestamp, json, integer } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, timestamp, json, integer, boolean, date } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -18,6 +18,22 @@ export const conversations = pgTable("conversations", {
   timestamp: timestamp("timestamp").defaultNow().notNull(),
 });
 
+export const halaqas = pgTable("halaqas", {
+  id: serial("id").primaryKey(),
+  userId: text("user_id").notNull(),
+  title: text("title").notNull(),
+  speaker: text("speaker"),
+  date: date("date").notNull(),
+  topic: text("topic").notNull(),
+  keyReflection: text("key_reflection").notNull(),
+  impact: text("impact").notNull(),
+  actionItems: json("action_items").$type<HalaqaActionItem[]>().default([]),
+  wirdSuggestions: json("wird_suggestions").$type<WirdSuggestion[]>(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  isArchived: boolean("is_archived").default(false),
+});
+
 export const userSettings = pgTable("user_settings", {
   id: serial("id").primaryKey(),
   userId: text("user_id").notNull().unique(),
@@ -25,6 +41,17 @@ export const userSettings = pgTable("user_settings", {
   email: text("email"),
   preferences: json("preferences").$type<UserPreferences>().notNull(),
   timestamp: timestamp("timestamp").defaultNow().notNull(),
+});
+
+export const wirds = pgTable("wirds", {
+  id: serial("id").primaryKey(),
+  userId: text("user_id").notNull(),
+  date: date("date").notNull(),
+  practices: json("practices").$type<WirdPractice[]>().notNull(),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  isArchived: boolean("is_archived").default(false),
 });
 
 export type Message = {
@@ -46,6 +73,59 @@ export type UserPreferences = {
   selectedMasjid?: Masjid;
 };
 
+export type HalaqaActionItem = {
+  id: string;
+  description: string;
+  completed: boolean;
+  completedDate?: Date;
+};
+
+export type WirdPractice = {
+  id: string;
+  name: string;
+  category: string;
+  target: number;
+  completed: number;
+  unit: string;  // e.g., "pages", "times", "minutes"
+  isCompleted: boolean;
+};
+
+export type WirdSuggestion = {
+  type: string;     // e.g., "Quran", "Dhikr", "Dua", "Salah", etc.
+  title: string;    // Name of the practice
+  description: string;  // What to do
+  frequency: string;    // How often
+  duration: string;     // How long
+  benefit: string;      // Benefits
+};
+
+export type WirdEntry = {
+  id: number;
+  userId: string;
+  date: string | Date;
+  practices: WirdPractice[];
+  notes: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+  isArchived: boolean | null;
+};
+
+export type Halaqa = {
+  id: number;
+  userId: string;
+  title: string;
+  speaker: string | null;
+  date: string | Date;
+  topic: string;
+  keyReflection: string;
+  impact: string;
+  actionItems: HalaqaActionItem[] | null;
+  wirdSuggestions?: WirdSuggestion[];
+  createdAt: Date;
+  updatedAt: Date;
+  isArchived: boolean | null;
+};
+
 export const insertReflectionSchema = createInsertSchema(reflections).pick({
   content: true,
   type: true,
@@ -56,6 +136,33 @@ export const insertConversationSchema = createInsertSchema(conversations).pick({
   reflectionId: true,
   messages: true,
   actionItems: true,
+});
+
+export const insertHalaqaSchema = createInsertSchema(halaqas).pick({
+  userId: true,
+  title: true,
+  speaker: true,
+  date: true,
+  topic: true,
+  keyReflection: true,
+  impact: true,
+});
+
+export const updateHalaqaSchema = createInsertSchema(halaqas).pick({
+  title: true,
+  speaker: true,
+  date: true,
+  topic: true,
+  keyReflection: true,
+  impact: true,
+  isArchived: true,
+}).partial();
+
+export const halaqaActionItemSchema = z.object({
+  id: z.string().optional(),
+  description: z.string(),
+  completed: z.boolean().default(false),
+  completedDate: z.date().optional(),
 });
 
 export const userPreferencesSchema = z.object({
@@ -78,9 +185,28 @@ export const insertUserSettingsSchema = createInsertSchema(userSettings).pick({
   preferences: userPreferencesSchema,
 });
 
+export const insertWirdSchema = createInsertSchema(wirds).pick({
+  userId: true,
+  date: true,
+  practices: true,
+  notes: true,
+});
+
+export const updateWirdSchema = createInsertSchema(wirds).pick({
+  practices: true,
+  notes: true,
+  isArchived: true,
+}).partial();
+
 export type InsertReflection = z.infer<typeof insertReflectionSchema>;
 export type InsertConversation = z.infer<typeof insertConversationSchema>;
+export type InsertHalaqa = z.infer<typeof insertHalaqaSchema>;
+export type UpdateHalaqa = z.infer<typeof updateHalaqaSchema>;
 export type InsertUserSettings = z.infer<typeof insertUserSettingsSchema>;
+export type InsertWird = z.infer<typeof insertWirdSchema>;
+export type UpdateWird = z.infer<typeof updateWirdSchema>;
 export type Reflection = typeof reflections.$inferSelect;
 export type Conversation = typeof conversations.$inferSelect;
+export type HalaqaRow = typeof halaqas.$inferSelect;
 export type UserSettings = typeof userSettings.$inferSelect;
+export type WirdRow = typeof wirds.$inferSelect;

@@ -4,99 +4,34 @@ ProfileIntegration.tsx:63 Checking for existing profile...
 ProfileIntegration.tsx:67 Found existing profile, no need to create one
 auth-debug.ts:5 Current auth token: eyJhbGciOi...
 auth-debug.ts:14 Token validation status: 200 OK
-auth-debug.ts:18 Token validation response: {id: '3049e130-8584-418b-b6f8-b7e9d93de5ac', email: 'sohailm25@gmail.com', name: 'Sohail Mohammad', googleId: '110694986574655216341', isFirstLogin: true, …}
-auth-debug.ts:5 Current auth token: eyJhbGciOi...
-auth-debug.ts:14 Token validation status: 200 OK
-auth-debug.ts:18 Token validation response: {id: '3049e130-8584-418b-b6f8-b7e9d93de5ac', email: 'sohailm25@gmail.com', name: 'Sohail Mohammad', googleId: '110694986574655216341', isFirstLogin: true, …}
-PersonalizationModal.tsx:128 Saving personalization data with the following values: {privacySettings: {…}, privateProfile: {…}}
+auth-debug.ts:18 Token validation response: Object
+PersonalizationModal.tsx:128 Saving personalization data with the following values: Object
 PersonalizationModal.tsx:170 Personalization data saved successfully
 Grammarly.js:2 grm ERROR [iterable] ░░ Not supported: in app messages from Iterable
-write @ Grammarly.js:2
-handleEvent @ Grammarly.js:2
-_logMessage @ Grammarly.js:2
-error @ Grammarly.js:2
-error @ Grammarly.js:2
-onTrigger @ Grammarly.js:2
-(anonymous) @ Grammarly.js:2
-t.__tryOrUnsub @ Grammarly.js:2
-t.next @ Grammarly.js:2
-t._next @ Grammarly.js:2
-t.next @ Grammarly.js:2
-l @ Grammarly.js:2
-t._execute @ Grammarly.js:2
-t.execute @ Grammarly.js:2
-t.flush @ Grammarly.js:2
-setInterval
-t.requestAsyncId @ Grammarly.js:2
-t.schedule @ Grammarly.js:2
-e.schedule @ Grammarly.js:2
-t.schedule @ Grammarly.js:2
-(anonymous) @ Grammarly.js:2
-e._trySubscribe @ Grammarly.js:2
-e.subscribe @ Grammarly.js:2
-(anonymous) @ Grammarly.js:2
-t.__tryOrUnsub @ Grammarly.js:2
-t.next @ Grammarly.js:2
-t._next @ Grammarly.js:2
-t.next @ Grammarly.js:2
-t.next @ Grammarly.js:2
-t.next @ Grammarly.js:2
-set @ Grammarly.js:2
-(anonymous) @ Grammarly.js:2
-t.__tryOrUnsub @ Grammarly.js:2
-t.next @ Grammarly.js:2
-t._next @ Grammarly.js:2
-t.next @ Grammarly.js:2
-t._next @ Grammarly.js:2
-t.next @ Grammarly.js:2
-t.next @ Grammarly.js:2
-(anonymous) @ Grammarly.js:2
-t.__tryOrUnsub @ Grammarly.js:2
-t.next @ Grammarly.js:2
-t._next @ Grammarly.js:2
-t.next @ Grammarly.js:2
-t.notifyNext @ Grammarly.js:2
-t._next @ Grammarly.js:2
-t.next @ Grammarly.js:2
-_processObservableMessage @ Grammarly.js:2
-(anonymous) @ Grammarly.js:2
-t.__tryOrUnsub @ Grammarly.js:2
-t.next @ Grammarly.js:2
-t._next @ Grammarly.js:2
-t.next @ Grammarly.js:2
-t._next @ Grammarly.js:2
-t.next @ Grammarly.js:2
-t @ Grammarly.js:2
-(anonymous) @ Grammarly.js:2
-(anonymous) @ Grammarly.js:2
-fire @ Grammarly.js:2
-Ii._onBgPortMessage @ Grammarly.js:2Understand this errorAI
+write @ Grammarly.js:2Understand this errorAI
 auth-debug.ts:5 Current auth token: eyJhbGciOi...
 auth-debug.ts:14 Token validation status: 200 OK
-auth-debug.ts:18 Token validation response: {id: '3049e130-8584-418b-b6f8-b7e9d93de5ac', email: 'sohailm25@gmail.com', name: 'Sohail Mohammad', googleId: '110694986574655216341', isFirstLogin: true, …}
+auth-debug.ts:18 Token validation response: Object
 ReflectionInput.tsx:49 Submitting personalized text reflection
-reflectionService.ts:151 useReflectionService.submitReflection called with content: here is my test reflection...
+reflectionService.ts:151 useReflectionService.submitReflection called with content: sohailm25 beginner...
 reflectionService.ts:157 Personalization is enabled, fetching context...
-usePersonalization.ts:28 [DEBUG getPersonalizationContext] Public profile: {userId: '3049e130-8584-418b-b6f8-b7e9d93de5ac', allowPersonalization: true}
+usePersonalization.ts:28 [DEBUG getPersonalizationContext] Public profile: Object
 usePersonalization.ts:39 [DEBUG getPersonalizationContext] Private profile available: true
-usePersonalization.ts:41 [DEBUG getPersonalizationContext] Private profile data: {knowledgeLevel: 'beginner', topicsCount: 1, goalsCount: 1, spiritualJourney: '', reflectionStyle: ''}
+usePersonalization.ts:41 [DEBUG getPersonalizationContext] Private profile data: Object
 usePersonalization.ts:50 [DEBUG getPersonalizationContext] FULL PRIVATE PROFILE: {
   "spiritualJourneyStage": "",
-  "primaryGoals": [
-    "build_community"
-  ],
+  "primaryGoals": [],
   "knowledgeLevel": "beginner",
   "lifeStage": "",
   "communityConnection": "",
-  "culturalBackground": "african",
+  "culturalBackground": "",
   "reflectionStyle": "",
   "guidancePreferences": [
     "practical",
-    "spiritual"
+    "spiritual",
+    "reflective"
   ],
-  "topicsOfInterest": [
-    "aqeedah"
-  ],
+  "topicsOfInterest": [],
   "dynamicAttributes": {
     "topicsEngagedWith": {},
     "preferredReferences": {},
@@ -111,20 +46,17 @@ reflectionService.ts:165 Personalization context type: object
 reflectionService.ts:166 Personalization context keys: knowledgeLevel, topicsOfInterest, primaryGoals, spiritualJourneyStage, lifeStage, communityConnection, culturalBackground, reflectionStyle, guidancePreferences
 reflectionService.ts:167 DEBUG - Full personalization context: {
   "knowledgeLevel": "beginner",
-  "topicsOfInterest": [
-    "aqeedah"
-  ],
-  "primaryGoals": [
-    "build_community"
-  ],
+  "topicsOfInterest": [],
+  "primaryGoals": [],
   "spiritualJourneyStage": "",
   "lifeStage": "",
   "communityConnection": "",
-  "culturalBackground": "african",
+  "culturalBackground": "",
   "reflectionStyle": "",
   "guidancePreferences": [
     "practical",
-    "spiritual"
+    "spiritual",
+    "reflective"
   ]
 }
 reflectionService.ts:207 ✅ Personalization context is correctly an object type
@@ -133,62 +65,54 @@ reflectionService.ts:221 Personalization context type before API call: object
 reflectionService.ts:222 Personalization context has keys: knowledgeLevel, topicsOfInterest, primaryGoals, spiritualJourneyStage, lifeStage, communityConnection, culturalBackground, reflectionStyle, guidancePreferences
 reflectionService.ts:48 Submitting reflection with personalization: true
 reflectionService.ts:57 🔴🔴🔴 Using API URL without query parameters: /api/reflection
-reflectionService.ts:60 Personalization context keys: (9) ['knowledgeLevel', 'topicsOfInterest', 'primaryGoals', 'spiritualJourneyStage', 'lifeStage', 'communityConnection', 'culturalBackground', 'reflectionStyle', 'guidancePreferences']
+reflectionService.ts:60 Personalization context keys: Array(9)
 reflectionService.ts:61 Personalization context type: object
 reflectionService.ts:83 personalizationContext content: {
   "knowledgeLevel": "beginner",
-  "topicsOfInterest": [
-    "aqeedah"
-  ],
-  "primaryGoals": [
-    "build_community"
-  ],
+  "topicsOfInterest": [],
+  "primaryGoals": [],
   "spiritualJourneyStage": "",
   "lifeStage": "",
   "communityConnection": "",
-  "culturalBackground": "african",
+  "culturalBackground": "",
   "reflectionStyle": "",
   "guidancePreferences": [
     "practical",
-    "spiritual"
+    "spiritual",
+    "reflective"
   ]
 }
 reflectionService.ts:86 🔴🔴🔴 IMPORTANT: Only using request body for personalization, NOT URL parameters
 reflectionService.ts:97 🔴🔴🔴 ADDING PERSONALIZATION TO REQUEST BODY
 reflectionService.ts:100 🔴🔴🔴 REQUEST BODY WITH PERSONALIZATION: {
-  "content": "here is my test reflection",
+  "content": "sohailm25 beginner",
   "type": "text",
   "personalizationContext": {
     "knowledgeLevel": "beginner",
-    "topicsOfInterest": [
-      "aqeedah"
-    ],
-    "primaryGoals": [
-  ...
+    "topicsOfInterest": [],
+    "primaryGoals": [],
+    "spiritualJourneyStage": ...
 reflectionService.ts:104 SENDING REQUEST BODY: {
-  "content": "here is my test reflection",
+  "content": "sohailm25 beginner",
   "type": "text",
   "personalizationContext": {
     "knowledgeLevel": "beginner",
-    "topicsOfInterest": [
-      "aqeedah"
-    ],
-    "primaryGoals": [
-      "build_community"
-    ],
+    "topicsOfInterest": [],
+    "primaryGoals": [],
     "spiritualJourneyStage": "",
     "lifeStage": "",
     "communityConnection": "",
-    "culturalBackground": "african",
+    "culturalBackground": "",
     "reflectionStyle": "",
     "guidancePreferences": [
       "practical",
-      "spiritual"
+      "spiritual",
+      "reflective"
     ]
   }
 }
 reflectionService.ts:105 SENDING REQUEST URL: /api/reflection
-reflectionService.ts:106 SENDING REQUEST HEADERS: {Content-Type: 'application/json'}
+reflectionService.ts:106 SENDING REQUEST HEADERS: Object
 reflectionService.ts:109 
 
 
@@ -198,243 +122,163 @@ reflectionService.ts:112 🔴🔴🔴 REQUEST CONTAINS NO QUERY PARAMETERS
 reflectionService.ts:113 
 
 
-reflectionService.ts:228 reflectionService.submitReflection returned result: success
-ReflectionInput.tsx:53 API response: {reflection: {…}, conversation: {…}, understanding: 'Thank you for sharing your reflection. I understan…ur willingness to engage with your faith journey.', questions: Array(3)}
-new.tsx:16 Reflection complete: {reflection: {…}, conversation: {…}, understanding: 'Thank you for sharing your reflection. I understan…ur willingness to engage with your faith journey.', questions: Array(3)}
-new.tsx:19 API response top-level keys: (4) ['reflection', 'conversation', 'understanding', 'questions']
-new.tsx:22 Understanding is present at top level: true
-new.tsx:23 Questions are present at top level: true
-new.tsx:26 Top-level understanding preview: Thank you for sharing your reflection. I understan...
-new.tsx:30 Top-level questions count: 3
-new.tsx:32 First question: What specific aspects of your faith or aqeedah (Islamic beliefs) are you most interested in reflecting upon at this moment?
-new.tsx:69 Direct from API response - understanding: Thank you for sharing your reflection. I understan...
-new.tsx:70 Direct from API response - questions: (3) ['What specific aspects of your faith or aqeedah (Is…ost interested in reflecting upon at this moment?', 'How do you currently make time for spiritual refle…ht you build this practice within your community?', "What questions about Islam have been on your mind … you'd like to explore through deeper reflection?"]
-new.tsx:84 Saving reflection data to localStorage: {id: 1, reflectionId: 1, original: 'here is my test reflection', understanding: 'Thank you for sharing your reflection. I understan…ur willingness to engage with your faith journey.', questions: Array(3), …}
-new.tsx:86 Understanding: Thank you for sharing your reflection. I understan...
-new.tsx:87 Questions: (3) ['What specific aspects of your faith or aqeedah (Is…ost interested in reflecting upon at this moment?', 'How do you currently make time for spiritual refle…ht you build this practice within your community?', "What questions about Islam have been on your mind … you'd like to explore through deeper reflection?"]
-new.tsx:92 Navigating to chat page: /chat/1
-ConversationView.tsx:289 [DEBUG] ConversationView render - conversationId: 1, messages: 0, questions: 0, isFirstSubmission: true
-ConversationView.tsx:295 [DEBUG] No questions available or questions array is empty
-ConversationView.tsx:774 [DEBUG] ConversationView rendering with 0 messages, showQuestions: false
-ConversationView.tsx:800 [DEBUG] First-message special case condition check: {isNotSubmitting: true, isFirstSubmission: true, hasQuestions: false, hasOneMessage: false, firstMessageIsUser: false, …}
-ConversationView.tsx:850 [DEBUG] General follow-up questions condition check: {isNotSubmitting: true, isNotFirstSubmission: false, hasQuestions: false, hasMessages: false, lastMessageRole: 'none'}
-ConversationView.tsx:871 [DEBUG] Last assistant message has questions: false
-ConversationView.tsx:289 [DEBUG] ConversationView render - conversationId: 1, messages: 0, questions: 0, isFirstSubmission: true
-ConversationView.tsx:295 [DEBUG] No questions available or questions array is empty
-ConversationView.tsx:774 [DEBUG] ConversationView rendering with 0 messages, showQuestions: false
-ConversationView.tsx:800 [DEBUG] First-message special case condition check: {isNotSubmitting: true, isFirstSubmission: true, hasQuestions: false, hasOneMessage: false, firstMessageIsUser: false, …}
-ConversationView.tsx:850 [DEBUG] General follow-up questions condition check: {isNotSubmitting: true, isNotFirstSubmission: false, hasQuestions: false, hasMessages: false, lastMessageRole: 'none'}
-ConversationView.tsx:871 [DEBUG] Last assistant message has questions: false
-ConversationView.tsx:333 [DEBUG] STATE CHANGE - showQuestions: false, initialLoad: true, isFirstSubmission: true, messagesCount: 0
-ConversationView.tsx:342 No questions available for display
-ConversationView.tsx:353 ConversationView - Loaded from localStorage: {id: 1, hasUnderstanding: true, questionsCount: 3, messageCount: 0}
-ConversationView.tsx:480 [DEBUG] Submission state changed - isSubmitting: false, isFirstSubmission: true
-chat.tsx:33 Loading reflection data for ID: 1
-chat.tsx:38 Loaded session data: {id: 1, reflectionId: 1, original: 'here is my test reflection', understanding: 'Thank you for sharing your reflection. I understan…ur willingness to engage with your faith journey.', questions: Array(3), …}
-chat.tsx:45 Found direct API response data:
-chat.tsx:46 - Understanding: Yes
-chat.tsx:47 - Questions: 3
-chat.tsx:52 Using new reflection format with understanding and original
-chat.tsx:65 Loaded questions: (3) ['What specific aspects of your faith or aqeedah (Is…ost interested in reflecting upon at this moment?', 'How do you currently make time for spiritual refle…ht you build this practice within your community?', "What questions about Islam have been on your mind … you'd like to explore through deeper reflection?"]
-ConversationView.tsx:333 [DEBUG] STATE CHANGE - showQuestions: false, initialLoad: true, isFirstSubmission: true, messagesCount: 0
-ConversationView.tsx:342 No questions available for display
-ConversationView.tsx:353 ConversationView - Loaded from localStorage: {id: 1, hasUnderstanding: true, questionsCount: 3, messageCount: 0}
-ConversationView.tsx:480 [DEBUG] Submission state changed - isSubmitting: false, isFirstSubmission: true
-chat.tsx:33 Loading reflection data for ID: 1
-chat.tsx:38 Loaded session data: {id: 1, reflectionId: 1, original: 'here is my test reflection', understanding: 'Thank you for sharing your reflection. I understan…ur willingness to engage with your faith journey.', questions: Array(3), …}
-chat.tsx:45 Found direct API response data:
-chat.tsx:46 - Understanding: Yes
-chat.tsx:47 - Questions: 3
-chat.tsx:52 Using new reflection format with understanding and original
-chat.tsx:65 Loaded questions: (3) ['What specific aspects of your faith or aqeedah (Is…ost interested in reflecting upon at this moment?', 'How do you currently make time for spiritual refle…ht you build this practice within your community?', "What questions about Islam have been on your mind … you'd like to explore through deeper reflection?"]
-ConversationView.tsx:289 [DEBUG] ConversationView render - conversationId: 1, messages: 2, questions: 3, isFirstSubmission: true
-ConversationView.tsx:292 [DEBUG] Questions content: (3) ['What specific aspects of your faith or aqeedah (Is…ost interested in reflecting upon at this moment?', 'How do you currently make time for spiritual refle…ht you build this practice within your community?', "What questions about Islam have been on your mind … you'd like to explore through deeper reflection?"]
-ConversationView.tsx:293 [DEBUG] All questions: (3) ['What specific aspects of your faith or aqeedah (Is…ost interested in reflecting upon at this moment?', 'How do you currently make time for spiritual refle…ht you build this practice within your community?', "What questions about Islam have been on your mind … you'd like to explore through deeper reflection?"]
-ConversationView.tsx:299 [DEBUG] Message roles sequence: user, assistant
-ConversationView.tsx:300 [DEBUG] Last message role: assistant
-ConversationView.tsx:774 [DEBUG] ConversationView rendering with 2 messages, showQuestions: false
-ConversationView.tsx:800 [DEBUG] First-message special case condition check: {isNotSubmitting: true, isFirstSubmission: true, hasQuestions: true, hasOneMessage: false, firstMessageIsUser: true, …}
-ConversationView.tsx:831 [DEBUG] Special case - Rendering first message follow-up questions
-ConversationView.tsx:850 [DEBUG] General follow-up questions condition check: {isNotSubmitting: true, isNotFirstSubmission: false, hasQuestions: true, hasMessages: true, lastMessageRole: 'assistant'}
-ConversationView.tsx:871 [DEBUG] Last assistant message has questions: false
-ConversationView.tsx:289 [DEBUG] ConversationView render - conversationId: 1, messages: 2, questions: 3, isFirstSubmission: true
-ConversationView.tsx:292 [DEBUG] Questions content: (3) ['What specific aspects of your faith or aqeedah (Is…ost interested in reflecting upon at this moment?', 'How do you currently make time for spiritual refle…ht you build this practice within your community?', "What questions about Islam have been on your mind … you'd like to explore through deeper reflection?"]
-ConversationView.tsx:293 [DEBUG] All questions: (3) ['What specific aspects of your faith or aqeedah (Is…ost interested in reflecting upon at this moment?', 'How do you currently make time for spiritual refle…ht you build this practice within your community?', "What questions about Islam have been on your mind … you'd like to explore through deeper reflection?"]
-ConversationView.tsx:299 [DEBUG] Message roles sequence: user, assistant
-ConversationView.tsx:300 [DEBUG] Last message role: assistant
-ConversationView.tsx:774 [DEBUG] ConversationView rendering with 2 messages, showQuestions: false
-ConversationView.tsx:800 [DEBUG] First-message special case condition check: {isNotSubmitting: true, isFirstSubmission: true, hasQuestions: true, hasOneMessage: false, firstMessageIsUser: true, …}
-ConversationView.tsx:831 [DEBUG] Special case - Rendering first message follow-up questions
-ConversationView.tsx:850 [DEBUG] General follow-up questions condition check: {isNotSubmitting: true, isNotFirstSubmission: false, hasQuestions: true, hasMessages: true, lastMessageRole: 'assistant'}
-ConversationView.tsx:871 [DEBUG] Last assistant message has questions: false
-ConversationView.tsx:495 Animation WILL RUN for message 0 (initial load)
-ConversationView.tsx:489 Animation SKIP - Already animated message 0
-ConversationView.tsx:495 Animation WILL RUN for message 1 (initial load)
-ConversationView.tsx:489 Animation SKIP - Already animated message 1
-ConversationView.tsx:125 [DEBUG] FollowUpQuestions component received props: {questionsCount: 3, isVisible: true, firstQuestionPreview: 'What specific aspects of your ...'}
-ConversationView.tsx:137 [DEBUG] FollowUpQuestions is visible, rendering buttons
-ConversationView.tsx:125 [DEBUG] FollowUpQuestions component received props: {questionsCount: 3, isVisible: true, firstQuestionPreview: 'What specific aspects of your ...'}
-ConversationView.tsx:137 [DEBUG] FollowUpQuestions is visible, rendering buttons
-ConversationView.tsx:45 [anim_421] TypingAnimation setup - skipAnimation: true, textLength: 392, hasAnimated: true, messageId: 1-1
-ConversationView.tsx:333 [DEBUG] STATE CHANGE - showQuestions: false, initialLoad: true, isFirstSubmission: true, messagesCount: 2
-ConversationView.tsx:339 Questions available for display: 3
-ConversationView.tsx:340 First question: What specific aspects of your faith or aqeedah (Islamic beliefs) are you most interested in reflecting upon at this moment?
-ConversationView.tsx:353 ConversationView - Loaded from localStorage: {id: 1, hasUnderstanding: true, questionsCount: 3, messageCount: 2}
-ConversationView.tsx:438 Messages updated, count: 2, lastMessageId: null, initialLoad: true
-ConversationView.tsx:442 Initial load detected, resetting animation state to ensure proper animation
-ConversationView.tsx:325 [DEBUG] setShowQuestions called with value: false
-ConversationView.tsx:326 [DEBUG] Current state - messages: 2, isFirstSubmission: true, initialLoad: true
-ConversationView.tsx:327 [DEBUG] setShowQuestions stack trace
-setShowQuestions @ ConversationView.tsx:327
-(anonymous) @ ConversationView.tsx:451
-commitHookEffectListMount @ chunk-276SZO74.js?v=6d9ccabe:16915
-commitPassiveMountOnFiber @ chunk-276SZO74.js?v=6d9ccabe:18156
-commitPassiveMountEffects_complete @ chunk-276SZO74.js?v=6d9ccabe:18129
-commitPassiveMountEffects_begin @ chunk-276SZO74.js?v=6d9ccabe:18119
-commitPassiveMountEffects @ chunk-276SZO74.js?v=6d9ccabe:18109
-flushPassiveEffectsImpl @ chunk-276SZO74.js?v=6d9ccabe:19490
-flushPassiveEffects @ chunk-276SZO74.js?v=6d9ccabe:19447
-performSyncWorkOnRoot @ chunk-276SZO74.js?v=6d9ccabe:18868
-flushSyncCallbacks @ chunk-276SZO74.js?v=6d9ccabe:9119
-commitRootImpl @ chunk-276SZO74.js?v=6d9ccabe:19432
-commitRoot @ chunk-276SZO74.js?v=6d9ccabe:19277
-finishConcurrentRender @ chunk-276SZO74.js?v=6d9ccabe:18805
-performConcurrentWorkOnRoot @ chunk-276SZO74.js?v=6d9ccabe:18718
-workLoop @ chunk-276SZO74.js?v=6d9ccabe:197
-flushWork @ chunk-276SZO74.js?v=6d9ccabe:176
-performWorkUntilDeadline @ chunk-276SZO74.js?v=6d9ccabe:384
-ConversationView.tsx:45 [anim_421] TypingAnimation setup - skipAnimation: true, textLength: 392, hasAnimated: true, messageId: 1-1
-ConversationView.tsx:394 Initial page load, will show questions shortly
-ConversationView.tsx:289 [DEBUG] ConversationView render - conversationId: 1, messages: 2, questions: 3, isFirstSubmission: true
-ConversationView.tsx:292 [DEBUG] Questions content: (3) ['What specific aspects of your faith or aqeedah (Is…ost interested in reflecting upon at this moment?', 'How do you currently make time for spiritual refle…ht you build this practice within your community?', "What questions about Islam have been on your mind … you'd like to explore through deeper reflection?"]
-ConversationView.tsx:293 [DEBUG] All questions: (3) ['What specific aspects of your faith or aqeedah (Is…ost interested in reflecting upon at this moment?', 'How do you currently make time for spiritual refle…ht you build this practice within your community?', "What questions about Islam have been on your mind … you'd like to explore through deeper reflection?"]
-ConversationView.tsx:299 [DEBUG] Message roles sequence: user, assistant
-ConversationView.tsx:300 [DEBUG] Last message role: assistant
-ConversationView.tsx:774 [DEBUG] ConversationView rendering with 2 messages, showQuestions: false
-ConversationView.tsx:800 [DEBUG] First-message special case condition check: {isNotSubmitting: true, isFirstSubmission: true, hasQuestions: true, hasOneMessage: false, firstMessageIsUser: true, …}
-ConversationView.tsx:831 [DEBUG] Special case - Rendering first message follow-up questions
-ConversationView.tsx:850 [DEBUG] General follow-up questions condition check: {isNotSubmitting: true, isNotFirstSubmission: false, hasQuestions: true, hasMessages: true, lastMessageRole: 'assistant'}
-ConversationView.tsx:871 [DEBUG] Last assistant message has questions: false
-ConversationView.tsx:289 [DEBUG] ConversationView render - conversationId: 1, messages: 2, questions: 3, isFirstSubmission: true
-ConversationView.tsx:292 [DEBUG] Questions content: (3) ['What specific aspects of your faith or aqeedah (Is…ost interested in reflecting upon at this moment?', 'How do you currently make time for spiritual refle…ht you build this practice within your community?', "What questions about Islam have been on your mind … you'd like to explore through deeper reflection?"]
-ConversationView.tsx:293 [DEBUG] All questions: (3) ['What specific aspects of your faith or aqeedah (Is…ost interested in reflecting upon at this moment?', 'How do you currently make time for spiritual refle…ht you build this practice within your community?', "What questions about Islam have been on your mind … you'd like to explore through deeper reflection?"]
-ConversationView.tsx:299 [DEBUG] Message roles sequence: user, assistant
-ConversationView.tsx:300 [DEBUG] Last message role: assistant
-ConversationView.tsx:774 [DEBUG] ConversationView rendering with 2 messages, showQuestions: false
-ConversationView.tsx:800 [DEBUG] First-message special case condition check: {isNotSubmitting: true, isFirstSubmission: true, hasQuestions: true, hasOneMessage: false, firstMessageIsUser: true, …}
-ConversationView.tsx:831 [DEBUG] Special case - Rendering first message follow-up questions
-ConversationView.tsx:850 [DEBUG] General follow-up questions condition check: {isNotSubmitting: true, isNotFirstSubmission: false, hasQuestions: true, hasMessages: true, lastMessageRole: 'assistant'}
-ConversationView.tsx:871 [DEBUG] Last assistant message has questions: false
-ConversationView.tsx:495 Animation WILL RUN for message 0 (initial load)
-ConversationView.tsx:489 Animation SKIP - Already animated message 0
-ConversationView.tsx:495 Animation WILL RUN for message 1 (initial load)
-ConversationView.tsx:489 Animation SKIP - Already animated message 1
-ConversationView.tsx:169 [DEBUG] FollowUpQuestions memoization - shouldUpdate: false
-ConversationView.tsx:45 [anim_137] TypingAnimation setup - skipAnimation: true, textLength: 392, hasAnimated: true, messageId: 1-1
-ConversationView.tsx:45 [anim_137] TypingAnimation setup - skipAnimation: true, textLength: 392, hasAnimated: true, messageId: 1-1
-ConversationView.tsx:462 Initial load complete, showing questions
-ConversationView.tsx:325 [DEBUG] setShowQuestions called with value: true
-ConversationView.tsx:326 [DEBUG] Current state - messages: 2, isFirstSubmission: true, initialLoad: true
-ConversationView.tsx:327 [DEBUG] setShowQuestions stack trace
-setShowQuestions @ ConversationView.tsx:327
-(anonymous) @ ConversationView.tsx:463
-setTimeout
-(anonymous) @ ConversationView.tsx:457
-commitHookEffectListMount @ chunk-276SZO74.js?v=6d9ccabe:16915
-commitPassiveMountOnFiber @ chunk-276SZO74.js?v=6d9ccabe:18156
-commitPassiveMountEffects_complete @ chunk-276SZO74.js?v=6d9ccabe:18129
-commitPassiveMountEffects_begin @ chunk-276SZO74.js?v=6d9ccabe:18119
-commitPassiveMountEffects @ chunk-276SZO74.js?v=6d9ccabe:18109
-flushPassiveEffectsImpl @ chunk-276SZO74.js?v=6d9ccabe:19490
-flushPassiveEffects @ chunk-276SZO74.js?v=6d9ccabe:19447
-performSyncWorkOnRoot @ chunk-276SZO74.js?v=6d9ccabe:18868
-flushSyncCallbacks @ chunk-276SZO74.js?v=6d9ccabe:9119
-commitRootImpl @ chunk-276SZO74.js?v=6d9ccabe:19432
-commitRoot @ chunk-276SZO74.js?v=6d9ccabe:19277
-finishConcurrentRender @ chunk-276SZO74.js?v=6d9ccabe:18805
-performConcurrentWorkOnRoot @ chunk-276SZO74.js?v=6d9ccabe:18718
-workLoop @ chunk-276SZO74.js?v=6d9ccabe:197
-flushWork @ chunk-276SZO74.js?v=6d9ccabe:176
-performWorkUntilDeadline @ chunk-276SZO74.js?v=6d9ccabe:384
-ConversationView.tsx:289 [DEBUG] ConversationView render - conversationId: 1, messages: 2, questions: 3, isFirstSubmission: true
-ConversationView.tsx:292 [DEBUG] Questions content: (3) ['What specific aspects of your faith or aqeedah (Is…ost interested in reflecting upon at this moment?', 'How do you currently make time for spiritual refle…ht you build this practice within your community?', "What questions about Islam have been on your mind … you'd like to explore through deeper reflection?"]
-ConversationView.tsx:293 [DEBUG] All questions: (3) ['What specific aspects of your faith or aqeedah (Is…ost interested in reflecting upon at this moment?', 'How do you currently make time for spiritual refle…ht you build this practice within your community?', "What questions about Islam have been on your mind … you'd like to explore through deeper reflection?"]
-ConversationView.tsx:299 [DEBUG] Message roles sequence: user, assistant
-ConversationView.tsx:300 [DEBUG] Last message role: assistant
-ConversationView.tsx:774 [DEBUG] ConversationView rendering with 2 messages, showQuestions: true
-ConversationView.tsx:800 [DEBUG] First-message special case condition check: {isNotSubmitting: true, isFirstSubmission: true, hasQuestions: true, hasOneMessage: false, firstMessageIsUser: true, …}
-ConversationView.tsx:831 [DEBUG] Special case - Rendering first message follow-up questions
-ConversationView.tsx:850 [DEBUG] General follow-up questions condition check: {isNotSubmitting: true, isNotFirstSubmission: false, hasQuestions: true, hasMessages: true, lastMessageRole: 'assistant'}
-ConversationView.tsx:871 [DEBUG] Last assistant message has questions: false
-ConversationView.tsx:289 [DEBUG] ConversationView render - conversationId: 1, messages: 2, questions: 3, isFirstSubmission: true
-ConversationView.tsx:292 [DEBUG] Questions content: (3) ['What specific aspects of your faith or aqeedah (Is…ost interested in reflecting upon at this moment?', 'How do you currently make time for spiritual refle…ht you build this practice within your community?', "What questions about Islam have been on your mind … you'd like to explore through deeper reflection?"]
-ConversationView.tsx:293 [DEBUG] All questions: (3) ['What specific aspects of your faith or aqeedah (Is…ost interested in reflecting upon at this moment?', 'How do you currently make time for spiritual refle…ht you build this practice within your community?', "What questions about Islam have been on your mind … you'd like to explore through deeper reflection?"]
-ConversationView.tsx:299 [DEBUG] Message roles sequence: user, assistant
-ConversationView.tsx:300 [DEBUG] Last message role: assistant
-ConversationView.tsx:774 [DEBUG] ConversationView rendering with 2 messages, showQuestions: true
-ConversationView.tsx:800 [DEBUG] First-message special case condition check: {isNotSubmitting: true, isFirstSubmission: true, hasQuestions: true, hasOneMessage: false, firstMessageIsUser: true, …}
-ConversationView.tsx:831 [DEBUG] Special case - Rendering first message follow-up questions
-ConversationView.tsx:850 [DEBUG] General follow-up questions condition check: {isNotSubmitting: true, isNotFirstSubmission: false, hasQuestions: true, hasMessages: true, lastMessageRole: 'assistant'}
-ConversationView.tsx:871 [DEBUG] Last assistant message has questions: false
-ConversationView.tsx:489 Animation SKIP - Already animated message 0
-ConversationView.tsx:489 Animation SKIP - Already animated message 0
-ConversationView.tsx:489 Animation SKIP - Already animated message 1
-ConversationView.tsx:489 Animation SKIP - Already animated message 1
-ConversationView.tsx:169 [DEBUG] FollowUpQuestions memoization - shouldUpdate: false
-ConversationView.tsx:333 [DEBUG] STATE CHANGE - showQuestions: true, initialLoad: false, isFirstSubmission: true, messagesCount: 2
-ConversationView.tsx:325 [DEBUG] setShowQuestions called with value: true
-ConversationView.tsx:326 [DEBUG] Current state - messages: 2, isFirstSubmission: true, initialLoad: true
-ConversationView.tsx:327 [DEBUG] setShowQuestions stack trace
-setShowQuestions @ ConversationView.tsx:327
-(anonymous) @ ConversationView.tsx:396
-setTimeout
-(anonymous) @ ConversationView.tsx:395
-setTimeout
-(anonymous) @ ConversationView.tsx:388
-commitHookEffectListMount @ chunk-276SZO74.js?v=6d9ccabe:16915
-commitPassiveMountOnFiber @ chunk-276SZO74.js?v=6d9ccabe:18156
-commitPassiveMountEffects_complete @ chunk-276SZO74.js?v=6d9ccabe:18129
-commitPassiveMountEffects_begin @ chunk-276SZO74.js?v=6d9ccabe:18119
-commitPassiveMountEffects @ chunk-276SZO74.js?v=6d9ccabe:18109
-flushPassiveEffectsImpl @ chunk-276SZO74.js?v=6d9ccabe:19490
-flushPassiveEffects @ chunk-276SZO74.js?v=6d9ccabe:19447
-performSyncWorkOnRoot @ chunk-276SZO74.js?v=6d9ccabe:18868
-flushSyncCallbacks @ chunk-276SZO74.js?v=6d9ccabe:9119
-commitRootImpl @ chunk-276SZO74.js?v=6d9ccabe:19432
-commitRoot @ chunk-276SZO74.js?v=6d9ccabe:19277
-finishConcurrentRender @ chunk-276SZO74.js?v=6d9ccabe:18805
-performConcurrentWorkOnRoot @ chunk-276SZO74.js?v=6d9ccabe:18718
-workLoop @ chunk-276SZO74.js?v=6d9ccabe:197
-flushWork @ chunk-276SZO74.js?v=6d9ccabe:176
-performWorkUntilDeadline @ chunk-276SZO74.js?v=6d9ccabe:384
+api/reflection:1 
+            
+            
+           Failed to load resource: the server responded with a status of 401 (Unauthorized)Understand this errorAI
+reflectionService.ts:129 Error submitting reflection: Error: Failed to submit reflection
+    at ReflectionService.submitReflection (reflectionService.ts:123:15)
+    at async submitReflection (reflectionService.ts:227:22)
+    at async handleTextSubmit (ReflectionInput.tsx:52:24)
+submitReflection @ reflectionService.ts:129Understand this errorAI
+reflectionService.ts:231 Error in reflectionService.submitReflection: Error: Failed to submit reflection
+    at ReflectionService.submitReflection (reflectionService.ts:123:15)
+    at async submitReflection (reflectionService.ts:227:22)
+    at async handleTextSubmit (ReflectionInput.tsx:52:24)
+submitReflection @ reflectionService.ts:231Understand this errorAI
+ReflectionInput.tsx:92 Error submitting reflection: Error: Failed to submit reflection
+    at ReflectionService.submitReflection (reflectionService.ts:123:15)
+    at async submitReflection (reflectionService.ts:227:22)
+    at async handleTextSubmit (ReflectionInput.tsx:52:24)
+handleTextSubmit @ ReflectionInput.tsx:92Understand this errorAI
+ReflectionInput.tsx:49 Submitting personalized text reflection
+reflectionService.ts:151 useReflectionService.submitReflection called with content: sohailm25 beginner...
+reflectionService.ts:157 Personalization is enabled, fetching context...
+usePersonalization.ts:28 [DEBUG getPersonalizationContext] Public profile: Object
+usePersonalization.ts:39 [DEBUG getPersonalizationContext] Private profile available: true
+usePersonalization.ts:41 [DEBUG getPersonalizationContext] Private profile data: Object
+usePersonalization.ts:50 [DEBUG getPersonalizationContext] FULL PRIVATE PROFILE: {
+  "spiritualJourneyStage": "",
+  "primaryGoals": [],
+  "knowledgeLevel": "beginner",
+  "lifeStage": "",
+  "communityConnection": "",
+  "culturalBackground": "",
+  "reflectionStyle": "",
+  "guidancePreferences": [
+    "practical",
+    "spiritual",
+    "reflective"
+  ],
+  "topicsOfInterest": [],
+  "dynamicAttributes": {
+    "topicsEngagedWith": {},
+    "preferredReferences": {},
+    "emotionalResponsiveness": {},
+    "languageComplexity": 5
+  },
+  "observedPatterns": {},
+  "recentInteractions": {}
+}
+reflectionService.ts:161 Retrieved personalization context: yes
+reflectionService.ts:165 Personalization context type: object
+reflectionService.ts:166 Personalization context keys: knowledgeLevel, topicsOfInterest, primaryGoals, spiritualJourneyStage, lifeStage, communityConnection, culturalBackground, reflectionStyle, guidancePreferences
+reflectionService.ts:167 DEBUG - Full personalization context: {
+  "knowledgeLevel": "beginner",
+  "topicsOfInterest": [],
+  "primaryGoals": [],
+  "spiritualJourneyStage": "",
+  "lifeStage": "",
+  "communityConnection": "",
+  "culturalBackground": "",
+  "reflectionStyle": "",
+  "guidancePreferences": [
+    "practical",
+    "spiritual",
+    "reflective"
+  ]
+}
+reflectionService.ts:207 ✅ Personalization context is correctly an object type
+reflectionService.ts:219 About to call reflectionService.submitReflection with personalization: true
+reflectionService.ts:221 Personalization context type before API call: object
+reflectionService.ts:222 Personalization context has keys: knowledgeLevel, topicsOfInterest, primaryGoals, spiritualJourneyStage, lifeStage, communityConnection, culturalBackground, reflectionStyle, guidancePreferences
+reflectionService.ts:48 Submitting reflection with personalization: true
+reflectionService.ts:57 🔴🔴🔴 Using API URL without query parameters: /api/reflection
+reflectionService.ts:60 Personalization context keys: Array(9)
+reflectionService.ts:61 Personalization context type: object
+reflectionService.ts:83 personalizationContext content: {
+  "knowledgeLevel": "beginner",
+  "topicsOfInterest": [],
+  "primaryGoals": [],
+  "spiritualJourneyStage": "",
+  "lifeStage": "",
+  "communityConnection": "",
+  "culturalBackground": "",
+  "reflectionStyle": "",
+  "guidancePreferences": [
+    "practical",
+    "spiritual",
+    "reflective"
+  ]
+}
+reflectionService.ts:86 🔴🔴🔴 IMPORTANT: Only using request body for personalization, NOT URL parameters
+reflectionService.ts:97 🔴🔴🔴 ADDING PERSONALIZATION TO REQUEST BODY
+reflectionService.ts:100 🔴🔴🔴 REQUEST BODY WITH PERSONALIZATION: {
+  "content": "sohailm25 beginner",
+  "type": "text",
+  "personalizationContext": {
+    "knowledgeLevel": "beginner",
+    "topicsOfInterest": [],
+    "primaryGoals": [],
+    "spiritualJourneyStage": ...
+reflectionService.ts:104 SENDING REQUEST BODY: {
+  "content": "sohailm25 beginner",
+  "type": "text",
+  "personalizationContext": {
+    "knowledgeLevel": "beginner",
+    "topicsOfInterest": [],
+    "primaryGoals": [],
+    "spiritualJourneyStage": "",
+    "lifeStage": "",
+    "communityConnection": "",
+    "culturalBackground": "",
+    "reflectionStyle": "",
+    "guidancePreferences": [
+      "practical",
+      "spiritual",
+      "reflective"
+    ]
+  }
+}
+reflectionService.ts:105 SENDING REQUEST URL: /api/reflection
+reflectionService.ts:106 SENDING REQUEST HEADERS: Object
+reflectionService.ts:109 
+
+
+reflectionService.ts:110 🔴🔴🔴 CLIENT SENDING REQUEST TO URL 🔴🔴🔴
+reflectionService.ts:111 🔴🔴🔴 FULL API URL: /api/reflection
+reflectionService.ts:112 🔴🔴🔴 REQUEST CONTAINS NO QUERY PARAMETERS
+reflectionService.ts:113 
+
+
+api/reflection:1 
+            
+            
+           Failed to load resource: the server responded with a status of 401 (Unauthorized)Understand this errorAI
+reflectionService.ts:129 Error submitting reflection: Error: Failed to submit reflection
+    at ReflectionService.submitReflection (reflectionService.ts:123:15)
+    at async submitReflection (reflectionService.ts:227:22)
+    at async handleTextSubmit (ReflectionInput.tsx:52:24)
+submitReflection @ reflectionService.ts:129Understand this errorAI
+reflectionService.ts:231 Error in reflectionService.submitReflection: Error: Failed to submit reflection
+    at ReflectionService.submitReflection (reflectionService.ts:123:15)
+    at async submitReflection (reflectionService.ts:227:22)
+    at async handleTextSubmit (ReflectionInput.tsx:52:24)
+submitReflection @ reflectionService.ts:231Understand this errorAI
+ReflectionInput.tsx:92 Error submitting reflection: Error: Failed to submit reflection
+    at ReflectionService.submitReflection (reflectionService.ts:123:15)
+    at async submitReflection (reflectionService.ts:227:22)
+    at async handleTextSubmit (ReflectionInput.tsx:52:24)
+handleTextSubmit @ ReflectionInput.tsx:92Understand this errorAI
 auth-debug.ts:5 Current auth token: eyJhbGciOi...
 auth-debug.ts:14 Token validation status: 200 OK
-auth-debug.ts:18 Token validation response: {id: '3049e130-8584-418b-b6f8-b7e9d93de5ac', email: 'sohailm25@gmail.com', name: 'Sohail Mohammad', googleId: '110694986574655216341', isFirstLogin: true, …}
-ConversationView.tsx:289 [DEBUG] ConversationView render - conversationId: 1, messages: 2, questions: 3, isFirstSubmission: true
-ConversationView.tsx:292 [DEBUG] Questions content: (3) ['What specific aspects of your faith or aqeedah (Is…ost interested in reflecting upon at this moment?', 'How do you currently make time for spiritual refle…ht you build this practice within your community?', "What questions about Islam have been on your mind … you'd like to explore through deeper reflection?"]
-ConversationView.tsx:293 [DEBUG] All questions: (3) ['What specific aspects of your faith or aqeedah (Is…ost interested in reflecting upon at this moment?', 'How do you currently make time for spiritual refle…ht you build this practice within your community?', "What questions about Islam have been on your mind … you'd like to explore through deeper reflection?"]
-ConversationView.tsx:299 [DEBUG] Message roles sequence: user, assistant
-ConversationView.tsx:300 [DEBUG] Last message role: assistant
-ConversationView.tsx:774 [DEBUG] ConversationView rendering with 2 messages, showQuestions: true
-ConversationView.tsx:800 [DEBUG] First-message special case condition check: {isNotSubmitting: true, isFirstSubmission: true, hasQuestions: true, hasOneMessage: false, firstMessageIsUser: true, …}
-ConversationView.tsx:831 [DEBUG] Special case - Rendering first message follow-up questions
-ConversationView.tsx:850 [DEBUG] General follow-up questions condition check: {isNotSubmitting: true, isNotFirstSubmission: false, hasQuestions: true, hasMessages: true, lastMessageRole: 'assistant'}
-ConversationView.tsx:871 [DEBUG] Last assistant message has questions: false
-ConversationView.tsx:289 [DEBUG] ConversationView render - conversationId: 1, messages: 2, questions: 3, isFirstSubmission: true
-ConversationView.tsx:292 [DEBUG] Questions content: (3) ['What specific aspects of your faith or aqeedah (Is…ost interested in reflecting upon at this moment?', 'How do you currently make time for spiritual refle…ht you build this practice within your community?', "What questions about Islam have been on your mind … you'd like to explore through deeper reflection?"]
-ConversationView.tsx:293 [DEBUG] All questions: (3) ['What specific aspects of your faith or aqeedah (Is…ost interested in reflecting upon at this moment?', 'How do you currently make time for spiritual refle…ht you build this practice within your community?', "What questions about Islam have been on your mind … you'd like to explore through deeper reflection?"]
-ConversationView.tsx:299 [DEBUG] Message roles sequence: user, assistant
-ConversationView.tsx:300 [DEBUG] Last message role: assistant
-ConversationView.tsx:774 [DEBUG] ConversationView rendering with 2 messages, showQuestions: true
-ConversationView.tsx:800 [DEBUG] First-message special case condition check: {isNotSubmitting: true, isFirstSubmission: true, hasQuestions: true, hasOneMessage: false, firstMessageIsUser: true, …}
-ConversationView.tsx:831 [DEBUG] Special case - Rendering first message follow-up questions
-ConversationView.tsx:850 [DEBUG] General follow-up questions condition check: {isNotSubmitting: true, isNotFirstSubmission: false, hasQuestions: true, hasMessages: true, lastMessageRole: 'assistant'}
-ConversationView.tsx:871 [DEBUG] Last assistant message has questions: false
-ConversationView.tsx:489 Animation SKIP - Already animated message 0
-ConversationView.tsx:489 Animation SKIP - Already animated message 0
-ConversationView.tsx:489 Animation SKIP - Already animated message 1
-ConversationView.tsx:489 Animation SKIP - Already animated message 1
-ConversationView.tsx:169 [DEBUG] FollowUpQuestions memoization - shouldUpdate: false
+auth-debug.ts:18 Token validation response: {id: 'c47b0acd-9c2f-48be-b621-dd9e76b56191', email: 'sohailm25@gmail.com', name: 'Sohail Mohammad', googleId: '110694986574655216341', isFirstLogin: true, …}
 auth-debug.ts:5 Current auth token: eyJhbGciOi...
 auth-debug.ts:14 Token validation status: 200 OK
-auth-debug.ts:18 Token validation response: {id: '3049e130-8584-418b-b6f8-b7e9d93de5ac', email: 'sohailm25@gmail.com', name: 'Sohail Mohammad', googleId: '
+auth-debug.ts:18 Token validation response: {id: 'c47b0acd-9c2f-48be-b621-dd9e76b56191', email: 'sohailm25@gmail.com', name: 'Sohail Mohammad', googleId: '110694986574655216341', isFirstLogin: true, …}
+auth-debug.ts:5 Current auth token: eyJhbGciOi...
+auth-debug.ts:14 Token validation status: 200 OK
+auth-debug.ts:18 Token validation response: {id: 'c47b0acd-9c2f-48be-b621-dd9e76b56191', email: 'sohailm25@gmail.com', name: 'Sohail Mohammad', googleId: '110694986574655216341', isFirstLogin: true, …}
+auth-debug.ts:5 Current auth token: eyJhbGciOi...
+auth-debug.ts:14 Token validation status: 200 OK
+auth-debug.ts:18 Token validation response: {id: 'c47b0acd-9c2f-48be-b621-dd9e76b56191', email: 'sohailm25@gmail.com', name: 'Sohail Mohammad', googleId: '110694986574655216341', isFirstLogin: true, …}

@@ -11,10 +11,12 @@ import { testConnection } from "./db";
 import masjidiRouter from "./masjidi-routes";
 import profileRouter from "./routes/profile-routes";
 import authRouter from "./routes/auth-routes";
+import halaqaRouter from "./routes/halaqa-routes";
 import express from "express";
 import path from "path";
 import fs from "fs";
 import { fileURLToPath } from "url";
+import wirdRouter from "./routes/wird-routes";
 
 // Import debug middleware
 import { authDebugMiddleware } from "./middleware/auth-debug";
@@ -73,6 +75,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   
   // Mount the Auth routes
   app.use("/auth", authRouter);
+
+  // Mount the Halaqa API routes
+  app.use("/api", halaqaRouter);
+
+  // Mount the Wird API routes
+  app.use("/api/wirds", wirdRouter);
 
   app.post("/api/reflection", async (req: Request, res: Response) => {
     try {

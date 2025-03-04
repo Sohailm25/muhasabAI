@@ -1,12 +1,12 @@
 import { useState, useEffect } from "react";
 import { Layout } from "@/components/Layout";
-import { ConversationView } from "@/components/ConversationView";
+import { ConversationView, Message } from "@/components/ConversationView";
 import { ActionItems } from "@/components/ActionItems";
 import { Insights } from "@/components/Insights";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation, useRoute } from "wouter";
 import { LoadingAnimation } from "@/components/LoadingAnimation";
-import type { Message } from "@shared/schema";
+import { useAuth } from "@/hooks/useAuth";
 
 export default function Chat() {
   const [, params] = useRoute<{ id: string }>("/chat/:id");

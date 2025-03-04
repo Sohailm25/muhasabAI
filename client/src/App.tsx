@@ -18,6 +18,12 @@ import Home from "@/pages/home";
 import NewReflection from "@/pages/new";
 import Chat from "@/pages/chat";
 import HalaqaHelper from "@/pages/halaqa"; // Halaqa Helper component
+import HalaqaNew from "@/pages/halaqa/new"; // New Halaqa entry
+import HalaqaDetail from "@/pages/halaqa/[id]"; // Halaqa detail view
+import HalaqaEdit from "@/pages/halaqa/edit/[id]"; // Halaqa edit view
+import WirdPage from "@/pages/wird"; // Wird main page
+import WirdNew from "@/pages/wird/new"; // New Wird entry
+import WirdDetail from "@/pages/wird/[id]"; // Wird detail view
 import Help from "@/pages/help";
 import Profile from "@/pages/profile";
 import NotFound from "@/pages/not-found";
@@ -88,11 +94,46 @@ const AppContent = () => {
             <NewReflection />
           </RequireAuth>
         </Route>
+        
+        {/* HalaqAI routes - specific routes first! */}
+        <Route path="/halaqa/new">
+          <RequireAuth>
+            <HalaqaNew />
+          </RequireAuth>
+        </Route>
+        <Route path="/halaqa/edit/:id">
+          <RequireAuth>
+            <HalaqaEdit />
+          </RequireAuth>
+        </Route>
+        <Route path="/halaqa/:id">
+          <RequireAuth>
+            <HalaqaDetail />
+          </RequireAuth>
+        </Route>
         <Route path="/halaqa">
           <RequireAuth>
             <HalaqaHelper />
           </RequireAuth>
         </Route>
+        
+        {/* WirdhAI routes - specific routes first! */}
+        <Route path="/wird/new">
+          <RequireAuth>
+            <WirdNew />
+          </RequireAuth>
+        </Route>
+        <Route path="/wird/:id">
+          <RequireAuth>
+            <WirdDetail />
+          </RequireAuth>
+        </Route>
+        <Route path="/wird">
+          <RequireAuth>
+            <WirdPage />
+          </RequireAuth>
+        </Route>
+        
         <Route path="/help">
           <RequireAuth>
             <Help />

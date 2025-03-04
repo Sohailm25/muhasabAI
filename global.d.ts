@@ -8,6 +8,11 @@ declare namespace NodeJS {
   }
 }
 
+// UUID module declaration
+declare module 'uuid' {
+  export function v4(): string;
+}
+
 // Anthropic SDK Declaration
 declare module '@anthropic-ai/sdk' {
   export interface AnthropicOptions {

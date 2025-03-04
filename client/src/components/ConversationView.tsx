@@ -6,9 +6,15 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { LoadingAnimation } from "@/components/LoadingAnimation";
 import { MasjidLoadingAnimation } from "@/components/MasjidLoadingAnimation";
-import type { Message } from "@shared/schema";
-import { Textarea } from "@/components/ui/textarea";
+import { cn } from "@/lib/utils";
 import React from "react";
+import { Textarea } from "@/components/ui/textarea";
+
+// Define Message type directly
+export interface Message {
+  role: "user" | "assistant";
+  content: string;
+}
 
 interface ConversationViewProps {
   conversationId?: number;
