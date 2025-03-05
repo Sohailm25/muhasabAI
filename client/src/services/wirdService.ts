@@ -38,6 +38,19 @@ export interface WirdRecommendation {
   description: string;
 }
 
+export interface WirdSuggestion {
+  id: string;
+  title?: string;
+  name: string;
+  type?: string;
+  category: string;
+  target: number;
+  unit?: string;
+  description?: string;
+  duration?: string;
+  frequency?: string;
+}
+
 export class WirdService {
   private apiBase: string;
 
@@ -320,6 +333,81 @@ export class WirdService {
     } catch (error) {
       console.error("Error getting wird recommendations:", error);
       throw error;
+    }
+  }
+
+  /**
+   * Add a wird suggestion to a user's wird plan
+   * @param userId User ID
+   * @param suggestion Wird suggestion to add
+   * @param date Optional date to add the suggestion to (defaults to today)
+   * @returns Updated wird entry or null if there was an error
+   */
+  async addToWirdPlan(
+    userId: string,
+    suggestion: WirdSuggestion,
+    date?: Date
+  ): Promise<WirdEntry | null> {
+    try {
+      const targetDate = date ? date : new Date();
+      
+      console.log("Adding suggestion to wird plan:", {
+        userId,
+        suggestion,
+        date: targetDate.toISOString()
+      });
+      
+      // Use the correct endpoint path (/wirds/add-suggestion)
+      const response = await fetch(`${this.apiBase}/wirds/add-suggestion`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          userId,
+          wirdSuggestion: suggestion,
+          date: targetDate.toISOString().split('T')[0]
+        }),
+      });
+      
+      if (!response.ok) {
+        // Try to get more details about the error
+        let errorText = response.statusText;
+        try {
+          const errorJson = await response.json();
+          if (errorJson.error) {
+            errorText = errorJson.error;
+          }
+        } catch (e) {
+          // If we can't parse the JSON, just use the status text
+        }
+        
+        throw new Error(`Failed to add suggestion to wird plan: ${errorText}`);
+      }
+      
+      const result = await response.json();
+      
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to add suggestion to wird plan');
+      }
+      
+      // Handle both possible response formats
+      const wirdData = result.result || result.wird;
+      
+      if (!wirdData) {
+        console.error("Invalid response data:", result);
+        throw new Error("Invalid response from server - no wird data");
+      }
+      
+      return {
+        ...wirdData,
+        date: new Date(wirdData.date),
+        createdAt: new Date(wirdData.createdAt),
+        updatedAt: new Date(wirdData.updatedAt),
+      };
+    } catch (error) {
+      console.error("Error adding wird suggestion to plan:", error);
+      throw error; // Rethrow so we can show a toast to the user
     }
   }
 }

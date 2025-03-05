@@ -1,7 +1,7 @@
 import express, { Request, Response } from "express";
 import * as storage from "../storage.js";
 import { Halaqa, HalaqaActionItem } from "@shared/schema";
-import { generateHalaqaActions, generateHalaqaApplicationSuggestions, generateHalaqaWirdSuggestions } from "../lib/anthropic.js";
+import { generateHalaqaActions, generateHalaqaApplicationSuggestions, generateHalaqaWirdSuggestions, generateHalaqaInsights } from "../lib/anthropic.js";
 import { z } from "zod";
 import { v4 } from "uuid";
 import { createLogger } from "../lib/logger.js";
@@ -57,25 +57,41 @@ router.get("/:id", async (req, res) => {
     // Validate ID is a number
     const halaqaId = parseInt(id);
     if (isNaN(halaqaId)) {
+      logger.warn(`Invalid halaqa ID format requested: ${id}`);
       return res.status(400).json({ error: "Invalid halaqa ID format" });
     }
     
-    // DEBUG: Log ID being requested
-    console.log("Getting halaqa with ID:", halaqaId);
+    // Log the ID being requested
+    logger.info(`Getting halaqa with ID: ${halaqaId}`);
     
-    const halaqa = await storage.getHalaqa(halaqaId);
-    
-    // DEBUG: Log whether halaqa was found
-    console.log("Halaqa found:", halaqa ? true : false);
-    
-    if (!halaqa) {
-      return res.status(404).json({ error: "Halaqa not found" });
+    try {
+      const halaqa = await storage.getHalaqa(halaqaId);
+      
+      // DEBUG: Log whether halaqa was found
+      logger.info(`Halaqa ${halaqaId} found: ${halaqa ? true : false}`);
+      
+      // Explicitly check for null or undefined
+      if (!halaqa) {
+        logger.warn(`Halaqa not found with ID: ${halaqaId}`);
+        return res.status(404).json({ error: "Halaqa not found" });
+      }
+      
+      // Ensure we have a valid halaqa object to return
+      if (!halaqa.id || !halaqa.userId) {
+        logger.error(`Invalid halaqa data returned for ID: ${halaqaId}`);
+        return res.status(500).json({ error: "Invalid halaqa data" });
+      }
+      
+      // Log success and return the halaqa
+      logger.info(`Successfully retrieved halaqa ${halaqaId}`);
+      return res.json(halaqa);
+    } catch (storageError) {
+      logger.error(`Storage error when fetching halaqa ${halaqaId}:`, storageError);
+      return res.status(500).json({ error: "Failed to fetch halaqa from storage" });
     }
-    
-    res.json(halaqa);
   } catch (error) {
-    console.error("Error fetching halaqa:", error);
-    res.status(500).json({ error: "Failed to fetch halaqa" });
+    logger.error("Unexpected error fetching halaqa:", error);
+    return res.status(500).json({ error: "Failed to fetch halaqa" });
   }
 });
 
@@ -380,92 +396,155 @@ router.post("/suggestions", async (req, res) => {
   }
 });
 
-// POST /api/halaqas/:id/analyze - Analyze a halaqa entry to generate action items and wird suggestions
-router.post("/:id/analyze", async (req, res) => {
-  const halaqaId = parseInt(req.params.id);
-  
-  if (isNaN(halaqaId)) {
-    logger.error(`Invalid halaqa ID format: ${req.params.id}`);
-    return res.status(400).json({ error: "Invalid halaqa ID format" });
-  }
-  
-  logger.info(`Starting analysis for halaqa ID: ${halaqaId}`);
-  
+// POST route for analyzing a halaqa entry (action items + wird suggestions)
+router.post("/:id/analyze", authRequired, async (req: AuthenticatedRequest, res: Response) => {
   try {
-    // Fetch the halaqa entry
+    const userId = req.user?.id;
+    const halaqaId = parseInt(req.params.id);
+    
+    if (isNaN(halaqaId)) {
+      logger.error(`Invalid halaqa ID format: ${req.params.id}`);
+      return res.status(400).json({ error: "Invalid halaqa ID format" });
+    }
+    
+    logger.info(`[halaqaRoutes] Starting analysis for halaqa ID: ${halaqaId}`);
+    
+    // Get the halaqa entry
     const halaqa = await storage.getHalaqa(halaqaId);
     
     if (!halaqa) {
-      logger.error(`Halaqa not found for ID: ${halaqaId}`);
-      return res.status(404).json({ error: "Halaqa not found" });
+      logger.warn(`[halaqaRoutes] Halaqa not found: ${halaqaId}`);
+      return res.status(404).json({ error: 'Halaqa not found' });
     }
     
-    logger.info(`Found halaqa for analysis: ${halaqaId}, title: "${halaqa.title}"`);
+    logger.info(`[halaqaRoutes] Found halaqa for analysis: ${halaqaId}, title: "${halaqa.title}"`);
     
-    // Generate action items and wird suggestions in parallel
-    // This provides better performance than sequential requests
-    const [actionItems, wirdSuggestions] = await Promise.all([
-      generateHalaqaActions(halaqa.keyReflection, halaqa.impact)
-        .catch(error => {
-          logger.error(`Error generating action items for halaqa ${halaqaId}:`, error);
-          return null;
-        }),
-      generateHalaqaWirdSuggestions({
-        title: halaqa.title,
-        topic: halaqa.topic,
-        keyReflection: halaqa.keyReflection,
-        impact: halaqa.impact
-      })
-        .catch(error => {
-          logger.error(`Error generating wird suggestions for halaqa ${halaqaId}:`, error);
-          return null;
-        })
-    ]);
+    // Check if halaqa already has wird suggestions and actionItems
+    const alreadyHasWirdSuggestions = Array.isArray(halaqa.wirdSuggestions) && halaqa.wirdSuggestions.length > 0;
+    const alreadyHasActionItems = Array.isArray(halaqa.actionItems) && halaqa.actionItems.length > 0;
     
-    // Process results and update storage
-    let updatedHalaqa = halaqa;
+    // If analysis is already complete, return existing data without reanalyzing
+    if (alreadyHasWirdSuggestions && alreadyHasActionItems) {
+      logger.info(`[halaqaRoutes] Halaqa ${halaqaId} already has action items and wird suggestions, skipping analysis`);
+      return res.status(200).json({
+        message: 'Halaqa already analyzed',
+        actionItems: halaqa.actionItems,
+        wirdSuggestions: halaqa.wirdSuggestions
+      });
+    }
     
-    // Process action items if successful
-    if (actionItems) {
-      logger.info(`Generated ${actionItems.length} action items for halaqa ${halaqaId}`);
-      
-      // Add IDs to action items
-      const actionItemsWithIds: HalaqaActionItem[] = actionItems.map(item => ({
-        id: v4(),
-        description: item.description,
-        completed: false
-      }));
-      
-      // Update the halaqa with action items
-      updatedHalaqa = await storage.updateHalaqaActionItems(halaqaId, actionItemsWithIds);
-      logger.info(`Updated halaqa ${halaqaId} with action items`);
+    // Initialize variables to track analysis progress
+    let actionItems: { description: string }[] = [];
+    let actionItemsWithIds: HalaqaActionItem[] = [];
+    let updatedHalaqa: Halaqa | undefined = undefined;
+    let wirdSuggestions = null;
+    let wirdSuggestionsSucceeded = false;
+    
+    // Generate action items if they don't exist already
+    if (!alreadyHasActionItems) {
+      try {
+        actionItems = await generateHalaqaActions(halaqa.keyReflection, halaqa.impact);
+        logger.info(`[halaqaRoutes] Generated ${actionItems.length} action items for halaqa ${halaqaId}`);
+        
+        // Add IDs and set completed to false
+        actionItemsWithIds = actionItems.map(item => ({
+          id: v4(),
+          description: item.description,
+          completed: false
+        }));
+        
+        // Update the halaqa with the action items
+        try {
+          updatedHalaqa = await storage.updateHalaqaActionItems(halaqaId, actionItemsWithIds);
+          logger.info(`[halaqaRoutes] Updated halaqa ${halaqaId} with action items`);
+        } catch (updateError) {
+          logger.error(`[halaqaRoutes] Error updating action items for halaqa ${halaqaId}:`, updateError);
+          
+          // Create an in-memory version of the updated halaqa
+          updatedHalaqa = {
+            ...halaqa,
+            actionItems: actionItemsWithIds
+          };
+          logger.info(`[halaqaRoutes] Created in-memory updated halaqa object with action items for ${halaqaId}`);
+        }
+      } catch (updateError) {
+        logger.error(`[halaqaRoutes] Error processing action items for halaqa ${halaqaId}:`, updateError);
+        // Continue with the workflow even if updating action items fails
+        // Since we couldn't save them, we'll add them to the response directly
+        updatedHalaqa = {
+          ...halaqa,
+          actionItems: actionItems.map(item => ({
+            id: v4(),
+            description: item.description,
+            completed: false
+          }))
+        };
+      }
     } else {
-      logger.warn(`No action items generated for halaqa ${halaqaId}`);
+      logger.info(`[halaqaRoutes] Halaqa ${halaqaId} already has action items, skipping generation`);
+      actionItemsWithIds = halaqa.actionItems || [];
+      updatedHalaqa = halaqa;
     }
-    
-    // Process wird suggestions if successful
-    if (wirdSuggestions) {
-      logger.info(`Generated ${wirdSuggestions.length} wird suggestions for halaqa ${halaqaId}`);
+
+    // Generate wird suggestions if they don't exist already
+    if (!alreadyHasWirdSuggestions) {
+      // Max retries for wird suggestions to prevent rate limiting
+      const MAX_RETRIES = 1;
+      let retries = 0;
       
-      // Store wird suggestions
-      await storage.saveHalaqaWirdSuggestions(halaqaId, wirdSuggestions);
-      logger.info(`Saved wird suggestions for halaqa ${halaqaId}`);
+      while (retries <= MAX_RETRIES && !wirdSuggestions) {
+        try {
+          wirdSuggestions = await generateHalaqaWirdSuggestions({
+            title: halaqa.title,
+            topic: halaqa.topic,
+            keyReflection: halaqa.keyReflection,
+            impact: halaqa.impact
+          });
+          
+          wirdSuggestionsSucceeded = true;
+          logger.info(`[halaqaRoutes] Generated ${wirdSuggestions.length} wird suggestions for halaqa ${halaqaId}`);
+        } catch (error) {
+          retries++;
+          if (retries > MAX_RETRIES) {
+            logger.error(`[halaqaRoutes] Failed to generate wird suggestions after ${MAX_RETRIES} retries:`, error);
+            break;
+          }
+          
+          logger.warn(`[halaqaRoutes] Retry ${retries}/${MAX_RETRIES} for wird suggestions:`, error);
+          // Wait before retrying to avoid rate limits (exponential backoff)
+          await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, retries)));
+        }
+      }
       
-      // Add wird suggestions to the response object
-      updatedHalaqa = {
-        ...updatedHalaqa,
-        wirdSuggestions: wirdSuggestions
-      };
+      // Process wird suggestions if successful
+      if (wirdSuggestions && wirdSuggestions.length > 0) {
+        try {
+          // Store wird suggestions
+          await storage.saveHalaqaWirdSuggestions(halaqaId, wirdSuggestions);
+          logger.info(`[halaqaRoutes] Saved wird suggestions for halaqa ${halaqaId}`);
+        } catch (saveError) {
+          logger.error(`[halaqaRoutes] Error saving wird suggestions for halaqa ${halaqaId}:`, saveError);
+          // Continue even if saving fails
+        }
+      }
     } else {
-      logger.warn(`No wird suggestions generated for halaqa ${halaqaId}`);
+      logger.info(`[halaqaRoutes] Halaqa ${halaqaId} already has wird suggestions, skipping generation`);
+      wirdSuggestions = halaqa.wirdSuggestions || [];
+      wirdSuggestionsSucceeded = true;
     }
     
-    // Return the updated halaqa with action items and wird suggestions
-    res.json(updatedHalaqa);
-    logger.info(`Successfully completed analysis for halaqa ${halaqaId}`);
+    logger.info(`[halaqaRoutes] Partially completed analysis for halaqa ${halaqaId}`);
+    
+    // Return the results
+    return res.status(200).json({
+      message: "Analysis partial completion",
+      actionItems: updatedHalaqa?.actionItems || actionItemsWithIds,
+      wirdSuggestions: wirdSuggestions || null,
+      wirdSuggestionsSucceeded,
+    });
   } catch (error) {
-    logger.error(`Error analyzing halaqa ${halaqaId}:`, error);
-    res.status(500).json({ error: "Failed to analyze halaqa entry" });
+    logger.error('[halaqaRoutes] Error analyzing halaqa:', error);
+    return res.status(500).json({ error: 'An error occurred while analyzing the halaqa' });
   }
 });
 
@@ -475,7 +554,7 @@ const AnalyzeHalaqaSchema = z.object({
 });
 
 // POST /api/halaqas/analyze - Generate wird suggestions for a halaqa
-router.post("/analyze", authRequired, async (req: Request, res: Response) => {
+router.post("/analyze", authRequired, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { halaqaId } = AnalyzeHalaqaSchema.parse(req.body);
     
@@ -493,23 +572,41 @@ router.post("/analyze", authRequired, async (req: Request, res: Response) => {
     
     logger.info(`Analyzing halaqa entry ${halaqaId} for user ${req.user?.id}`);
     
+    // Enhanced: Preprocess halaqa content to ensure it's complete and well-formatted
+    // This ensures the AI has the richest possible context to work with
+    const halaqaContent = {
+      title: halaqa.title || "Untitled Halaqa", 
+      topic: halaqa.topic || "",
+      keyReflection: halaqa.keyReflection || "",
+      impact: halaqa.impact || ""
+    };
+    
+    // Log the content being analyzed to help debug relevance issues
+    logger.info(`Analysis content summary for halaqa ${halaqaId}:
+      Title: ${halaqaContent.title.substring(0, 50)}...
+      Topic: ${halaqaContent.topic.substring(0, 50)}...
+      Key Reflection Length: ${halaqaContent.keyReflection.length} chars
+      Impact Length: ${halaqaContent.impact.length} chars
+    `);
+    
     // Generate wird suggestions using AI
-    const wirdSuggestions = await generateHalaqaWirdSuggestions({
-      title: halaqa.title, 
-      topic: halaqa.topic,
-      keyReflection: halaqa.keyReflection,
-      impact: halaqa.impact
-    });
+    const wirdSuggestions = await generateHalaqaWirdSuggestions(halaqaContent);
     
     if (!wirdSuggestions || wirdSuggestions.length === 0) {
       return res.status(500).json({ error: "Failed to generate wird suggestions" });
     }
     
+    // Generate personalized insights
+    const personalizedInsights = await generateHalaqaInsights(halaqaContent);
+    
     // Save the wird suggestions
     await storage.saveHalaqaWirdSuggestions(halaqaId, wirdSuggestions);
     
-    // Return the wird suggestions
-    return res.json({ wirdSuggestions });
+    // Return both wird suggestions and personalized insights
+    return res.json({ 
+      wirdSuggestions,
+      personalizedInsights
+    });
   } catch (error) {
     logger.error("Error analyzing halaqa entry:", error);
     return res.status(400).json({ error: "Invalid request" });

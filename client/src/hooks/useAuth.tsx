@@ -41,44 +41,64 @@ export function AuthProvider({ children }: AuthProviderProps) {
         setIsLoading(true);
         const token = localStorage.getItem('auth_token');
         
-        if (token) {
+        // If no token exists, just set user to null and exit early - no need to make API calls
+        if (!token) {
+          console.log('No auth token found, user is not logged in');
+          setUser(null);
+          setIsLoading(false);
+          return;
+        }
+        
+        try {
           // Validate token on server
           const userData = await api.get('/auth/validate');
           setUser(userData);
           
-          // Check if profile exists
-          try {
-            console.log('Checking for user profile on app load...');
-            await api.get('/api/profile');
-            console.log('Profile exists');
-          } catch (error) {
-            const profileError = error as { status?: number };
-            // If profile doesn't exist (404), create a new one
-            if (profileError.status === 404 && userData) {
-              console.log('Profile not found on app load, creating new profile');
-              try {
-                await api.post('/api/profile', {
-                  userId: userData.id,
-                  generalPreferences: {
-                    inputMethod: 'text',
-                    reflectionFrequency: 'daily',
-                    languagePreferences: 'english'
-                  },
-                  privacySettings: {
-                    localStorageOnly: false,
-                    allowPersonalization: true,
-                    enableSync: true
-                  }
-                });
-                console.log('Profile created successfully on app load');
-              } catch (createError) {
-                console.error('Error creating profile on app load:', createError);
+          // Only try to get or create profile if we have valid user data
+          if (userData && userData.id) {
+            try {
+              console.log('Checking for user profile on app load...');
+              await api.get('/api/profile');
+              console.log('Profile exists');
+            } catch (error) {
+              const profileError = error as { status?: number };
+              // If profile doesn't exist (404), create a new one
+              if (profileError.status === 404) {
+                console.log('Profile not found on app load, creating new profile');
+                try {
+                  await api.post('/api/profile', {
+                    userId: userData.id,
+                    generalPreferences: {
+                      inputMethod: 'text',
+                      reflectionFrequency: 'daily',
+                      languagePreferences: 'english'
+                    },
+                    privacySettings: {
+                      localStorageOnly: false,
+                      allowPersonalization: true,
+                      enableSync: true
+                    }
+                  });
+                  console.log('Profile created successfully on app load');
+                } catch (createError) {
+                  console.error('Error creating profile on app load:', createError);
+                  // Don't show an error to the user - this is a background task
+                }
+              } else {
+                // Only log other errors, don't interrupt the user experience
+                console.error('Error checking for profile:', profileError);
               }
             }
           }
+        } catch (validationError) {
+          // Token is invalid, clear it
+          console.error('Token validation failed:', validationError);
+          localStorage.removeItem('auth_token');
+          setUser(null);
         }
       } catch (err) {
-        // Invalid token or server error, clear local storage
+        // Catch-all for unexpected errors
+        console.error('Unexpected error in auth check:', err);
         localStorage.removeItem('auth_token');
         setUser(null);
       } finally {

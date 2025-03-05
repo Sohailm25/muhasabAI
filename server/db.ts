@@ -12,7 +12,9 @@ import {
   varchar,
   index,
   type AnyPgColumn,
-  boolean
+  boolean,
+  integer,
+  json
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { migrate } from 'drizzle-orm/node-postgres/migrator';
@@ -138,8 +140,50 @@ export const encrypted_profiles = pgTable('encrypted_profiles', {
   updated_at: timestamp('updated_at').notNull().defaultNow(),
 });
 
-// Removing the index definition due to compatibility issues with the current drizzle-orm version
-// We'll create the index directly in SQL migrations instead
+// Add identity frameworks table
+export const identity_frameworks = pgTable('identity_frameworks', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  user_id: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  title: varchar('title', { length: 255 }).notNull(),
+  created_at: timestamp('created_at').notNull().defaultNow(),
+  updated_at: timestamp('updated_at').notNull().defaultNow(),
+  completion_percentage: integer('completion_percentage').notNull().default(0),
+}, (table) => {
+  return {
+    userIdIdx: index('framework_user_id_idx').on(table.user_id),
+  };
+});
+
+// Add framework components table
+export const framework_components = pgTable('framework_components', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  framework_id: uuid('framework_id').notNull().references(() => identity_frameworks.id, { onDelete: 'cascade' }),
+  component_type: varchar('component_type', { length: 50 }).notNull(), // 'identity', 'vision', 'systems', 'goals', 'habits', 'triggers'
+  content: json('content').notNull().default({}),
+  created_at: timestamp('created_at').notNull().defaultNow(),
+  updated_at: timestamp('updated_at').notNull().defaultNow(),
+}, (table) => {
+  return {
+    frameworkIdIdx: index('component_framework_id_idx').on(table.framework_id),
+    componentTypeIdx: index('component_type_idx').on(table.component_type),
+  };
+});
+
+// Add habit tracking table
+export const habit_tracking = pgTable('habit_tracking', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  component_id: uuid('component_id').notNull().references(() => framework_components.id, { onDelete: 'cascade' }),
+  habit_index: integer('habit_index').notNull(), // Index of the habit in the habits array
+  current_streak: integer('current_streak').notNull().default(0),
+  longest_streak: integer('longest_streak').notNull().default(0),
+  last_completed: timestamp('last_completed'),
+  created_at: timestamp('created_at').notNull().defaultNow(),
+  updated_at: timestamp('updated_at').notNull().defaultNow(),
+}, (table) => {
+  return {
+    componentIdIdx: index('habit_component_id_idx').on(table.component_id),
+  };
+});
 
 /**
  * Initialize the database for Railway deployment
@@ -176,6 +220,45 @@ export async function initializeDatabase() {
       );
       
       CREATE INDEX IF NOT EXISTS idx_user_profiles_user_id ON user_profiles(user_id);
+
+      CREATE TABLE IF NOT EXISTS identity_frameworks (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id UUID NOT NULL,
+        title VARCHAR(255) NOT NULL,
+        created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
+        completion_percentage INTEGER NOT NULL DEFAULT 0,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+      );
+      
+      CREATE INDEX IF NOT EXISTS framework_user_id_idx ON identity_frameworks(user_id);
+      
+      CREATE TABLE IF NOT EXISTS framework_components (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        framework_id UUID NOT NULL,
+        component_type VARCHAR(50) NOT NULL,
+        content JSONB NOT NULL DEFAULT '{}',
+        created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
+        FOREIGN KEY (framework_id) REFERENCES identity_frameworks(id) ON DELETE CASCADE
+      );
+      
+      CREATE INDEX IF NOT EXISTS component_framework_id_idx ON framework_components(framework_id);
+      CREATE INDEX IF NOT EXISTS component_type_idx ON framework_components(component_type);
+      
+      CREATE TABLE IF NOT EXISTS habit_tracking (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        component_id UUID NOT NULL,
+        habit_index INTEGER NOT NULL,
+        current_streak INTEGER NOT NULL DEFAULT 0,
+        longest_streak INTEGER NOT NULL DEFAULT 0,
+        last_completed TIMESTAMP,
+        created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
+        FOREIGN KEY (component_id) REFERENCES framework_components(id) ON DELETE CASCADE
+      );
+      
+      CREATE INDEX IF NOT EXISTS habit_component_id_idx ON habit_tracking(component_id);
     `);
     
     // For a more robust approach with migrations, use:

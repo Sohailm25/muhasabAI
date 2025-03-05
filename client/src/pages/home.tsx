@@ -1,28 +1,60 @@
 import { useState, useEffect } from "react";
+import { useLocation } from "wouter";
 import axios from "axios";
 import { Layout } from "@/components/Layout";
 import { LoadingAnimation } from "@/components/LoadingAnimation";
-import { ConversationList } from "@/components/ConversationList";
 import { Button } from "@/components/ui/button";
-import { useLocation } from "wouter";
-import { PlusCircle, BookOpen, Clock, ClipboardList } from "lucide-react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
+import { 
+  PlusCircle, 
+  BookOpen, 
+  ClipboardList, 
+  ChevronRight, 
+  BookMarked, 
+  Sparkles, 
+  PenLine, 
+  Clock,
+  Calendar,
+  Trophy,
+  ArrowUpRight
+} from "lucide-react";
+import { ConversationList } from "@/components/ConversationList";
+import { motion } from "framer-motion";
 
+// Define user settings interface
 interface UserSettings {
   id: string;
   userId: string;
   name: string | null;
   email: string | null;
-  preferences: UserPreferences;
+  preferences: {
+    emailNotifications: boolean;
+    darkMode: boolean;
+    saveHistory: boolean;
+    selectedMasjid?: any;
+  };
   timestamp: string;
 }
 
-interface UserPreferences {
-  emailNotifications: boolean;
-  darkMode: boolean;
-  saveHistory: boolean;
-  selectedMasjid?: any;
-}
+// Animation variants
+const containerVariants = {
+  hidden: { opacity: 0 },
+  visible: { 
+    opacity: 1,
+    transition: { 
+      staggerChildren: 0.1
+    }
+  }
+};
+
+const itemVariants = {
+  hidden: { y: 20, opacity: 0 },
+  visible: { 
+    y: 0, 
+    opacity: 1,
+    transition: { duration: 0.5 }
+  }
+};
 
 export default function Home() {
   const [isLoading, setIsLoading] = useState(false);
@@ -46,94 +78,193 @@ export default function Home() {
   // Get first name from full name
   const firstName = settings?.name?.split(' ')[0] || 'Muslim';
 
+  // Get time of day for greeting
+  const getTimeBasedGreeting = () => {
+    const hour = new Date().getHours();
+    if (hour < 12) return "Good morning";
+    if (hour < 18) return "Good afternoon";
+    return "Good evening";
+  };
+
+  const coreFeatures = [
+    {
+      title: "MuhasabAI",
+      arabic: "محاسبة",
+      description: "Share your thoughts and engage in Islamic self-reflection",
+      icon: <PenLine className="h-6 w-6 text-primary" />,
+      action: "New Reflection",
+      onClick: () => setLocation('/new'),
+      color: "bg-blue-500/10 dark:bg-blue-500/20",
+      iconColor: "text-blue-500"
+    },
+    {
+      title: "HalaqAI",
+      arabic: "حلقة",
+      description: "Document insights from Islamic talks and lectures",
+      icon: <BookOpen className="h-6 w-6 text-primary" />,
+      action: "Explore HalaqAI",
+      onClick: () => setLocation('/halaqa'),
+      color: "bg-emerald-500/10 dark:bg-emerald-500/20",
+      iconColor: "text-emerald-500"
+    },
+    {
+      title: "WirdhAI",
+      arabic: "ورد",
+      description: "Track your daily Islamic practices and habits",
+      icon: <ClipboardList className="h-6 w-6 text-primary" />,
+      action: "Explore WirdhAI",
+      onClick: () => setLocation('/wird'),
+      color: "bg-amber-500/10 dark:bg-amber-500/20",
+      iconColor: "text-amber-500"
+    }
+  ];
+
+  const quickActions = [
+    {
+      title: "New Reflection",
+      description: "Start a new reflection session",
+      icon: <PlusCircle className="h-5 w-5" />,
+      onClick: () => setLocation('/new'),
+      color: "bg-primary"
+    },
+    {
+      title: "Identity Builder",
+      description: "Define your spiritual identity",
+      icon: <Sparkles className="h-5 w-5" />,
+      onClick: () => setLocation('/identity'),
+      color: "bg-purple-500 dark:bg-purple-600"
+    },
+    {
+      title: "View History",
+      description: "Review past reflections",
+      icon: <Clock className="h-5 w-5" />,
+      onClick: () => setLocation('/history'),
+      color: "bg-gray-500 dark:bg-gray-600"
+    }
+  ];
+
   return (
     <Layout title="Islamic Reflection Space">
       {isLoading && <LoadingAnimation message="Loading..." />}
       
-      <div className="container max-w-4xl mx-auto py-8 px-4">
-        {/* Welcome Section with Call-to-Action */}
-        <div className="mb-10 animate-slide-in">
-          <div className="text-center max-w-xl mx-auto mb-8">
-            <div className="mb-2">
-              <h2 className="text-xl font-semibold text-primary/80">السلام عليكم</h2>
-              <h1 className="text-3xl font-bold tracking-tight">Welcome, {firstName}</h1>
+      <div className="container max-w-5xl mx-auto py-8 px-4">
+        {/* Welcome Section with Islamic greeting */}
+        <motion.div 
+          className="mb-10"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5 }}
+        >
+          <div className="text-center max-w-2xl mx-auto mb-8">
+            <div className="mb-4">
+              <h2 className="text-xl font-medium text-primary/80">
+                السلام عليكم ورحمة الله وبركاته
+              </h2>
+              <h1 className="text-3xl font-bold tracking-tight mt-2">
+                {getTimeBasedGreeting()}, {firstName}
+              </h1>
             </div>
             <p className="mt-3 text-muted-foreground">
-              A private space to document your spiritual journey, gain insights, and track your growth on the path to Allah.
+              Welcome to your personal Islamic reflection space. What would you like to do today?
             </p>
           </div>
-          
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-lg mx-auto">
-            <Button 
-              size="lg" 
-              className="w-full py-6 h-auto flex flex-col items-center gap-2" 
-              onClick={() => setLocation('/new')}
-            >
-              <PlusCircle className="h-6 w-6" />
-              <div>
-                <div className="font-semibold">New Reflection</div>
-                <div className="text-xs font-normal">Share your thoughts and experiences</div>
-              </div>
-            </Button>
-            
-            <Button 
-              variant="outline" 
-              size="lg" 
-              className="w-full py-6 h-auto flex flex-col items-center gap-2"
-              onClick={() => setLocation('/halaqa')}
-            >
-              <BookOpen className="h-6 w-6" />
-              <div>
-                <div className="font-semibold">HalaqAI</div>
-                <div className="text-xs font-normal">Track your Islamic learnings</div>
-              </div>
-            </Button>
-          </div>
-          
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-lg mx-auto mt-4">
-            <Button 
-              variant="outline" 
-              size="lg" 
-              className="w-full py-6 h-auto flex flex-col items-center gap-2"
-              onClick={() => setLocation('/wird')}
-            >
-              <ClipboardList className="h-6 w-6" />
-              <div>
-                <div className="font-semibold">WirdhAI</div>
-                <div className="text-xs font-normal">Track your daily Islamic practices</div>
-              </div>
-            </Button>
-            
-            <Button 
-              variant="outline" 
-              size="lg" 
-              className="w-full py-6 h-auto flex flex-col items-center gap-2"
-              onClick={() => setLocation('/personal-action-plan')}
-            >
-              <ClipboardList className="h-6 w-6" />
-              <div>
-                <div className="font-semibold">Action Plan</div>
-                <div className="text-xs font-normal">Track your spiritual goals</div>
-              </div>
-            </Button>
-          </div>
-        </div>
+        </motion.div>
         
-        {/* Past Reflections */}
-        <Card className="animate-slide-in transition-all" style={{ animationDelay: "100ms" }}>
-          <CardHeader className="pb-3">
-            <CardTitle className="flex items-center gap-2">
-              <Clock className="h-5 w-5 text-primary" />
-              Your Reflections
-            </CardTitle>
-            <CardDescription>
-              Continue your spiritual journey with previous reflections
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <ConversationList />
-          </CardContent>
-        </Card>
+        {/* Quick Action Buttons */}
+        <motion.div 
+          className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-10"
+          variants={containerVariants}
+          initial="hidden"
+          animate="visible"
+        >
+          {quickActions.map((action, index) => (
+            <motion.div key={index} variants={itemVariants}>
+              <Button 
+                className={`w-full h-auto py-4 px-4 text-white ${action.color} hover:opacity-90 transition-all`}
+                onClick={action.onClick}
+              >
+                <div className="flex items-center gap-3 w-full">
+                  <div className="bg-white/20 rounded-full p-2">
+                    {action.icon}
+                  </div>
+                  <div className="text-left">
+                    <div className="font-medium">{action.title}</div>
+                    <div className="text-xs font-normal opacity-80">{action.description}</div>
+                  </div>
+                  <ArrowUpRight className="h-4 w-4 ml-auto" />
+                </div>
+              </Button>
+            </motion.div>
+          ))}
+        </motion.div>
+        
+        {/* Core Features Section */}
+        <motion.div 
+          className="mb-10"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.5, delay: 0.3 }}
+        >
+          <h2 className="text-2xl font-semibold mb-4">Core Features</h2>
+          
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {coreFeatures.map((feature, index) => (
+              <motion.div 
+                key={index}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5, delay: 0.1 * index }}
+              >
+                <Card className="h-full border overflow-hidden">
+                  <div className={`${feature.color} p-6 relative overflow-hidden`}>
+                    <span className="absolute top-3 right-3 opacity-40 font-arabic text-2xl">{feature.arabic}</span>
+                    <div className={`p-2 rounded-full bg-white/20 inline-flex ${feature.iconColor}`}>
+                      {feature.icon}
+                    </div>
+                    <h3 className="text-xl font-semibold mt-3">{feature.title}</h3>
+                  </div>
+                  <CardContent className="p-4">
+                    <p className="text-sm text-muted-foreground mb-4">{feature.description}</p>
+                    <Button 
+                      variant="ghost" 
+                      className="w-full justify-between hover:bg-muted/50"
+                      onClick={feature.onClick}
+                    >
+                      {feature.action}
+                      <ChevronRight className="h-4 w-4" />
+                    </Button>
+                  </CardContent>
+                </Card>
+              </motion.div>
+            ))}
+          </div>
+        </motion.div>
+        
+        {/* Recent Activity Section */}
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, delay: 0.4 }}
+        >
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-2xl font-semibold">Recent Activity</h2>
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              className="text-sm flex items-center gap-1"
+              onClick={() => setLocation('/history')}
+            >
+              View All
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
+          
+          <Card className="border">
+            <CardContent className="pt-6">
+              <ConversationList />
+            </CardContent>
+          </Card>
+        </motion.div>
       </div>
     </Layout>
   );

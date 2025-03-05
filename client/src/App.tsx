@@ -33,6 +33,10 @@ import DashboardPage from "@/pages/dashboard";
 import SettingsPage from "@/pages/settings";
 import ReflectionsPage from "@/pages/reflections";
 import HistoryPage from "@/pages/history";
+import IdentityPage from "@/pages/identity";
+import NewIdentityFramework from "@/pages/identity/new";
+import FrameworkEditor from "@/pages/identity/[id]";
+import HabitTrackingPage from "@/pages/identity/tracking";
 
 const AppContent = () => {
   const { isOpen, closeModal } = usePersonalizationModal();
@@ -92,6 +96,28 @@ const AppContent = () => {
         <Route path="/new">
           <RequireAuth>
             <NewReflection />
+          </RequireAuth>
+        </Route>
+        
+        {/* Identity Builder routes - specific routes first! */}
+        <Route path="/identity/new">
+          <RequireAuth>
+            <NewIdentityFramework />
+          </RequireAuth>
+        </Route>
+        <Route path="/identity/tracking">
+          <RequireAuth>
+            <HabitTrackingPage />
+          </RequireAuth>
+        </Route>
+        <Route path="/identity/:id">
+          <RequireAuth>
+            <FrameworkEditor />
+          </RequireAuth>
+        </Route>
+        <Route path="/identity">
+          <RequireAuth>
+            <IdentityPage />
           </RequireAuth>
         </Route>
         

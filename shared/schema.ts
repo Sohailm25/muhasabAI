@@ -1,4 +1,4 @@
-import { pgTable, text, serial, timestamp, json, integer, boolean, date } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, timestamp, json, integer, boolean, date, uuid } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -54,6 +54,35 @@ export const wirds = pgTable("wirds", {
   isArchived: boolean("is_archived").default(false),
 });
 
+export const identity_frameworks = pgTable("identity_frameworks", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  userId: text("user_id").notNull(),
+  title: text("title").notNull(),
+  completionPercentage: integer("completion_percentage").default(0).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const framework_components = pgTable("framework_components", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  frameworkId: uuid("framework_id").notNull(),
+  componentType: text("component_type").notNull(),
+  content: json("content").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const habit_tracking = pgTable("habit_tracking", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  componentId: uuid("component_id").notNull(),
+  habitIndex: integer("habit_index").notNull(),
+  currentStreak: integer("current_streak").default(0).notNull(),
+  longestStreak: integer("longest_streak").default(0).notNull(),
+  lastCompleted: timestamp("last_completed"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
 export type Message = {
   role: "user" | "assistant";
   content: string;
@@ -91,12 +120,17 @@ export type WirdPractice = {
 };
 
 export type WirdSuggestion = {
-  type: string;     // e.g., "Quran", "Dhikr", "Dua", "Salah", etc.
-  title: string;    // Name of the practice
-  description: string;  // What to do
-  frequency: string;    // How often
-  duration: string;     // How long
-  benefit: string;      // Benefits
+  id: string;       // Unique identifier
+  type?: string;    // e.g., "Quran", "Dhikr", "Dua", "Salah", etc.
+  category?: string; // Alternative name for type
+  title?: string;   // Name of the practice
+  name: string;     // Alternative name for title
+  description?: string; // What to do
+  frequency?: string;   // How often
+  duration?: string;    // How long
+  benefit?: string;     // Benefits
+  target: number;    // Target amount
+  unit?: string;     // Unit of measurement (e.g., "pages", "times")
 };
 
 export type WirdEntry = {
@@ -210,3 +244,36 @@ export type Conversation = typeof conversations.$inferSelect;
 export type HalaqaRow = typeof halaqas.$inferSelect;
 export type UserSettings = typeof userSettings.$inferSelect;
 export type WirdRow = typeof wirds.$inferSelect;
+
+export type IdentityFramework = {
+  id: string;
+  userId: string;
+  title: string;
+  completionPercentage: number;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+export type FrameworkComponent = {
+  id: string;
+  frameworkId: string;
+  componentType: string;
+  content: any;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+export type HabitTracking = {
+  id: string;
+  componentId: string;
+  habitIndex: number;
+  currentStreak: number;
+  longestStreak: number;
+  lastCompleted: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+export type IdentityFrameworkRow = typeof identity_frameworks.$inferSelect;
+export type FrameworkComponentRow = typeof framework_components.$inferSelect;
+export type HabitTrackingRow = typeof habit_tracking.$inferSelect;

@@ -47,10 +47,20 @@ class ReflectionService {
     try {
       console.log("Submitting reflection with personalization:", !!personalizationContext);
       
-      // Initialize headers with content type
+      // Get auth token from localStorage
+      const token = localStorage.getItem('auth_token');
+      
+      // Initialize headers with content type and authorization if token exists
       const headers: Record<string, string> = {
         'Content-Type': 'application/json',
       };
+      
+      // Add authorization if token exists
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      } else {
+        console.warn("No auth token found - submission may fail if authentication is required");
+      }
       
       // Initialize URL (no query parameters)
       const apiUrl = `${this.apiEndpoint}/reflection`;
@@ -119,8 +129,16 @@ class ReflectionService {
       });
       
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || 'Failed to submit reflection');
+        console.error(`Error response from server: ${response.status} ${response.statusText}`);
+        
+        try {
+          const errorData = await response.json();
+          console.error('Server error details:', errorData);
+          throw new Error(errorData.error || 'Failed to submit reflection');
+        } catch (jsonError) {
+          // If we can't parse the error as JSON, use the status text
+          throw new Error(`Server error: ${response.status} ${response.statusText}`);
+        }
       }
       
       const data = await response.json();

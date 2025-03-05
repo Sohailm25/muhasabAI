@@ -2,7 +2,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { logApiRequest, getDebugHeaders, logCopyablePrompt } from './debug-logs';
 import { Halaqa } from '@shared/schema';
 import { createLogger } from "./logger";
-import { v4 as uuidv4 } from "uuid";
+import { v4 } from "uuid";
 import { WirdSuggestion } from '@shared/schema';
 
 // Import WirdSuggestion type and extend it with the id field that's required
@@ -1134,13 +1134,7 @@ export async function generateHalaqaWirdSuggestions(halaqaContent: {
     const prompt = `
 You are an Islamic spiritual mentor helping with personalized devotional practices (wird) for a Muslim based on their halaqa reflection.
 
-Based ONLY on the reflection details provided, suggest 3-5 practical Islamic devotional practices (wird) that would be beneficial and meaningful.
-
-Each practice should:
-1. Connect directly to a specific insight or theme from their reflection
-2. Be practically implementable (with a specific, measurable action)
-3. Include a clear spiritual benefit that addresses their needs/challenges
-4. Be well-grounded in Islamic tradition (Quran, Sunnah, etc.)
+CRITICAL INSTRUCTION: Your suggestions MUST be based EXCLUSIVELY on the specific content of their reflection below. DO NOT provide generic Islamic practices that aren't directly connected to their exact words and themes.
 
 HALAQA REFLECTION DETAILS:
 - Title: ${halaqaContent.title}
@@ -1148,15 +1142,26 @@ HALAQA REFLECTION DETAILS:
 - Key Reflection: ${halaqaContent.keyReflection}
 - Personal Impact: ${halaqaContent.impact}
 
+Step 1: First, identify and list 3-5 SPECIFIC PHRASES, CONCEPTS, or THEMES that the user explicitly mentioned in their reflection.
+
+Step 2: For each identified phrase/concept/theme, create a tailored wird suggestion that:
+1. Directly quotes or references the user's exact language from their reflection
+2. Provides concrete, customized guidance specifically addressing that phrase/concept
+3. Includes detailed implementation steps with specifics (e.g., which verses, which times of day)
+4. Grounds the practice in Islamic tradition relevant to their specific reflection topic
+
+IMPORTANT: Your suggestions must be highly customized to their specific reflection content. Each suggestion should clearly reference elements from their actual reflection and quote their own words where possible.
+
 Provide your output as a JSON array of Wird suggestion objects with these fields:
 - type: a category like "Quran", "Dhikr", "Dua", "Sunnah", or "Charity" 
-- title: a concise, action-oriented title (5-7 words)
-- description: an explanation connecting to their reflection (2-3 sentences)
+- title: a concise, action-oriented title (5-7 words) that references their specific reflection content
+- description: a detailed explanation connecting to specific phrases or concepts from their reflection (3-4 sentences)
 - duration: an estimated time commitment (e.g., "5 minutes")
 - frequency: how often to practice (e.g., "daily", "weekly")
-- benefit: the spiritual/personal benefit of this practice
+- benefit: the specific spiritual/personal benefit of this practice as it relates to their expressed needs
 
-THE OUTPUT MUST BE VALID JSON WITH NO MARKDOWN FORMATTING.
+THE OUTPUT MUST BE VALID JSON WITH NO MARKDOWN FORMATTING. Do not include any other text, commentary, or explanation outside the JSON array.
+IMPORTANT: Ensure all strings are properly escaped with double quotes and the JSON is valid.
 `;
 
     const response = await anthropic.messages.create({
@@ -1174,33 +1179,68 @@ THE OUTPUT MUST BE VALID JSON WITH NO MARKDOWN FORMATTING.
       content = response.content[0].text || '';
     }
     
-    // Try to parse the response as JSON
+    // Clean and normalize the content for parsing
+    let cleanedContent = content
+      // Remove markdown code blocks
+      .replace(/```json\s*/g, '')
+      .replace(/```\s*$/g, '')
+      .replace(/```/g, '')
+      // Trim whitespace
+      .trim();
+      
+    // Try several parsing strategies
     try {
-      // Find JSON array in the response (sometimes Claude adds explanatory text)
-      const jsonMatch = content.match(/\[[\s\S]*\]/);
-      if (!jsonMatch) {
-        console.error("Failed to extract JSON from response");
-        return generateFallbackWirdSuggestions();
+      // Strategy 1: Try to parse the entire cleaned content as JSON
+      try {
+        const parsedData = JSON.parse(cleanedContent);
+        if (Array.isArray(parsedData) && parsedData.length > 0) {
+          return parsedData.map(s => ({ ...s, id: v4() }));
+        }
+      } catch (e) {
+        // Continue to next strategy if this fails
+        console.log("Strategy 1 failed, trying next approach");
       }
       
-      const jsonContent = jsonMatch[0];
-      const suggestions = JSON.parse(jsonContent) as BaseWirdSuggestion[];
-      
-      // Validate suggestions format
-      if (!Array.isArray(suggestions) || suggestions.length === 0) {
-        console.error("Invalid suggestions format", suggestions);
-        return generateFallbackWirdSuggestions();
+      // Strategy 2: Try to extract JSON array using regex
+      const jsonRegex = /\[[\s\S]*?\]/;
+      const match = cleanedContent.match(jsonRegex);
+      if (match && match[0]) {
+        try {
+          const parsedData = JSON.parse(match[0]);
+          if (Array.isArray(parsedData) && parsedData.length > 0) {
+            return parsedData.map(s => ({ ...s, id: v4() }));
+          }
+        } catch (e) {
+          console.log("Strategy 2 failed, trying next approach");
+        }
       }
       
-      // Add id to each suggestion
-      const validatedSuggestions: ExtendedWirdSuggestion[] = suggestions.map(suggestion => ({
-        ...suggestion,
-        id: uuidv4()
-      }));
+      // Strategy 3: More aggressive JSON cleanup and try again
+      // This handles cases with trailing commas or other common JSON errors
+      let fixedContent = cleanedContent
+        // Fix common JSON errors like trailing commas
+        .replace(/,(\s*[\]}])/g, '$1')
+        // Ensure property names are double-quoted
+        .replace(/([{,]\s*)([a-zA-Z0-9_]+)(\s*:)/g, '$1"$2"$3')
+        // Ensure string values use double quotes
+        .replace(/:\s*'([^']*)'/g, ': "$1"');
       
-      return validatedSuggestions;
+      try {
+        const parsedData = JSON.parse(fixedContent);
+        if (Array.isArray(parsedData) && parsedData.length > 0) {
+          return parsedData.map(s => ({ ...s, id: v4() }));
+        }
+      } catch (e) {
+        console.log("Strategy 3 failed, falling back to default suggestions");
+      }
+      
+      // If we got here, all parsing strategies failed
+      console.error("All JSON parsing strategies failed. Returning fallback suggestions.");
+      return generateFallbackWirdSuggestions();
+      
     } catch (parseError) {
       console.error("Error parsing wird suggestion response:", parseError);
+      // Provide fallback suggestions when parsing fails
       return generateFallbackWirdSuggestions();
     }
   } catch (error) {
@@ -1216,7 +1256,7 @@ THE OUTPUT MUST BE VALID JSON WITH NO MARKDOWN FORMATTING.
 function generateFallbackWirdSuggestions(): ExtendedWirdSuggestion[] {
   return [
     {
-      id: uuidv4(),
+      id: v4(),
       title: "Daily Quran Reflection",
       description: "Take 10 minutes each day to read and reflect on a few verses of the Quran, focusing on their meaning in your life.",
       type: "Quran",
@@ -1225,7 +1265,7 @@ function generateFallbackWirdSuggestions(): ExtendedWirdSuggestion[] {
       benefit: "Deepens connection with Allah through His words"
     },
     {
-      id: uuidv4(),
+      id: v4(),
       title: "Morning and Evening Adhkar",
       description: "Establish a consistent practice of morning and evening remembrances (adhkar) to strengthen your connection with Allah throughout the day.",
       type: "Dhikr",
@@ -1234,7 +1274,7 @@ function generateFallbackWirdSuggestions(): ExtendedWirdSuggestion[] {
       benefit: "Provides spiritual protection and mindfulness"
     },
     {
-      id: uuidv4(),
+      id: v4(),
       title: "Weekly Gratitude Journaling",
       description: "Set aside time each week to write down blessings Allah has bestowed upon you, fostering a mindset of gratitude and contentment.",
       type: "Reflection",
@@ -1243,4 +1283,444 @@ function generateFallbackWirdSuggestions(): ExtendedWirdSuggestion[] {
       benefit: "Cultivates thankfulness and recognition of Allah's favors"
     }
   ];
+}
+
+/**
+ * Generates detailed, personalized insights based on a halaqa reflection
+ * @param halaqaContent Content from the halaqa entry
+ * @returns Array of personalized insights
+ */
+export async function generateHalaqaInsights(halaqaContent: {
+  title: string;
+  topic: string;
+  keyReflection: string;
+  impact: string;
+}): Promise<Array<{id: string; title: string; content: string;}>> {
+  const logger = getLogger("generateHalaqaInsights");
+  logger.info(`Generating personalized insights for halaqa: ${halaqaContent.title}`);
+
+  try {
+    const prompt = `
+You are a deeply knowledgeable Islamic scholar with expertise in spiritual development and practical application of Islamic teachings. Your task is to generate personalized, specific insights based on a Muslim's halaqa (Islamic study circle) reflection.
+
+CRITICAL INSTRUCTION: Your insights MUST be based EXCLUSIVELY on the specific content provided below. DO NOT provide generic Islamic advice that isn't directly connected to the user's exact words and themes.
+
+HALAQA REFLECTION:
+Title: ${halaqaContent.title}
+Topic: ${halaqaContent.topic}
+Key Reflection: ${halaqaContent.keyReflection}
+Personal Impact: ${halaqaContent.impact}
+
+Step 1: First, carefully extract and list 4-6 SPECIFIC PHRASES, CONCEPTS, or THEMES that the user explicitly mentioned in their reflection.
+
+Step 2: For each identified phrase/concept/theme, create a personalized insight that:
+1. Directly quotes the user's exact words from their reflection
+2. Provides deeper theological/spiritual context for that specific phrase or concept
+3. Connects that specific phrase to relevant Quranic ayat or hadith
+4. Offers practical application directly addressing their expressed situation
+5. Includes thoughtful questions that help them deepen their understanding of that specific concept
+
+Structure each insight with a relevant title that references their specific reflection content and detailed, substantive content (250+ words per insight).
+
+Your insights must feel deeply personalized - like you've truly understood their specific situation and reflection. The user should immediately recognize that you're responding to their exact words and concepts.
+
+Format your response as a JSON array with objects containing:
+- id: A unique identifier like "insight-1", "insight-2", etc.
+- title: A meaningful, specific title that directly references words or phrases from their reflection
+- content: The detailed insight content that directly addresses their specific reflection, with quotes from their own words
+
+THE OUTPUT MUST BE VALID JSON WITH NO MARKDOWN FORMATTING. Do not include any other text, commentary, or explanation outside the JSON array.
+`;
+
+    // Call Claude API
+    const completion = await anthropic.messages.create({
+      model: 'claude-3-haiku-20240307',
+      max_tokens: 4000,
+      temperature: 0.7,
+      messages: [
+        { role: "user", content: prompt }
+      ],
+    });
+
+    // Extract the content from the response
+    let content = '';
+    if (completion.content && completion.content.length > 0) {
+      content = completion.content[0].text || '';
+    }
+    
+    // Clean and normalize the content for parsing
+    let cleanedContent = content
+      // Remove markdown code blocks
+      .replace(/```json\s*/g, '')
+      .replace(/```\s*$/g, '')
+      .replace(/```/g, '')
+      // Trim whitespace
+      .trim();
+      
+    try {
+      const parsedData = JSON.parse(cleanedContent);
+      if (Array.isArray(parsedData) && parsedData.length > 0) {
+        logger.info(`Successfully generated ${parsedData.length} insights`);
+        return parsedData;
+      }
+    } catch (e) {
+      logger.error("Error parsing insights JSON:", e);
+    }
+    
+    // Return fallback insights if parsing fails
+    return [
+      {
+        id: "insight-1",
+        title: "Connection to Core Beliefs",
+        content: `Your reflection on "${halaqaContent.topic}" shows a thoughtful engagement with Islamic principles. Consider how these ideas connect to foundational concepts in the Quran and Sunnah, and how you might deepen this understanding through regular study.`
+      },
+      {
+        id: "insight-2",
+        title: "Practical Implementation",
+        content: `The impact you've described suggests opportunities for practical application. Consider ways to incorporate these learnings into your daily routine through consistent, small actions that align with the guidance you've received.`
+      },
+      {
+        id: "insight-3", 
+        title: "Knowledge and Action",
+        content: `Islamic tradition emphasizes that knowledge should lead to action. Your reflection touches on important concepts that can be transformed into tangible changes in how you approach your relationship with Allah and those around you.`
+      },
+      {
+        id: "insight-4",
+        title: "Spiritual Growth",
+        content: `The journey of faith involves continuous reflection and improvement. Your thoughts on this topic reflect a sincere desire to grow spiritually, which is itself a blessing from Allah.`
+      }
+    ];
+  } catch (error) {
+    logger.error("Error generating halaqa insights:", error);
+    // Return fallback insights
+    return [
+      {
+        id: "insight-1",
+        title: "Connection to Islamic Principles",
+        content: `Your reflection contains valuable observations about ${halaqaContent.topic}. Consider exploring related concepts in the Quran and Sunnah to deepen your understanding.`
+      },
+      {
+        id: "insight-2",
+        title: "Practical Application",
+        content: `Consider how you might apply the lessons from this halaqa in your daily life through consistent practice and mindfulness.`
+      }
+    ];
+  }
+}
+
+/**
+ * Generate personalized suggestions for identity framework components
+ * @param input The spiritual aspect the user wants to develop (framework title)
+ * @param componentType The type of component ('identity', 'vision', 'systems', etc.)
+ * @param previousComponents Optional data from previously completed components
+ * @returns Object containing suggestions, examples, and feedback
+ */
+export async function generateFrameworkSuggestions(
+  input: string,
+  componentType: string,
+  previousComponents?: any
+): Promise<{
+  suggestions: string[];
+  examples: string[];
+  feedback: string;
+}> {
+  console.log(`Generating framework suggestions for ${componentType} based on "${input}"`);
+  
+  // Get previous component content if available
+  let previousIdentity = '';
+  let previousVision = '';
+  let previousSystems = '';
+  
+  if (previousComponents && Array.isArray(previousComponents)) {
+    const identityComponent = previousComponents.find(c => c.componentType === 'identity');
+    const visionComponent = previousComponents.find(c => c.componentType === 'vision');
+    const systemsComponent = previousComponents.find(c => c.componentType === 'systems');
+    
+    if (identityComponent && identityComponent.content && identityComponent.content.statements) {
+      previousIdentity = identityComponent.content.statements.filter(Boolean).join("; ");
+    }
+    
+    if (visionComponent && visionComponent.content && visionComponent.content.statements) {
+      previousVision = visionComponent.content.statements.filter(Boolean).join("; ");
+    }
+    
+    if (systemsComponent && systemsComponent.content && systemsComponent.content.processes) {
+      previousSystems = systemsComponent.content.processes.filter(Boolean).join("; ");
+    }
+  }
+  
+  // Create context string from previous components
+  const previousContext = `
+${previousIdentity ? `IDENTITY: ${previousIdentity}` : ''}
+${previousVision ? `VISION: ${previousVision}` : ''}
+${previousSystems ? `SYSTEMS: ${previousSystems}` : ''}
+  `.trim();
+  
+  // Define specific prompts for each component type
+  const componentPrompts: Record<string, string> = {
+    identity: `You are helping a Muslim develop their spiritual identity. Based on their aspiration "${input}", generate 3 personalized identity statements that DIRECTLY RELATE to this specific aspiration.
+
+The statements should complete these prompts:
+1. "I am (or am becoming) a _________ person."
+2. "At my core, I value __________."
+3. "My strengths that support this identity include __________."
+
+Make sure each statement:
+- Is specific to their aspiration "${input}"
+- Uses natural, first-person language
+- Is concise but meaningful (15-25 words)
+- Focuses on spiritual growth, not generic self-help
+- Incorporates Islamic values when relevant
+
+Format your response as a JSON object with this structure:
+{
+  "suggestions": [3 identity statements that complete the first prompt],
+  "examples": [3 additional examples that could work for any of the prompts, clearly labeled with which prompt they complete],
+  "feedback": "A brief sentence of guidance about crafting good identity statements"
+}`,
+
+    vision: `You are helping a Muslim develop their spiritual vision. Based on their aspiration "${input}"${previousIdentity ? ` and their identity statements: ${previousIdentity}` : ''}, generate 3 personalized vision statements that DIRECTLY RELATE to this specific aspiration.
+
+The statements should complete these prompts:
+1. "This identity matters to me because __________."
+2. "When I embody this identity, the impact on others is __________."
+3. "In five years, living this identity would mean __________."
+
+Make sure each statement:
+- Specifically references their aspiration "${input}"
+- Connects to their identity statements when possible
+- Uses natural, first-person language
+- Focuses on meaningful impact and purpose
+- Incorporates Islamic values when relevant
+
+Format your response as a JSON object with this structure:
+{
+  "suggestions": [3 vision statements that relate to their aspiration, one for each prompt],
+  "examples": [3 additional examples that could work for any of the prompts, clearly labeled with which prompt they complete],
+  "feedback": "A brief sentence of guidance about creating a meaningful vision"
+}`,
+
+    systems: `You are helping a Muslim develop systems to support their spiritual growth. Based on their aspiration "${input}"${previousIdentity ? ` and their identity statements: ${previousIdentity}` : ''}${previousVision ? ` and their vision: ${previousVision}` : ''}, generate 3 personalized system processes that DIRECTLY RELATE to this specific aspiration.
+
+The statements should complete these prompts:
+1. "My daily/weekly process includes __________."
+2. "The principles that guide my approach are __________."
+3. "I maintain balance by __________."
+
+Make sure each statement:
+- Specifically references their aspiration "${input}"
+- Is practical and actionable
+- Is sustainable and realistic
+- Incorporates Islamic practices when relevant
+- Connects to their identity and vision when possible
+
+Format your response as a JSON object with this structure:
+{
+  "suggestions": [3 system process statements relevant to their aspiration, one for each prompt],
+  "examples": [3 additional examples that could work for any of the prompts, clearly labeled with which prompt they complete],
+  "feedback": "A brief sentence of guidance about creating effective systems"
+}`,
+
+    goals: `You are helping a Muslim set goals for their spiritual growth. Based on their aspiration "${input}"${previousContext ? ` and their previous components:\n${previousContext}` : ''}, generate personalized goals that DIRECTLY RELATE to this specific aspiration.
+
+Create goals that complete these prompts:
+1. Short-term goal (1-3 months): "Within the next few months, I will __________."
+2. Medium-term goal (3-12 months): "Within the next year, I will __________."
+3. Long-term goal (1+ years): "In the long-term, I will __________."
+4. Success criteria: "I'll know I've succeeded when __________."
+
+Make sure each goal:
+- Specifically references their aspiration "${input}"
+- Is SMART (Specific, Measurable, Achievable, Relevant, Time-bound)
+- Aligns with Islamic values
+- Builds progressively (short-term goals support medium-term goals, etc.)
+- Connects to their identity, vision, and systems when possible
+
+Format your response as a JSON object with this structure:
+{
+  "suggestions": [4 goals, one for each timeframe including success criteria],
+  "examples": [4 additional examples, one for each timeframe including success criteria],
+  "feedback": "A brief sentence of guidance about setting effective spiritual goals"
+}`,
+
+    habits: `You are helping a Muslim develop habits for spiritual growth. Based on their aspiration "${input}"${previousContext ? ` and their previous components:\n${previousContext}` : ''}, generate 3 personalized habits that DIRECTLY RELATE to this specific aspiration.
+
+Each habit should have these components:
+1. Habit description: A clear statement of the habit
+2. Minimum viable version: A simplified version for low-energy days
+3. Expanded version: The full practice for ideal conditions
+4. The immediate reward: The benefit felt right after doing the habit
+
+Make sure each habit:
+- Specifically supports their aspiration "${input}"
+- Is realistic and sustainable
+- Has a clear trigger and reward
+- Incorporates Islamic practices when relevant
+- Connects to their goals, systems, vision, and identity
+
+Format your response as a JSON object with this structure:
+{
+  "suggestions": [3 habit descriptions that directly support their aspiration],
+  "examples": [3 formatted examples with all components like: "Habit: Morning Quran recitation\\nMinimum version: 5 minutes\\nExpanded version: 30 minutes with reflection\\nImmediate reward: Sense of peace and connection"],
+  "feedback": "A brief sentence of guidance about forming effective spiritual habits"
+}`,
+
+    triggers: `You are helping a Muslim establish triggers for spiritual habits. Based on their aspiration "${input}"${previousContext ? ` and their previous components:\n${previousContext}` : ''}, generate 3 personalized trigger sets that DIRECTLY RELATE to this specific aspiration.
+
+Each trigger set should have these components:
+1. Primary trigger: When/Where to perform the habit (e.g., "After Fajr prayer")
+2. Secondary trigger: A backup trigger if the primary one isn't possible (e.g., "Before breakfast")
+3. Environmental supports: Physical changes to make the habit easier (e.g., "Prayer mat placed by bedside")
+
+Make sure each trigger set:
+- Is specific and clear
+- Attaches to existing routines when possible
+- Is realistic for daily life
+- Takes into account Islamic daily rhythms (prayer times, etc.)
+- Connects to the habits they want to develop
+
+Format your response as a JSON object with this structure:
+{
+  "suggestions": [3 primary trigger ideas that directly support their aspiration],
+  "examples": [3 formatted examples with all components like: "Primary trigger: After Fajr prayer\\nBackup trigger: Before breakfast\\nEnvironmental support: Prayer mat placed by bedside"],
+  "feedback": "A brief sentence of guidance about creating effective triggers"
+}`,
+  };
+
+  // Get the appropriate prompt for this component type
+  const prompt = componentPrompts[componentType] || 
+    `Generate suggestions to help a Muslim develop the spiritual aspect "${input}" for the component "${componentType}". Format as JSON with suggestions, examples, and feedback fields.`;
+  
+  try {
+    console.log(`Calling Claude API for ${componentType} suggestions`);
+    
+    // Call the Claude API
+    const response = await anthropic.messages.create({
+      model: 'claude-3-7-sonnet-20250219',
+      messages: [{ role: 'user', content: prompt }],
+      max_tokens: 1024,
+      temperature: 0.7,
+    });
+
+    // Extract and parse the response
+    let responseText = '';
+    if (response.content && response.content.length > 0 && response.content[0].type === 'text') {
+      responseText = response.content[0].text || '';
+    }
+    
+    console.log(`Received response from Claude API for ${componentType}`);
+    
+    try {
+      const parsedResponse = JSON.parse(responseText);
+      
+      return {
+        suggestions: parsedResponse.suggestions || [],
+        examples: parsedResponse.examples || [],
+        feedback: parsedResponse.feedback || ""
+      };
+    } catch (error) {
+      console.error(`Error parsing Claude response for ${componentType}:`, error);
+      console.log("Raw response:", responseText);
+      return getDefaultFrameworkSuggestions(componentType);
+    }
+  } catch (error) {
+    console.error(`Error generating ${componentType} framework suggestions:`, error);
+    return getDefaultFrameworkSuggestions(componentType);
+  }
+}
+
+/**
+ * Fallback suggestions when the API call fails
+ */
+function getDefaultFrameworkSuggestions(componentType: string) {
+  console.log(`Using default suggestions for ${componentType}`);
+  
+  // Default suggestions based on component type
+  const defaults: Record<string, any> = {
+    identity: {
+      suggestions: [
+        "I am becoming a more mindful person who notices Allah's signs.",
+        "At my core, I value spiritual growth and connection with Allah.",
+        "My strengths include my dedication to daily practice and self-reflection."
+      ],
+      examples: [
+        "I am a person who strives to embody patience in all situations.",
+        "I value consistency in my spiritual practice above perfection.",
+        "My strength of perseverance supports my Islamic identity."
+      ],
+      feedback: "Focus on qualities that align with Islamic values and your authentic self."
+    },
+    vision: {
+      suggestions: [
+        "This identity matters to me because it brings me closer to Allah.",
+        "When I embody this identity, I inspire others to strengthen their faith.",
+        "In five years, living this identity would mean greater peace and taqwa."
+      ],
+      examples: [
+        "This matters because it helps me fulfill my purpose as a believer.",
+        "My growth impacts my family by creating a more spiritually nurturing home.",
+        "Living this identity means embodying the Prophet's (PBUH) example daily."
+      ],
+      feedback: "Connect your vision to your relationship with Allah and your community."
+    },
+    systems: {
+      suggestions: [
+        "My daily process includes Quran recitation after Fajr prayer.",
+        "The principles that guide me are consistency, intention, and gratitude.",
+        "I maintain balance by alternating focused worship with service to others."
+      ],
+      examples: [
+        "My system includes weekly self-accountability sessions.",
+        "I'm guided by the principle of excellence (ihsan) in all actions.",
+        "Balance comes through scheduled rest and spiritual renewal."
+      ],
+      feedback: "Create sustainable systems that integrate seamlessly with your daily life."
+    },
+    goals: {
+      suggestions: [
+        "Complete a Quran study course within the next 3 months.",
+        "Establish regular volunteer work with my local masjid within 6 months.",
+        "Memorize 3 new surahs by the end of the year."
+      ],
+      examples: [
+        "Short-term: Pray all five salah on time for 30 consecutive days.",
+        "Medium-term: Lead taraweeh for one night during Ramadan.",
+        "Long-term: Perform Hajj within the next five years.",
+        "I'll know I've succeeded when I can maintain khushoo throughout my prayers."
+      ],
+      feedback: "Set specific, measurable goals that progressively build your spiritual capacity."
+    },
+    habits: {
+      suggestions: [
+        "Morning dhikr practice",
+        "Quran recitation with reflection",
+        "Nightly self-accountability"
+      ],
+      examples: [
+        "Habit: Morning Quran recitation\nMinimum version: 5 minutes\nExpanded version: 30 minutes with tafsir study\nImmediate reward: Starting the day with Allah's guidance",
+        "Habit: Midday reflection\nMinimum version: 2 minutes of gratitude\nExpanded version: 15 minutes of journaling\nImmediate reward: Renewed focus and intention",
+        "Habit: Evening dhikr\nMinimum version: 33 repetitions of subhanAllah\nExpanded version: Complete tasbih with reflection\nImmediate reward: Calm mind before sleep"
+      ],
+      feedback: "Create habits with a low barrier to start and clear spiritual benefits."
+    },
+    triggers: {
+      suggestions: [
+        "After completing wudu",
+        "Upon entering your designated prayer space",
+        "When the adhan app notification sounds"
+      ],
+      examples: [
+        "For Quran: Primary trigger - After Fajr prayer\nBackup trigger - During morning commute\nEnvironmental support - Quran and tafsir books visible on bedside table",
+        "For dhikr: Primary trigger - While walking between tasks\nBackup trigger - During wait times\nEnvironmental support - Tasbih beads in pocket or bag",
+        "For dua: Primary trigger - Before meals\nBackup trigger - Before sleeping\nEnvironmental support - Dua list saved on phone home screen"
+      ],
+      feedback: "Link spiritual practices to existing daily activities and physical locations."
+    }
+  };
+  
+  return defaults[componentType] || {
+    suggestions: ["Develop a consistent practice.", "Focus on small, sustainable changes.", "Connect your practice to your values."],
+    examples: ["Example suggestion 1", "Example suggestion 2", "Example suggestion 3"],
+    feedback: "Start small and build gradually for lasting spiritual growth."
+  };
 }

@@ -11,6 +11,11 @@ import profileRoutes from './routes/profile-routes';
 import healthRoutes from './routes/health-routes';
 import halaqaRoutes from './routes/halaqa-routes';
 import wirdRoutes from './routes/wird-routes';
+import authRoutes from './routes/auth-routes';
+
+// Import route handlers
+import userRoutes from "./routes/user-routes";
+import reflectionRoutes from "./routes/reflection-routes";
 
 // Check for required environment variables
 function checkRequiredEnvVars() {
@@ -85,8 +90,11 @@ app.use((req, res, next) => {
   app.use('/api', healthRoutes);
 
   // Feature-specific API routes
+  app.use('/api/user', userRoutes);
+  app.use('/api/reflections', reflectionRoutes);
   app.use('/api/halaqas', halaqaRoutes);
-  app.use('/api/wird', wirdRoutes);
+  app.use('/api', wirdRoutes);
+  app.use('/api', authRoutes);
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     const status = err.status || err.statusCode || 500;

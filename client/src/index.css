@@ -24,6 +24,13 @@
     min-height: 100%;
   }
 
+  /* Arabic text styling */
+  .font-arabic {
+    font-family: 'Amiri', 'Scheherazade New', serif;
+    direction: rtl;
+    display: inline-block;
+  }
+
   /* Improve touch targets for mobile */
   button, a, input, textarea, select {
     @apply focus:outline-none focus:ring-2 focus:ring-primary/40 focus-visible:ring-2 focus-visible:ring-primary;

@@ -14,11 +14,15 @@ import {
   WirdEntry,
   InsertWird,
   WirdPractice,
-  WirdSuggestion
+  WirdSuggestion,
+  IdentityFramework,
+  FrameworkComponent,
+  HabitTracking
 } from "@shared/schema";
 import { db } from "./db";
 import { reflections, conversations, userSettings, halaqas, wirds } from "@shared/schema";
 import { eq, and, desc, gte, lte } from "drizzle-orm";
+import { v4 as uuidv4 } from "uuid";
 
 // For type safety with process.env
 declare global {
@@ -41,10 +45,10 @@ export interface IStorage {
   updateUserSettings(userId: string, settings: Partial<InsertUserSettings>): Promise<UserSettings>;
   // Halaqa methods
   createHalaqa(halaqa: InsertHalaqa): Promise<Halaqa>;
-  getHalaqa(id: number): Promise<Halaqa | undefined>;
+  getHalaqa(id: number): Promise<Halaqa | null>;
   getHalaqasByUserId(userId: string): Promise<Halaqa[]>;
-  updateHalaqa(id: number, data: UpdateHalaqa): Promise<Halaqa | undefined>;
-  updateHalaqaActionItems(id: number, actionItems: HalaqaActionItem[]): Promise<Halaqa | undefined>;
+  updateHalaqa(id: number, data: UpdateHalaqa): Promise<Halaqa | null>;
+  updateHalaqaActionItems(id: number, actionItems: HalaqaActionItem[]): Promise<Halaqa | null>;
   // WirdhAI methods
   getWirdsByUserId(userId: string): Promise<WirdEntry[]>;
   getWirdByDate(userId: string, date: string): Promise<WirdEntry | null>;
@@ -59,6 +63,23 @@ export interface IStorage {
   getWirdsByDateRange(userId: string, startDate: string, endDate: string): Promise<WirdEntry[]>;
   saveHalaqaWirdSuggestions(halaqaId: number, suggestions: WirdSuggestion[]): Promise<boolean>;
   getHalaqaWirdSuggestions(halaqaId: number): Promise<WirdSuggestion[] | null>;
+  // Identity Framework methods
+  getFrameworks(userId: string): Promise<IdentityFramework[]>;
+  getFramework(userId: string, frameworkId: string): Promise<IdentityFramework | null>;
+  createFramework(userId: string, title: string): Promise<IdentityFramework>;
+  updateFramework(userId: string, frameworkId: string, title: string): Promise<IdentityFramework>;
+  updateFrameworkCompletion(userId: string, frameworkId: string, completionPercentage: number): Promise<IdentityFramework>;
+  deleteFramework(userId: string, frameworkId: string): Promise<boolean>;
+  // Framework Component methods
+  getComponents(frameworkId: string): Promise<FrameworkComponent[]>;
+  getComponent(frameworkId: string, componentType: string): Promise<FrameworkComponent | null>;
+  createComponent(frameworkId: string, componentType: string, content: any): Promise<FrameworkComponent>;
+  updateComponent(frameworkId: string, componentType: string, content: any): Promise<FrameworkComponent>;
+  // Habit Tracking methods
+  getHabitTracking(componentId: string): Promise<HabitTracking[]>;
+  deleteHabitTracking(componentId: string): Promise<boolean>;
+  createHabitTracking(habitTrackingValues: Partial<HabitTracking>[]): Promise<HabitTracking[]>;
+  updateHabitTracking(habitId: string, currentStreak: number, longestStreak: number, lastCompleted: Date): Promise<HabitTracking>;
 }
 
 // Create a singleton instance of MemStorage
@@ -70,6 +91,9 @@ export class MemStorage implements IStorage {
   public userSettingsMap: Map<string, UserSettings> = new Map();
   public halaqas: Map<number, Halaqa> = new Map();
   public wirds: Map<number, WirdEntry> = new Map();
+  public frameworks: Map<string, IdentityFramework> = new Map();
+  public components: Map<string, FrameworkComponent> = new Map();
+  public habitTracking: Map<string, HabitTracking> = new Map();
   private currentReflectionId = 1;
   private currentConversationId = 1;
   private currentUserSettingsId = 1;
@@ -192,8 +216,9 @@ export class MemStorage implements IStorage {
     return newHalaqa;
   }
 
-  async getHalaqa(id: number): Promise<Halaqa | undefined> {
-    return this.halaqas.get(id);
+  async getHalaqa(id: number): Promise<Halaqa | null> {
+    const halaqa = this.halaqas.get(id);
+    return halaqa ?? null;
   }
 
   async getHalaqasByUserId(userId: string): Promise<Halaqa[]> {
@@ -202,9 +227,9 @@ export class MemStorage implements IStorage {
       .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
   }
 
-  async updateHalaqa(id: number, data: UpdateHalaqa): Promise<Halaqa | undefined> {
+  async updateHalaqa(id: number, data: UpdateHalaqa): Promise<Halaqa | null> {
     const halaqa = this.halaqas.get(id);
-    if (!halaqa) return undefined;
+    if (!halaqa) return null;
 
     const updatedHalaqa: Halaqa = {
       ...halaqa,
@@ -215,9 +240,9 @@ export class MemStorage implements IStorage {
     return updatedHalaqa;
   }
 
-  async updateHalaqaActionItems(id: number, actionItems: HalaqaActionItem[]): Promise<Halaqa | undefined> {
+  async updateHalaqaActionItems(id: number, actionItems: HalaqaActionItem[]): Promise<Halaqa | null> {
     const halaqa = this.halaqas.get(id);
-    if (!halaqa) return undefined;
+    if (!halaqa) return null;
 
     const updatedHalaqa: Halaqa = {
       ...halaqa,
@@ -231,17 +256,22 @@ export class MemStorage implements IStorage {
   // WirdhAI methods
   async getWirdsByUserId(userId: string): Promise<WirdEntry[]> {
     return Array.from(this.wirds.values())
-      .filter(wird => wurds.userId === userId && wurds.isArchived === false)
-      .sort((a, b) => b.date.getTime() - a.date.getTime());
+      .filter(wird => wird.userId === userId && wird.isArchived === false)
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   }
 
   async getWirdByDate(userId: string, date: string): Promise<WirdEntry | null> {
-    for (const wurds of this.wirds.values()) {
-      if (wird.userId === userId && wurds.date.toISOString().split('T')[0] === date && wurds.isArchived === false) {
-        return wurds;
+    try {
+      for (const wird of this.wirds.values()) {
+        if (wird.userId === userId && wird.date === date) {
+          return wird;
+        }
       }
+      return null;
+    } catch (error) {
+      console.error("Error getting wird by date:", error);
+      return null;
     }
-    return null;
   }
 
   async getWird(id: number): Promise<WirdEntry | null> {
@@ -266,7 +296,7 @@ export class MemStorage implements IStorage {
   }
 
   async updateWird(id: number, data: Partial<WirdEntry>): Promise<WirdEntry> {
-    const wurds = this.wirds.get(id);
+    const wird = this.wirds.get(id);
     if (!wird) throw new Error(`Wird with id ${id} not found`);
 
     const updatedWird: WirdEntry = {
@@ -279,23 +309,28 @@ export class MemStorage implements IStorage {
   }
 
   async updateWirdPractices(id: number, practices: WirdPractice[]): Promise<WirdEntry> {
-    const wurds = this.wirds.get(id);
-    if (!wird) throw new Error(`Wird with id ${id} not found`);
+    try {
+      const wird = this.wirds.get(id);
+      if (!wird) throw new Error(`Wird with id ${id} not found`);
 
-    const updatedWird: WirdEntry = {
-      ...wird,
-      practices,
-      updatedAt: new Date()
-    };
-    this.wirds.set(id, updatedWird);
-    return updatedWird;
+      const updatedWird: WirdEntry = {
+        ...wird,
+        practices,
+        updatedAt: new Date()
+      };
+      this.wirds.set(id, updatedWird);
+      return updatedWird;
+    } catch (error) {
+      console.error(`Error updating wird practices: ${error}`);
+      throw error;
+    }
   }
 
   async getWirdsByDateRange(userId: string, startDate: string, endDate: string): Promise<WirdEntry[]> {
     return Array.from(this.wirds.values())
-      .filter(wird => wurds.userId === userId && wurds.isArchived === false &&
-        wurds.date >= new Date(startDate) && wurds.date <= new Date(endDate))
-      .sort((a, b) => b.date.getTime() - a.date.getTime());
+      .filter(wird => wird.userId === userId && wird.isArchived === false &&
+        wird.date >= new Date(startDate) && wird.date <= new Date(endDate))
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   }
 
   async saveHalaqaWirdSuggestions(halaqaId: number, suggestions: WirdSuggestion[]): Promise<boolean> {
@@ -310,6 +345,312 @@ export class MemStorage implements IStorage {
 
   async getHalaqaWirdSuggestions(halaqaId: number): Promise<WirdSuggestion[] | null> {
     return this.wirdSuggestions.get(halaqaId) || null;
+  }
+
+  async addWirdSuggestionToUserWirdPlan(
+    userId: string,
+    wirdSuggestion: WirdSuggestion,
+    date?: Date
+  ): Promise<WirdEntry | null> {
+    try {
+      console.log("Adding wird suggestion to plan:", {
+        userId,
+        wirdSuggestion: JSON.stringify(wirdSuggestion),
+        date: date?.toISOString() || new Date().toISOString(),
+      });
+      
+      const targetDate = date || new Date();
+      const dateString = targetDate.toISOString().split("T")[0];
+
+      // Try to get existing wird for this date
+      let existingWird = null;
+      try {
+        existingWird = await this.getWirdByDate(userId, targetDate);
+        console.log("Found existing wird for date:", existingWird ? existingWird.id : "none");
+      } catch (err) {
+        console.log("Error finding existing wird, will create new one:", err);
+      }
+
+      // Create a new practice from the suggestion
+      const newPractice: WirdPractice = {
+        id: uuidv4(),
+        name: wirdSuggestion.title || wirdSuggestion.name || "Spiritual Practice",
+        category: wirdSuggestion.type || wirdSuggestion.category || "General",
+        target: wirdSuggestion.target || 1,
+        completed: 0,
+        unit: wirdSuggestion.unit || "times",
+        isCompleted: false,
+      };
+
+      // Try to extract a number from the duration string
+      if (wirdSuggestion.duration) {
+        const match = wirdSuggestion.duration.match(/(\d+)/);
+        if (match && match[1]) {
+          const numericTarget = parseInt(match[1], 10);
+          if (!isNaN(numericTarget)) {
+            newPractice.target = numericTarget;
+            if (wirdSuggestion.duration.includes("minute")) {
+              newPractice.unit = "minutes";
+            } else if (wirdSuggestion.duration.includes("page")) {
+              newPractice.unit = "pages";
+            }
+          }
+        }
+      }
+
+      if (existingWird) {
+        // Update existing wird with new practice
+        console.log("Updating existing wird with new practice");
+        const updatedPractices = [...existingWird.practices, newPractice];
+        return await this.updateWird(existingWird.id, {
+          practices: updatedPractices,
+        });
+      } else {
+        // Create new wird with this practice
+        console.log("Creating new wird with practice");
+        // Using this.createWird instead of createWird (which doesn't exist in this scope)
+        return await this.createWird({
+          userId,
+          date: targetDate,
+          practices: [newPractice],
+          notes: "",
+        });
+      }
+    } catch (error) {
+      console.error("Error adding wird suggestion to user wird plan:", error);
+      return null;
+    }
+  }
+
+  // Identity Framework methods
+  async getFrameworks(userId: string): Promise<IdentityFramework[]> {
+    const frameworks: IdentityFramework[] = [];
+    
+    for (const framework of this.frameworks.values()) {
+      if (framework.userId === userId) {
+        frameworks.push(framework);
+      }
+    }
+    
+    return frameworks.sort((a, b) => 
+      new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+    );
+  }
+
+  async getFramework(userId: string, frameworkId: string): Promise<IdentityFramework | null> {
+    const framework = this.frameworks.get(frameworkId);
+    
+    if (!framework || framework.userId !== userId) {
+      return null;
+    }
+    
+    return framework;
+  }
+
+  async createFramework(userId: string, title: string): Promise<IdentityFramework> {
+    const id = uuidv4();
+    const now = new Date();
+    
+    const framework: IdentityFramework = {
+      id,
+      userId,
+      title,
+      createdAt: now,
+      updatedAt: now,
+      completionPercentage: 0
+    };
+    
+    this.frameworks.set(id, framework);
+    return framework;
+  }
+
+  async updateFramework(userId: string, frameworkId: string, title: string): Promise<IdentityFramework> {
+    const framework = await this.getFramework(userId, frameworkId);
+    
+    if (!framework) {
+      throw new Error("Framework not found");
+    }
+    
+    const updatedFramework: IdentityFramework = {
+      ...framework,
+      title,
+      updatedAt: new Date()
+    };
+    
+    this.frameworks.set(frameworkId, updatedFramework);
+    return updatedFramework;
+  }
+
+  async updateFrameworkCompletion(userId: string, frameworkId: string, completionPercentage: number): Promise<IdentityFramework> {
+    const framework = await this.getFramework(userId, frameworkId);
+    
+    if (!framework) {
+      throw new Error("Framework not found");
+    }
+    
+    const updatedFramework: IdentityFramework = {
+      ...framework,
+      completionPercentage,
+      updatedAt: new Date()
+    };
+    
+    this.frameworks.set(frameworkId, updatedFramework);
+    return updatedFramework;
+  }
+
+  async deleteFramework(userId: string, frameworkId: string): Promise<boolean> {
+    const framework = await this.getFramework(userId, frameworkId);
+    
+    if (!framework) {
+      return false;
+    }
+    
+    // Delete all components related to this framework
+    for (const [componentId, component] of this.components.entries()) {
+      if (component.frameworkId === frameworkId) {
+        // Delete all habit tracking related to this component
+        for (const [trackingId, tracking] of this.habitTracking.entries()) {
+          if (tracking.componentId === componentId) {
+            this.habitTracking.delete(trackingId);
+          }
+        }
+        
+        this.components.delete(componentId);
+      }
+    }
+    
+    return this.frameworks.delete(frameworkId);
+  }
+
+  // Framework Component methods
+  async getComponents(frameworkId: string): Promise<FrameworkComponent[]> {
+    const components: FrameworkComponent[] = [];
+    
+    for (const component of this.components.values()) {
+      if (component.frameworkId === frameworkId) {
+        components.push(component);
+      }
+    }
+    
+    return components;
+  }
+
+  async getComponent(frameworkId: string, componentType: string): Promise<FrameworkComponent | null> {
+    for (const component of this.components.values()) {
+      if (component.frameworkId === frameworkId && component.componentType === componentType) {
+        return component;
+      }
+    }
+    
+    return null;
+  }
+
+  async createComponent(frameworkId: string, componentType: string, content: any): Promise<FrameworkComponent> {
+    const id = uuidv4();
+    const now = new Date();
+    
+    const component: FrameworkComponent = {
+      id,
+      frameworkId,
+      componentType,
+      content,
+      createdAt: now,
+      updatedAt: now
+    };
+    
+    this.components.set(id, component);
+    return component;
+  }
+
+  async updateComponent(frameworkId: string, componentType: string, content: any): Promise<FrameworkComponent> {
+    const component = await this.getComponent(frameworkId, componentType);
+    
+    if (component) {
+      const updatedComponent: FrameworkComponent = {
+        ...component,
+        content,
+        updatedAt: new Date()
+      };
+      
+      this.components.set(component.id, updatedComponent);
+      return updatedComponent;
+    } else {
+      return this.createComponent(frameworkId, componentType, content);
+    }
+  }
+
+  // Habit Tracking methods
+  async getHabitTracking(componentId: string): Promise<HabitTracking[]> {
+    const tracking: HabitTracking[] = [];
+    
+    for (const track of this.habitTracking.values()) {
+      if (track.componentId === componentId) {
+        tracking.push(track);
+      }
+    }
+    
+    return tracking.sort((a, b) => a.habitIndex - b.habitIndex);
+  }
+
+  async deleteHabitTracking(componentId: string): Promise<boolean> {
+    let deleted = false;
+    
+    for (const [trackingId, tracking] of this.habitTracking.entries()) {
+      if (tracking.componentId === componentId) {
+        this.habitTracking.delete(trackingId);
+        deleted = true;
+      }
+    }
+    
+    return deleted;
+  }
+
+  async createHabitTracking(habitTrackingValues: Partial<HabitTracking>[]): Promise<HabitTracking[]> {
+    const now = new Date();
+    const result: HabitTracking[] = [];
+    
+    for (const values of habitTrackingValues) {
+      if (!values.componentId || values.habitIndex === undefined) {
+        throw new Error("Component ID and habit index are required");
+      }
+      
+      const id = uuidv4();
+      
+      const tracking: HabitTracking = {
+        id,
+        componentId: values.componentId,
+        habitIndex: values.habitIndex,
+        currentStreak: values.currentStreak || 0,
+        longestStreak: values.longestStreak || 0,
+        lastCompleted: values.lastCompleted || null,
+        createdAt: now,
+        updatedAt: now
+      };
+      
+      this.habitTracking.set(id, tracking);
+      result.push(tracking);
+    }
+    
+    return result;
+  }
+
+  async updateHabitTracking(habitId: string, currentStreak: number, longestStreak: number, lastCompleted: Date): Promise<HabitTracking> {
+    const tracking = this.habitTracking.get(habitId);
+    
+    if (!tracking) {
+      throw new Error("Habit tracking not found");
+    }
+    
+    const updatedTracking: HabitTracking = {
+      ...tracking,
+      currentStreak,
+      longestStreak,
+      lastCompleted,
+      updatedAt: new Date()
+    };
+    
+    this.habitTracking.set(habitId, updatedTracking);
+    return updatedTracking;
   }
 }
 
@@ -462,15 +803,15 @@ export class DbStorage implements IStorage {
     return results[0];
   }
 
-  async getHalaqa(id: number): Promise<Halaqa | undefined> {
-    if (!db) return undefined;
+  async getHalaqa(id: number): Promise<Halaqa | null> {
+    if (!db) return null;
 
     const results = await db
       .select()
       .from(halaqas)
       .where(eq(halaqas.id, id))
       .limit(1);
-    return results[0];
+    return results[0] || null;
   }
 
   async getHalaqasByUserId(userId: string): Promise<Halaqa[]> {
@@ -488,8 +829,8 @@ export class DbStorage implements IStorage {
     return results;
   }
 
-  async updateHalaqa(id: number, data: UpdateHalaqa): Promise<Halaqa | undefined> {
-    if (!db) return undefined;
+  async updateHalaqa(id: number, data: UpdateHalaqa): Promise<Halaqa | null> {
+    if (!db) return null;
 
     const results = await db
       .update(halaqas)
@@ -502,8 +843,8 @@ export class DbStorage implements IStorage {
     return results[0];
   }
 
-  async updateHalaqaActionItems(id: number, actionItems: HalaqaActionItem[]): Promise<Halaqa | undefined> {
-    if (!db) return undefined;
+  async updateHalaqaActionItems(id: number, actionItems: HalaqaActionItem[]): Promise<Halaqa | null> {
+    if (!db) return null;
 
     const results = await db
       .update(halaqas)
@@ -568,17 +909,22 @@ export class DbStorage implements IStorage {
   // WirdhAI methods
   async getWirdsByUserId(userId: string): Promise<WirdEntry[]> {
     return Array.from(this.wirds.values())
-      .filter(wird => wurds.userId === userId && wurds.isArchived === false)
-      .sort((a, b) => b.date.getTime() - a.date.getTime());
+      .filter(wird => wird.userId === userId && wird.isArchived === false)
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   }
 
   async getWirdByDate(userId: string, date: string): Promise<WirdEntry | null> {
-    for (const wurds of this.wirds.values()) {
-      if (wird.userId === userId && wurds.date.toISOString().split('T')[0] === date && wurds.isArchived === false) {
-        return wurds;
+    try {
+      for (const wird of this.wirds.values()) {
+        if (wird.userId === userId && wird.date === date) {
+          return wird;
+        }
       }
+      return null;
+    } catch (error) {
+      console.error("Error getting wird by date:", error);
+      return null;
     }
-    return null;
   }
 
   async getWird(id: number): Promise<WirdEntry | null> {
@@ -603,7 +949,7 @@ export class DbStorage implements IStorage {
   }
 
   async updateWird(id: number, data: Partial<WirdEntry>): Promise<WirdEntry> {
-    const wurds = this.wirds.get(id);
+    const wird = this.wirds.get(id);
     if (!wird) throw new Error(`Wird with id ${id} not found`);
 
     const updatedWird: WirdEntry = {
@@ -616,23 +962,505 @@ export class DbStorage implements IStorage {
   }
 
   async updateWirdPractices(id: number, practices: WirdPractice[]): Promise<WirdEntry> {
-    const wurds = this.wirds.get(id);
-    if (!wird) throw new Error(`Wird with id ${id} not found`);
+    try {
+      const wird = this.wirds.get(id);
+      if (!wird) throw new Error(`Wird with id ${id} not found`);
 
-    const updatedWird: WirdEntry = {
-      ...wird,
-      practices,
-      updatedAt: new Date()
-    };
-    this.wirds.set(id, updatedWird);
-    return updatedWird;
+      const updatedWird: WirdEntry = {
+        ...wird,
+        practices,
+        updatedAt: new Date()
+      };
+      this.wirds.set(id, updatedWird);
+      return updatedWird;
+    } catch (error) {
+      console.error(`Error updating wird practices: ${error}`);
+      throw error;
+    }
   }
 
   async getWirdsByDateRange(userId: string, startDate: string, endDate: string): Promise<WirdEntry[]> {
     return Array.from(this.wirds.values())
-      .filter(wird => wurds.userId === userId && wurds.isArchived === false &&
-        wurds.date >= new Date(startDate) && wurds.date <= new Date(endDate))
-      .sort((a, b) => b.date.getTime() - a.date.getTime());
+      .filter(wird => wird.userId === userId && wird.isArchived === false &&
+        wird.date >= new Date(startDate) && wird.date <= new Date(endDate))
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  }
+
+  // Identity Framework methods
+  async getFrameworks(userId: string): Promise<IdentityFramework[]> {
+    try {
+      const { identity_frameworks } = await import("./db");
+      const { sql } = await import("drizzle-orm");
+      const { db } = await import("./db");
+      
+      const frameworks = await db.select({
+        id: identity_frameworks.id,
+        userId: identity_frameworks.user_id,
+        title: identity_frameworks.title,
+        createdAt: identity_frameworks.created_at,
+        updatedAt: identity_frameworks.updated_at,
+        completionPercentage: identity_frameworks.completion_percentage
+      })
+      .from(identity_frameworks)
+      .where(sql`${identity_frameworks.user_id} = ${userId}`)
+      .orderBy(identity_frameworks.updated_at);
+      
+      return frameworks.map(f => ({
+        id: f.id.toString(),
+        userId: f.userId.toString(),
+        title: f.title,
+        createdAt: f.createdAt,
+        updatedAt: f.updatedAt,
+        completionPercentage: f.completionPercentage
+      }));
+    } catch (error) {
+      console.error("Error fetching frameworks:", error);
+      return [];
+    }
+  }
+
+  async getFramework(userId: string, frameworkId: string): Promise<IdentityFramework | null> {
+    try {
+      const { identity_frameworks } = await import("./db");
+      const { sql } = await import("drizzle-orm");
+      const { db } = await import("./db");
+      
+      const [framework] = await db.select({
+        id: identity_frameworks.id,
+        userId: identity_frameworks.user_id,
+        title: identity_frameworks.title,
+        createdAt: identity_frameworks.created_at,
+        updatedAt: identity_frameworks.updated_at,
+        completionPercentage: identity_frameworks.completion_percentage
+      })
+      .from(identity_frameworks)
+      .where(sql`${identity_frameworks.id} = ${frameworkId} AND ${identity_frameworks.user_id} = ${userId}`);
+      
+      if (!framework) return null;
+      
+      return {
+        id: framework.id.toString(),
+        userId: framework.userId.toString(),
+        title: framework.title,
+        createdAt: framework.createdAt,
+        updatedAt: framework.updatedAt,
+        completionPercentage: framework.completionPercentage
+      };
+    } catch (error) {
+      console.error("Error fetching framework:", error);
+      return null;
+    }
+  }
+
+  async createFramework(userId: string, title: string): Promise<IdentityFramework> {
+    try {
+      const { identity_frameworks } = await import("./db");
+      const { db } = await import("./db");
+      
+      const [framework] = await db.insert(identity_frameworks)
+        .values({
+          user_id: userId,
+          title: title
+        })
+        .returning({
+          id: identity_frameworks.id,
+          userId: identity_frameworks.user_id,
+          title: identity_frameworks.title,
+          createdAt: identity_frameworks.created_at,
+          updatedAt: identity_frameworks.updated_at,
+          completionPercentage: identity_frameworks.completion_percentage
+        });
+      
+      return {
+        id: framework.id.toString(),
+        userId: framework.userId.toString(),
+        title: framework.title,
+        createdAt: framework.createdAt,
+        updatedAt: framework.updatedAt,
+        completionPercentage: framework.completionPercentage
+      };
+    } catch (error) {
+      console.error("Error creating framework:", error);
+      throw error;
+    }
+  }
+
+  async updateFramework(userId: string, frameworkId: string, title: string): Promise<IdentityFramework> {
+    try {
+      const { identity_frameworks } = await import("./db");
+      const { sql } = await import("drizzle-orm");
+      const { db } = await import("./db");
+      
+      const [framework] = await db.update(identity_frameworks)
+        .set({
+          title,
+          updated_at: new Date()
+        })
+        .where(sql`${identity_frameworks.id} = ${frameworkId} AND ${identity_frameworks.user_id} = ${userId}`)
+        .returning({
+          id: identity_frameworks.id,
+          userId: identity_frameworks.user_id,
+          title: identity_frameworks.title,
+          createdAt: identity_frameworks.created_at,
+          updatedAt: identity_frameworks.updated_at,
+          completionPercentage: identity_frameworks.completion_percentage
+        });
+      
+      if (!framework) {
+        throw new Error("Framework not found or not authorized");
+      }
+      
+      return {
+        id: framework.id.toString(),
+        userId: framework.userId.toString(),
+        title: framework.title,
+        createdAt: framework.createdAt,
+        updatedAt: framework.updatedAt,
+        completionPercentage: framework.completionPercentage
+      };
+    } catch (error) {
+      console.error("Error updating framework:", error);
+      throw error;
+    }
+  }
+
+  async updateFrameworkCompletion(userId: string, frameworkId: string, completionPercentage: number): Promise<IdentityFramework> {
+    try {
+      const { identity_frameworks } = await import("./db");
+      const { sql } = await import("drizzle-orm");
+      const { db } = await import("./db");
+      
+      const [framework] = await db.update(identity_frameworks)
+        .set({
+          completion_percentage: completionPercentage,
+          updated_at: new Date()
+        })
+        .where(sql`${identity_frameworks.id} = ${frameworkId} AND ${identity_frameworks.user_id} = ${userId}`)
+        .returning({
+          id: identity_frameworks.id,
+          userId: identity_frameworks.user_id,
+          title: identity_frameworks.title,
+          createdAt: identity_frameworks.created_at,
+          updatedAt: identity_frameworks.updated_at,
+          completionPercentage: identity_frameworks.completion_percentage
+        });
+      
+      if (!framework) {
+        throw new Error("Framework not found or not authorized");
+      }
+      
+      return {
+        id: framework.id.toString(),
+        userId: framework.userId.toString(),
+        title: framework.title,
+        createdAt: framework.createdAt,
+        updatedAt: framework.updatedAt,
+        completionPercentage: framework.completionPercentage
+      };
+    } catch (error) {
+      console.error("Error updating framework completion:", error);
+      throw error;
+    }
+  }
+
+  async deleteFramework(userId: string, frameworkId: string): Promise<boolean> {
+    try {
+      const { identity_frameworks } = await import("./db");
+      const { sql } = await import("drizzle-orm");
+      const { db } = await import("./db");
+      
+      const result = await db.delete(identity_frameworks)
+        .where(sql`${identity_frameworks.id} = ${frameworkId} AND ${identity_frameworks.user_id} = ${userId}`);
+      
+      return true;
+    } catch (error) {
+      console.error("Error deleting framework:", error);
+      return false;
+    }
+  }
+
+  // Framework Component methods
+  async getComponents(frameworkId: string): Promise<FrameworkComponent[]> {
+    try {
+      const { framework_components } = await import("./db");
+      const { sql } = await import("drizzle-orm");
+      const { db } = await import("./db");
+      
+      const components = await db.select({
+        id: framework_components.id,
+        frameworkId: framework_components.framework_id,
+        componentType: framework_components.component_type,
+        content: framework_components.content,
+        createdAt: framework_components.created_at,
+        updatedAt: framework_components.updated_at
+      })
+      .from(framework_components)
+      .where(sql`${framework_components.framework_id} = ${frameworkId}`)
+      .orderBy(framework_components.component_type);
+      
+      return components.map(c => ({
+        id: c.id.toString(),
+        frameworkId: c.frameworkId.toString(),
+        componentType: c.componentType,
+        content: c.content,
+        createdAt: c.createdAt,
+        updatedAt: c.updatedAt
+      }));
+    } catch (error) {
+      console.error("Error fetching components:", error);
+      return [];
+    }
+  }
+
+  async getComponent(frameworkId: string, componentType: string): Promise<FrameworkComponent | null> {
+    try {
+      const { framework_components } = await import("./db");
+      const { sql } = await import("drizzle-orm");
+      const { db } = await import("./db");
+      
+      const [component] = await db.select({
+        id: framework_components.id,
+        frameworkId: framework_components.framework_id,
+        componentType: framework_components.component_type,
+        content: framework_components.content,
+        createdAt: framework_components.created_at,
+        updatedAt: framework_components.updated_at
+      })
+      .from(framework_components)
+      .where(sql`${framework_components.framework_id} = ${frameworkId} AND ${framework_components.component_type} = ${componentType}`);
+      
+      if (!component) return null;
+      
+      return {
+        id: component.id.toString(),
+        frameworkId: component.frameworkId.toString(),
+        componentType: component.componentType,
+        content: component.content,
+        createdAt: component.createdAt,
+        updatedAt: component.updatedAt
+      };
+    } catch (error) {
+      console.error("Error fetching component:", error);
+      return null;
+    }
+  }
+
+  async createComponent(frameworkId: string, componentType: string, content: any): Promise<FrameworkComponent> {
+    try {
+      const { framework_components } = await import("./db");
+      const { db } = await import("./db");
+      
+      const [component] = await db.insert(framework_components)
+        .values({
+          framework_id: frameworkId,
+          component_type: componentType,
+          content
+        })
+        .returning({
+          id: framework_components.id,
+          frameworkId: framework_components.framework_id,
+          componentType: framework_components.component_type,
+          content: framework_components.content,
+          createdAt: framework_components.created_at,
+          updatedAt: framework_components.updated_at
+        });
+      
+      return {
+        id: component.id.toString(),
+        frameworkId: component.frameworkId.toString(),
+        componentType: component.componentType,
+        content: component.content,
+        createdAt: component.createdAt,
+        updatedAt: component.updatedAt
+      };
+    } catch (error) {
+      console.error("Error creating component:", error);
+      throw error;
+    }
+  }
+
+  async updateComponent(frameworkId: string, componentType: string, content: any): Promise<FrameworkComponent> {
+    try {
+      const { framework_components } = await import("./db");
+      const { sql } = await import("drizzle-orm");
+      const { db } = await import("./db");
+      
+      // Check if component exists
+      const existingComponent = await this.getComponent(frameworkId, componentType);
+      
+      if (existingComponent) {
+        // Update existing component
+        const [component] = await db.update(framework_components)
+          .set({
+            content,
+            updated_at: new Date()
+          })
+          .where(sql`${framework_components.id} = ${existingComponent.id}`)
+          .returning({
+            id: framework_components.id,
+            frameworkId: framework_components.framework_id,
+            componentType: framework_components.component_type,
+            content: framework_components.content,
+            createdAt: framework_components.created_at,
+            updatedAt: framework_components.updated_at
+          });
+        
+        return {
+          id: component.id.toString(),
+          frameworkId: component.frameworkId.toString(),
+          componentType: component.componentType,
+          content: component.content,
+          createdAt: component.createdAt,
+          updatedAt: component.updatedAt
+        };
+      } else {
+        // Create new component
+        return this.createComponent(frameworkId, componentType, content);
+      }
+    } catch (error) {
+      console.error("Error updating component:", error);
+      throw error;
+    }
+  }
+
+  // Habit Tracking methods
+  async getHabitTracking(componentId: string): Promise<HabitTracking[]> {
+    try {
+      const { habit_tracking } = await import("./db");
+      const { sql } = await import("drizzle-orm");
+      const { db } = await import("./db");
+      
+      const tracking = await db.select({
+        id: habit_tracking.id,
+        componentId: habit_tracking.component_id,
+        habitIndex: habit_tracking.habit_index,
+        currentStreak: habit_tracking.current_streak,
+        longestStreak: habit_tracking.longest_streak,
+        lastCompleted: habit_tracking.last_completed,
+        createdAt: habit_tracking.created_at,
+        updatedAt: habit_tracking.updated_at
+      })
+      .from(habit_tracking)
+      .where(sql`${habit_tracking.component_id} = ${componentId}`)
+      .orderBy(habit_tracking.habit_index);
+      
+      return tracking.map(t => ({
+        id: t.id.toString(),
+        componentId: t.componentId.toString(),
+        habitIndex: t.habitIndex,
+        currentStreak: t.currentStreak,
+        longestStreak: t.longestStreak,
+        lastCompleted: t.lastCompleted,
+        createdAt: t.createdAt,
+        updatedAt: t.updatedAt
+      }));
+    } catch (error) {
+      console.error("Error fetching habit tracking:", error);
+      return [];
+    }
+  }
+
+  async deleteHabitTracking(componentId: string): Promise<boolean> {
+    try {
+      const { habit_tracking } = await import("./db");
+      const { sql } = await import("drizzle-orm");
+      const { db } = await import("./db");
+      
+      await db.delete(habit_tracking)
+        .where(sql`${habit_tracking.component_id} = ${componentId}`);
+      
+      return true;
+    } catch (error) {
+      console.error("Error deleting habit tracking:", error);
+      return false;
+    }
+  }
+
+  async createHabitTracking(habitTrackingValues: Partial<HabitTracking>[]): Promise<HabitTracking[]> {
+    try {
+      const { habit_tracking } = await import("./db");
+      const { db } = await import("./db");
+      
+      const values = habitTrackingValues.map(v => ({
+        component_id: v.componentId,
+        habit_index: v.habitIndex,
+        current_streak: v.currentStreak || 0,
+        longest_streak: v.longestStreak || 0,
+        last_completed: v.lastCompleted || null
+      }));
+      
+      const tracking = await db.insert(habit_tracking)
+        .values(values)
+        .returning({
+          id: habit_tracking.id,
+          componentId: habit_tracking.component_id,
+          habitIndex: habit_tracking.habit_index,
+          currentStreak: habit_tracking.current_streak,
+          longestStreak: habit_tracking.longest_streak,
+          lastCompleted: habit_tracking.last_completed,
+          createdAt: habit_tracking.created_at,
+          updatedAt: habit_tracking.updated_at
+        });
+      
+      return tracking.map(t => ({
+        id: t.id.toString(),
+        componentId: t.componentId.toString(),
+        habitIndex: t.habitIndex,
+        currentStreak: t.currentStreak,
+        longestStreak: t.longestStreak,
+        lastCompleted: t.lastCompleted,
+        createdAt: t.createdAt,
+        updatedAt: t.updatedAt
+      }));
+    } catch (error) {
+      console.error("Error creating habit tracking:", error);
+      throw error;
+    }
+  }
+
+  async updateHabitTracking(habitId: string, currentStreak: number, longestStreak: number, lastCompleted: Date): Promise<HabitTracking> {
+    try {
+      const { habit_tracking } = await import("./db");
+      const { sql } = await import("drizzle-orm");
+      const { db } = await import("./db");
+      
+      const [tracking] = await db.update(habit_tracking)
+        .set({
+          current_streak: currentStreak,
+          longest_streak: longestStreak,
+          last_completed: lastCompleted,
+          updated_at: new Date()
+        })
+        .where(sql`${habit_tracking.id} = ${habitId}`)
+        .returning({
+          id: habit_tracking.id,
+          componentId: habit_tracking.component_id,
+          habitIndex: habit_tracking.habit_index,
+          currentStreak: habit_tracking.current_streak,
+          longestStreak: habit_tracking.longest_streak,
+          lastCompleted: habit_tracking.last_completed,
+          createdAt: habit_tracking.created_at,
+          updatedAt: habit_tracking.updated_at
+        });
+      
+      if (!tracking) {
+        throw new Error("Habit tracking not found");
+      }
+      
+      return {
+        id: tracking.id.toString(),
+        componentId: tracking.componentId.toString(),
+        habitIndex: tracking.habitIndex,
+        currentStreak: tracking.currentStreak,
+        longestStreak: tracking.longestStreak,
+        lastCompleted: tracking.lastCompleted,
+        createdAt: tracking.createdAt,
+        updatedAt: tracking.updatedAt
+      };
+    } catch (error) {
+      console.error("Error updating habit tracking:", error);
+      throw error;
+    }
   }
 }
 
@@ -705,13 +1533,33 @@ export async function getHalaqa(id: number): Promise<Halaqa | null> {
     if (!db) {
       console.log("Database not available, using in-memory storage for getHalaqa");
       const storage = createStorage();
-      return (await storage.getHalaqa(id)) || null;
+      // Convert undefined to null for consistency
+      const halaqa = await storage.getHalaqa(id);
+      return halaqa ?? null;
     }
     
-    const [result] = await db.select().from(halaqas).where(eq(halaqas.id, id));
-    return result || null;
+    try {
+      // Use a try/catch here to handle case where the query might fail
+      const [result] = await db.select().from(halaqas).where(eq(halaqas.id, id));
+      
+      if (!result) {
+        console.log(`No halaqa found with ID: ${id}`);
+        return null;
+      }
+      
+      console.log(`Successfully retrieved halaqa ${id} from database`);
+      return result;
+    } catch (dbError) {
+      console.error(`Database error when fetching halaqa ${id}:`, dbError);
+      
+      // If there's a database error, try to fall back to in-memory storage
+      console.log(`Falling back to in-memory storage for halaqa ${id}`);
+      const memStorage = createStorage();
+      const halaqa = await memStorage.getHalaqa(id);
+      return halaqa ?? null;
+    }
   } catch (error) {
-    console.error("Error in getHalaqa:", error);
+    console.error(`Critical error in getHalaqa for ID ${id}:`, error);
     throw error;
   }
 }
@@ -788,6 +1636,22 @@ export async function updateHalaqaActionItems(
   actionItems: HalaqaActionItem[]
 ): Promise<Halaqa> {
   try {
+    // If database is not available, use in-memory storage
+    if (!db) {
+      console.log("Database not available, using in-memory storage for updateHalaqaActionItems");
+      const storage = createStorage();
+      return await storage.updateHalaqaActionItems(id, actionItems);
+    }
+    
+    // Check if we have a valid database connection before attempting to use it
+    if (typeof db.update !== 'function') {
+      console.error("Database connection invalid or not properly initialized for updateHalaqaActionItems");
+      // Fall back to in-memory storage
+      const storage = createStorage();
+      return await storage.updateHalaqaActionItems(id, actionItems);
+    }
+    
+    // Otherwise use database
     const [result] = await db
       .update(halaqas)
       .set({
@@ -796,6 +1660,11 @@ export async function updateHalaqaActionItems(
       })
       .where(eq(halaqas.id, id))
       .returning();
+      
+    if (!result) {
+      throw new Error(`Halaqa with ID ${id} not found during update`);
+    }
+    
     return result;
   } catch (error) {
     console.error(`Error in updateHalaqaActionItems for ID ${id}:`, error);
@@ -814,84 +1683,31 @@ export async function getWirdByUserAndDate(
   date: string
 ): Promise<WirdEntry | null> {
   try {
-    // Convert date to postgres format if needed
-    const dateObj = new Date(date);
+    console.log(`Fetching wird for user ${userId} on date ${date}`);
     
-    // Query the database for a wird entry on this date
-    const result = await db.query.wirds.findFirst({
-      where: eq(wirds.userId, userId) && eq(wirds.date, dateObj)
-    });
+    // Create a storage instance
+    const storage = createStorage();
     
-    return result as WirdEntry | null;
+    // Try using the storage interface directly
+    try {
+      return await storage.getWirdByDate(userId, date);
+    } catch (err) {
+      console.log("Error using storage interface, falling back to in-memory search:", err);
+      
+      // Fallback to in-memory search
+      const memStorage = new MemStorage();
+      const entries = Array.from(memStorage.wirds.values());
+      
+      for (const entry of entries) {
+        if (entry.userId === userId && entry.date === date) {
+          return entry;
+        }
+      }
+      
+      return null;
+    }
   } catch (error) {
     console.error(`Error fetching wird for user ${userId} on date ${date}:`, error);
-    return null;
-  }
-}
-
-/**
- * Add a wird suggestion to a user's wird plan
- * @param userId User's ID
- * @param wirdSuggestion The wird suggestion to add
- * @param date Optional date to add the wird for (defaults to today)
- * @returns The updated wird entry
- */
-export async function addWirdSuggestionToUserWirdPlan(
-  userId: string,
-  wirdSuggestion: WirdSuggestion,
-  date?: Date
-): Promise<WirdEntry | null> {
-  try {
-    const targetDate = date || new Date();
-    const dateString = targetDate.toISOString().split('T')[0];
-    
-    // Look for an existing wird entry for the user on the target date
-    let existingWird = await getWirdByUserAndDate(userId, dateString);
-    
-    // Convert the suggestion to a practice
-    const newPractice: WirdPractice = {
-      id: crypto.randomUUID(),
-      name: wirdSuggestion.title,
-      category: wirdSuggestion.type,
-      // Default to 1 for target unless we can parse a number from the duration
-      target: 1,
-      completed: 0,
-      unit: "times",
-      isCompleted: false,
-    };
-    
-    // Try to extract a numerical target from the duration or frequency
-    const durationMatch = wirdSuggestion.duration.match(/\d+/);
-    if (durationMatch) {
-      newPractice.target = parseInt(durationMatch[0], 10);
-      newPractice.unit = "minutes";
-    }
-    
-    if (existingWird) {
-      // Add to existing wird
-      const updatedPractices = [...existingWird.practices, newPractice];
-      
-      // Update the wird entry
-      const updatedWird = await updateWird(existingWird.id, {
-        practices: updatedPractices
-      });
-      
-      console.log(`Added wird suggestion to existing wird plan for user ${userId} on ${dateString}`);
-      return updatedWird;
-    } else {
-      // Create new wird entry
-      const newWird = await createWird({
-        userId,
-        date: targetDate,
-        practices: [newPractice],
-        notes: `Added from halaqa reflection: ${wirdSuggestion.description}`
-      });
-      
-      console.log(`Created new wird plan with suggestion for user ${userId} on ${dateString}`);
-      return newWird;
-    }
-  } catch (error) {
-    console.error(`Error adding wird suggestion to user plan:`, error);
     return null;
   }
 }
@@ -958,4 +1774,75 @@ export async function getHalaqaWirdSuggestions(
     console.error(`Error retrieving wird suggestions for halaqa ${halaqaId}:`, error);
     return null;
   }
+}
+
+// Export Identity Framework functions
+export async function getFrameworks(userId: string): Promise<IdentityFramework[]> {
+  const storage = createStorage();
+  return storage.getFrameworks(userId);
+}
+
+export async function getFramework(userId: string, frameworkId: string): Promise<IdentityFramework | null> {
+  const storage = createStorage();
+  return storage.getFramework(userId, frameworkId);
+}
+
+export async function createFramework(userId: string, title: string): Promise<IdentityFramework> {
+  const storage = createStorage();
+  return storage.createFramework(userId, title);
+}
+
+export async function updateFramework(userId: string, frameworkId: string, title: string): Promise<IdentityFramework> {
+  const storage = createStorage();
+  return storage.updateFramework(userId, frameworkId, title);
+}
+
+export async function deleteFramework(userId: string, frameworkId: string): Promise<boolean> {
+  const storage = createStorage();
+  return storage.deleteFramework(userId, frameworkId);
+}
+
+export async function getComponents(frameworkId: string): Promise<FrameworkComponent[]> {
+  const storage = createStorage();
+  return storage.getComponents(frameworkId);
+}
+
+export async function getComponent(frameworkId: string, componentType: string): Promise<FrameworkComponent | null> {
+  const storage = createStorage();
+  return storage.getComponent(frameworkId, componentType);
+}
+
+export async function createComponent(frameworkId: string, componentType: string, content: any): Promise<FrameworkComponent> {
+  const storage = createStorage();
+  return storage.createComponent(frameworkId, componentType, content);
+}
+
+export async function updateComponent(frameworkId: string, componentType: string, content: any): Promise<FrameworkComponent> {
+  const storage = createStorage();
+  return storage.updateComponent(frameworkId, componentType, content);
+}
+
+export async function updateFrameworkCompletion(userId: string, frameworkId: string, completionPercentage: number): Promise<IdentityFramework> {
+  const storage = createStorage();
+  return storage.updateFrameworkCompletion(userId, frameworkId, completionPercentage);
+}
+
+export async function getHabitTracking(componentId: string): Promise<HabitTracking[]> {
+  const storage = createStorage();
+  return storage.getHabitTracking(componentId);
+}
+
+export async function deleteHabitTracking(componentId: string): Promise<boolean> {
+  const storage = createStorage();
+  return storage.deleteHabitTracking(componentId);
+}
+
+export async function createHabitTracking(habitTrackingValues: Partial<HabitTracking>[]): Promise<HabitTracking[]> {
+  const storage = createStorage();
+  return storage.createHabitTracking(habitTrackingValues);
+}
+
+export async function updateHabitTracking(habitId: string, currentStreak: number, longestStreak: number, lastCompleted: Date): Promise<HabitTracking> {
+  const storage = createStorage();
+  return storage.updateHabitTracking(habitId, currentStreak, longestStreak, lastCompleted);
 }

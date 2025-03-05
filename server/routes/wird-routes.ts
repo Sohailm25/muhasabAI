@@ -1,13 +1,25 @@
 import express from "express";
-import * as storage from "../storage";
-import { WirdEntry, WirdPractice, InsertWird } from "@shared/schema";
+import * as storageModule from "../storage";
+import { WirdEntry, WirdPractice, InsertWird, WirdSuggestion } from "@shared/schema";
 import { generateWirdRecommendations } from "../lib/anthropic";
 import { z } from "zod";
 import { v4 } from "uuid";
 import { createLogger } from "../lib/logger";
+import { addErrorHandler, createExpressEndpoints } from "trpc-openapi";
+import { v4 as uuidv4 } from "uuid";
+import { AddWirdSchema, WirdPracticeSchema, UpdatePracticesSchema } from "../../shared/schema";
 
 const router = express.Router();
 const logger = createLogger("wirdRoutes");
+
+// Initialize storage
+let storage: any;
+try {
+  storage = storageModule.createStorage();
+  console.log('[WIRD ROUTER] Storage initialized successfully');
+} catch (error) {
+  console.error('[WIRD ROUTER] Failed to initialize storage:', error);
+}
 
 // GET /api/wirds/user/:userId - Get all wird entries for a user
 router.get("/user/:userId", async (req, res) => {
@@ -16,6 +28,12 @@ router.get("/user/:userId", async (req, res) => {
     
     if (!userId) {
       return res.status(400).json({ error: "User ID is required" });
+    }
+    
+    // Initialize storage if not already done
+    if (!storage) {
+      console.log('[WIRD ROUTER] Initializing storage for getWirdsByUserId');
+      storage = storageModule.createStorage();
     }
     
     const wirds = await storage.getWirdsByUserId(userId);
@@ -83,6 +101,8 @@ router.get("/range/:userId/:startDate/:endDate", async (req, res) => {
   try {
     const { userId, startDate, endDate } = req.params;
     
+    console.log('[WIRD ROUTER] Getting wird entries for date range:', { userId, startDate, endDate });
+    
     if (!userId || !startDate || !endDate) {
       return res.status(400).json({ error: "User ID, start date, and end date are required" });
     }
@@ -93,11 +113,39 @@ router.get("/range/:userId/:startDate/:endDate", async (req, res) => {
       return res.status(400).json({ error: "Invalid date format. Use YYYY-MM-DD" });
     }
     
-    const wirds = await storage.getWirdsByDateRange(userId, startDate, endDate);
-    res.json(wirds);
+    // Initialize storage if not already done
+    if (!storage) {
+      console.log('[WIRD ROUTER] Initializing storage for getWirdsByDateRange');
+      storage = storageModule.createStorage();
+    }
+    
+    try {
+      // CRITICAL FIX: Use fallback implementation based on getWirdsByUserId
+      console.log('[WIRD ROUTER] Using fallback implementation - filtering all wirds by date');
+      
+      // Get all wirds for the user
+      const allWirds = await storage.getWirdsByUserId(userId);
+      console.log(`[WIRD ROUTER] Found ${allWirds.length} total wird entries for user`);
+      
+      // Convert dates for comparison
+      const startDateObj = new Date(startDate);
+      const endDateObj = new Date(endDate);
+      
+      // Filter wirds by date range
+      const filteredWirds = allWirds.filter(wird => {
+        const wirdDate = new Date(wird.date);
+        return wirdDate >= startDateObj && wirdDate <= endDateObj;
+      });
+      
+      console.log(`[WIRD ROUTER] Found ${filteredWirds.length} wird entries in date range`);
+      return res.json(filteredWirds);
+    } catch (error) {
+      console.error('[WIRD ROUTER] Error when filtering wirds by date range:', error);
+      return res.status(500).json({ error: "Failed to fetch wird entries" });
+    }
   } catch (error) {
     console.error("Error fetching wird entries by date range:", error);
-    res.status(500).json({ error: "Failed to fetch wird entries" });
+    return res.status(500).json({ error: "Failed to fetch wird entries" });
   }
 });
 
@@ -288,43 +336,126 @@ router.post("/recommendations", async (req, res) => {
   }
 });
 
-// Schema for adding wird suggestions
+// Add suggestion schema
 const AddWirdSuggestionSchema = z.object({
   userId: z.string(),
   wirdSuggestion: z.object({
     id: z.string(),
-    title: z.string(),
-    description: z.string(),
-    type: z.string(),
-    duration: z.string(),
-    frequency: z.string()
+    title: z.string().optional(),
+    name: z.string().optional(),
+    type: z.string().optional(),
+    category: z.string().optional(),
+    description: z.string().optional(),
+    frequency: z.string().optional(),
+    duration: z.string().optional(),
+    benefit: z.string().optional(),
+    target: z.number().optional(),
+    unit: z.string().optional(),
   }),
-  date: z.string().optional()
+  date: z.string().optional(),
 });
 
-// POST /api/wird/add-suggestion - Add a wird suggestion to a user's wird plan
+// POST /api/wirds/add-suggestion - Add a wird suggestion to user's wird plan
 router.post("/add-suggestion", async (req, res) => {
   try {
+    console.log("Received add-suggestion request:", JSON.stringify(req.body, null, 2));
+    
+    // Validate the request body
     const { userId, wirdSuggestion, date } = AddWirdSuggestionSchema.parse(req.body);
     
-    // Convert date string to Date object if provided
-    const targetDate = date ? new Date(date) : undefined;
-    
-    // Add the wird suggestion to the user's wird plan
-    const result = await storage.addWirdSuggestionToUserWirdPlan(
-      userId,
-      wirdSuggestion,
-      targetDate
-    );
-    
-    if (!result) {
-      return res.status(500).json({ success: false, error: "Failed to add wird suggestion to plan" });
+    if (!userId) {
+      return res.status(400).json({ 
+        success: false, 
+        error: "User ID is required" 
+      });
     }
     
-    return res.json({ success: true, wird: result });
+    if (!wirdSuggestion) {
+      return res.status(400).json({ 
+        success: false, 
+        error: "Wird suggestion is required" 
+      });
+    }
+    
+    try {
+      // Override the date if needed (this fixes any date formatting issues)
+      const targetDate = date ? new Date(date) : new Date();
+      
+      console.log("Adding wird suggestion to plan:", { 
+        userId,
+        wirdSuggestion: JSON.stringify(wirdSuggestion),
+        date: targetDate.toISOString()
+      });
+      
+      // Make simple wird practice from suggestion
+      const simplePractice = {
+        name: wirdSuggestion.title || wirdSuggestion.name || "Spiritual Practice",
+        category: wirdSuggestion.type || wirdSuggestion.category || "General",
+        id: wirdSuggestion.id || v4(), // Use existing ID or create new one
+        target: wirdSuggestion.target || 1,
+        completed: 0,
+        unit: wirdSuggestion.unit || "times",
+        isCompleted: false
+      };
+      
+      // Format the date string for lookup
+      const dateStr = targetDate.toISOString().split('T')[0];
+      
+      // Find existing wird for user on this date
+      const existingWirds = await storage.getWirdsByUserId(userId);
+      const wirdForDate = existingWirds.find(wird => {
+        const wirdDate = typeof wird.date === 'string' 
+          ? wird.date.split('T')[0] 
+          : wird.date.toISOString().split('T')[0];
+        return wirdDate === dateStr;
+      });
+      
+      let result;
+      
+      if (wirdForDate) {
+        // Add practice to existing wird
+        const updatedPractices = [...wirdForDate.practices, simplePractice];
+        
+        // Update the wird with the new practice
+        result = await storage.updateWirdPractices(
+          wirdForDate.id,
+          updatedPractices
+        );
+        
+        console.log(`Added practice to existing wird ${wirdForDate.id}`);
+      } else {
+        // Create a new wird with this practice
+        result = await storage.createWird({
+          userId,
+          date: targetDate,
+          practices: [simplePractice],
+          notes: ""
+        });
+        
+        console.log(`Created new wird with ID ${result.id}`);
+      }
+      
+      return res.json({ 
+        success: true, 
+        result 
+      });
+    } catch (innerError) {
+      console.error("Inner error in add-suggestion:", innerError);
+      throw new Error(`Failed to process wird suggestion: ${innerError.message}`);
+    }
   } catch (error) {
-    logger.error("Error adding wird suggestion to plan:", error);
-    return res.status(400).json({ success: false, error: "Invalid request" });
+    console.error("Error adding wird suggestion:", error);
+    
+    let errorMessage = "Failed to add wird suggestion";
+    if (error instanceof Error) {
+      errorMessage = error.message;
+    }
+    
+    res.status(500).json({ 
+      success: false, 
+      error: errorMessage,
+      stack: process.env.NODE_ENV === 'development' ? (error as Error).stack : undefined
+    });
   }
 });
 

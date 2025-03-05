@@ -45,6 +45,14 @@ export function useProfile() {
   
   // Function to load both profiles (public and private)
   async function loadProfiles() {
+    // Don't attempt to load profiles if user isn't authenticated
+    if (!isAuthenticated) {
+      console.log('Not authenticated, skipping profile load');
+      setIsLoading(false);
+      hasAttemptedLoad.current = true;
+      return;
+    }
+    
     // If already initializing elsewhere in the app, wait for that to complete
     if (initializationLock.isInitializing && initializationLock.promise) {
       try {
@@ -74,23 +82,33 @@ export function useProfile() {
       setError(null);
       
       // Fetch public profile from API
-      const profile = await api.getUserProfile();
-      setPublicProfile(profile);
-      
-      // If we have a user ID, load private profile
-      if (profile?.userId) {
-        await loadPrivateProfile(profile.userId);
+      try {
+        const profile = await api.getUserProfile();
+        setPublicProfile(profile);
+        
+        // If we have a user ID, load private profile
+        if (profile?.userId) {
+          await loadPrivateProfile(profile.userId);
+        }
+        
+        // Resolve the initialization promise
+        resolvePromise!(profile);
+      } catch (err) {
+        console.error('Error loading public profile:', err);
+        // Check if this is an authentication error
+        const errorMessage = err instanceof Error ? err.message : String(err);
+        if (errorMessage.includes('Authentication') || errorMessage.includes('auth')) {
+          // Do not set error state for auth issues - this is expected for unauthenticated users
+          console.log('Authentication required for profile, user is likely not logged in');
+        } else {
+          // Set error for non-auth related issues
+          setError(err instanceof Error ? err : new Error('Failed to load profile'));
+        }
+        rejectPromise!(err);
       }
       
       // Mark this instance as having attempted to load
       hasAttemptedLoad.current = true;
-      
-      // Resolve the initialization promise
-      resolvePromise!(profile);
-    } catch (err) {
-      console.error('Error loading profiles:', err);
-      setError(err instanceof Error ? err : new Error('Failed to load profile'));
-      rejectPromise!(err);
     } finally {
       setIsLoading(false);
       initializationLock.isInitializing = false;

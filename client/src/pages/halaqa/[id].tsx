@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef, useLayoutEffect } from "react";
 import { useRoute, useLocation } from "wouter";
 import { Layout } from "@/components/Layout";
 import { Button } from "@/components/ui/button";
@@ -8,6 +8,7 @@ import { format } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { halaqaService } from "@/services/halaqaService";
+import { wirdService } from "@/services/wirdService";
 import { Halaqa, HalaqaActionItem, WirdSuggestion } from "@/types";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Pencil, BookOpen, Calendar, User, Tag, ArrowLeft, RotateCw, Check, Trash2, Plus, Star, Clock, Repeat } from "lucide-react";
@@ -44,6 +45,7 @@ import { Input } from "@/components/ui/input";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { Badge } from "@/components/ui/badge";
 
 export default function HalaqaDetailPage() {
   const [, params] = useRoute<{ id: string }>("/halaqa/:id");
@@ -57,11 +59,125 @@ export default function HalaqaDetailPage() {
   const [generatingActions, setGeneratingActions] = useState(false);
   const [analyzingHalaqa, setAnalyzingHalaqa] = useState(false);
   const [wirdSuggestions, setWirdSuggestions] = useState<WirdSuggestion[] | null>(null);
+  const [personalizedInsights, setPersonalizedInsights] = useState<{id: string; title: string; content: string;}[] | null>(null);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
-  const [showEditActionDialog, setShowEditActionDialog] = useState(false);
-  const [currentActionItem, setCurrentActionItem] = useState<HalaqaActionItem | null>(null);
   const [addingToWird, setAddingToWird] = useState<string | null>(null); // To track which suggestion is being added
+  const [addedWirds, setAddedWirds] = useState<string[]>([]); // Track IDs of suggestions added to wird
   const [editMode, setEditMode] = useState(false);
+  
+  // Set up refs for timeout and loading tracking
+  const isMounted = useRef(true);
+  const loadingTimeoutRef = useRef<number | null>(null);
+  const currentlyLoadingId = useRef<number | null>(null);
+  
+  // Add a ref to track if analysis has been attempted
+  const hasAttemptedAnalysis = useRef(false);
+  
+  // Reset attempted analysis flag when halaqa ID changes
+  useEffect(() => {
+    if (params?.id) {
+      hasAttemptedAnalysis.current = false;
+    }
+  }, [params?.id]);
+  
+  // Reset mounted state when component mounts (use layout effect to run BEFORE render)
+  useLayoutEffect(() => {
+    console.log('Component mounted, setting isMounted to true');
+    isMounted.current = true;
+    
+    // Clean up on unmount
+    return () => {
+      console.log('Component unmounting, setting isMounted to false');
+      isMounted.current = false;
+      // Clear any pending timeouts
+      if (loadingTimeoutRef.current) {
+        window.clearTimeout(loadingTimeoutRef.current);
+        loadingTimeoutRef.current = null;
+      }
+    };
+  }, []);
+  
+  // Attempt to load already added wirds from localStorage when component mounts
+  useEffect(() => {
+    try {
+      const savedAddedWirds = localStorage.getItem('addedWirds');
+      if (savedAddedWirds) {
+        setAddedWirds(JSON.parse(savedAddedWirds));
+      }
+    } catch (e) {
+      console.error('Error loading added wirds from localStorage:', e);
+    }
+  }, []);
+  
+  // Load halaqa when the route params change
+  useEffect(() => {
+    if (!params || !params.id) {
+      console.log("No params or ID found");
+      return;
+    }
+    
+    const halaqaId = parseInt(params.id, 10);
+    if (isNaN(halaqaId)) {
+      console.error(`Invalid halaqa ID: ${params.id}`);
+      setError("Invalid halaqa ID");
+      setLoading(false);
+      return;
+    }
+    
+    // Prevent refetching if we already have this halaqa loaded
+    if (halaqa && halaqa.id === halaqaId) {
+      console.log(`Halaqa ${halaqaId} already loaded, skipping fetch`);
+      return;
+    }
+    
+    // Prevent refetching if we're already loading this ID
+    if (loading && currentlyLoadingId.current === halaqaId) {
+      console.log(`Already loading halaqa ${halaqaId}, skipping useEffect fetch`);
+      return;
+    }
+    
+    console.log(`Route parameters detected, loading halaqa ID: ${halaqaId}`);
+    fetchHalaqa(halaqaId);
+    
+    // Use a cleanup function to handle navigation away
+    return () => {
+      // If we're navigating away, we can cancel ongoing fetches
+      if (currentlyLoadingId.current === halaqaId) {
+        console.log(`Navigating away from halaqa ${halaqaId}, cleaning up`);
+        if (loadingTimeoutRef.current) {
+          window.clearTimeout(loadingTimeoutRef.current);
+          loadingTimeoutRef.current = null;
+        }
+      }
+    };
+  }, [params, halaqa?.id]); // Only run when params or halaqa.id changes
+  
+  // Auto-analyze halaqa to generate Wird suggestions when it loads
+  useEffect(() => {
+    if (halaqa && !analyzingHalaqa && user?.id && !hasAttemptedAnalysis.current) {
+      // Check if we need to analyze based on missing wird suggestions
+      const needsAnalysis = !halaqa.wirdSuggestions || halaqa.wirdSuggestions.length === 0;
+      
+      if (needsAnalysis) {
+        console.log("Auto-analyzing halaqa to generate insights and wird suggestions");
+        hasAttemptedAnalysis.current = true; // Mark as attempted regardless of outcome
+        handleAnalyzeHalaqa();
+      } else {
+        // If we already have wird suggestions, just update the state
+        console.log("Halaqa already has wird suggestions, updating state");
+        if (halaqa.wirdSuggestions) {
+          setWirdSuggestions(halaqa.wirdSuggestions);
+          
+          // If we don't have personalized insights yet, initialize with fallback insights
+          if (!personalizedInsights || personalizedInsights.length === 0) {
+            setPersonalizedInsights(getFallbackInsights());
+          }
+          
+          hasAttemptedAnalysis.current = true;
+        }
+      }
+    }
+  }, [halaqa?.id, user?.id]); // Include user?.id to prevent analysis before user is loaded
   
   // Action item schema for the edit form
   const actionItemSchema = z.object({
@@ -100,14 +216,15 @@ export default function HalaqaDetailPage() {
     }
   });
   
+  // Sync wird suggestions from halaqa whenever halaqa changes
   useEffect(() => {
-    if (params && params.id) {
-      const halaqaId = parseInt(params.id, 10); // Parse with radix to ensure proper conversion
-      if (!isNaN(halaqaId)) {
-        fetchHalaqa(halaqaId);
+    if (halaqa && halaqa.wirdSuggestions && halaqa.wirdSuggestions.length > 0) {
+      // Only update if different (to avoid render loops)
+      if (JSON.stringify(wirdSuggestions) !== JSON.stringify(halaqa.wirdSuggestions)) {
+        setWirdSuggestions(halaqa.wirdSuggestions);
       }
     }
-  }, [params]);
+  }, [halaqa]);
   
   // Initialize edit form when halaqa data is loaded or edit mode is enabled
   useEffect(() => {
@@ -123,25 +240,61 @@ export default function HalaqaDetailPage() {
     }
   }, [halaqa, editMode]);
   
+  // Fetch halaqa data
   const fetchHalaqa = async (id: number) => {
+    // Don't start a new fetch if we're already fetching this ID
+    if (loading && currentlyLoadingId.current === id) {
+      console.log(`Already loading halaqa ${id}, skipping fetchHalaqa call`);
+      return;
+    }
+    
+    // Clear any existing timeout
+    if (loadingTimeoutRef.current) {
+      window.clearTimeout(loadingTimeoutRef.current);
+      loadingTimeoutRef.current = null;
+    }
+    
+    console.log(`Fetching halaqa ${id}...`);
     setLoading(true);
+    setError(null);
+    currentlyLoadingId.current = id;
+    
+    // Set a safety timeout to ensure loading state doesn't get stuck
+    loadingTimeoutRef.current = window.setTimeout(() => {
+      console.log(`Safety timeout triggered for halaqa ${id}, resetting loading state`);
+      setLoading(false);
+      currentlyLoadingId.current = null;
+    }, 10000); // 10 second timeout
+    
     try {
+      console.log(`Making API call to fetch halaqa ${id}`);
       const fetchedHalaqa = await halaqaService.getHalaqa(id);
+      console.log(`Successfully fetched halaqa ${id}:`, fetchedHalaqa);
       
+      // Always attempt to update the state
+      console.log(`Updating halaqa state for ID ${id}`);
       setHalaqa(fetchedHalaqa);
       
-      // Auto-trigger analysis if no wird suggestions exist yet
-      if (!fetchedHalaqa.wirdSuggestions || fetchedHalaqa.wirdSuggestions.length === 0) {
-        handleAnalyzeHalaqa();
-      } else {
+      // Set wird suggestions if they exist
+      if (fetchedHalaqa.wirdSuggestions && fetchedHalaqa.wirdSuggestions.length > 0) {
+        console.log(`Setting wird suggestions for halaqa ${id}:`, fetchedHalaqa.wirdSuggestions);
         setWirdSuggestions(fetchedHalaqa.wirdSuggestions);
       }
       
     } catch (error) {
       console.error(`Error fetching halaqa ${id}:`, error);
       setError("Failed to load halaqa. Please try again.");
+      setHalaqa(null);
     } finally {
+      // Clear the timeout
+      if (loadingTimeoutRef.current) {
+        window.clearTimeout(loadingTimeoutRef.current);
+        loadingTimeoutRef.current = null;
+      }
+      
+      console.log(`Finished loading attempt for halaqa ${id}, setting loading state to false`);
       setLoading(false);
+      currentlyLoadingId.current = null;
     }
   };
   
@@ -171,29 +324,133 @@ export default function HalaqaDetailPage() {
   
   // Analyze halaqa to generate Wird suggestions
   const handleAnalyzeHalaqa = async () => {
-    if (!halaqa || !user?.id) return;
+    // Multiple safeguards against infinite loops and unnecessary API calls
+    if (analyzingHalaqa || !halaqa || !user?.id) return;
     
+    // Make sure we mark analysis as attempted
+    hasAttemptedAnalysis.current = true;
+    
+    // Don't analyze if we already have suggestions
+    if (halaqa.wirdSuggestions && halaqa.wirdSuggestions.length > 0) {
+      // Just update our state to match what's in the halaqa object
+      setWirdSuggestions(halaqa.wirdSuggestions);
+      
+      // Only show notification to user when triggered manually (not during auto-analysis)
+      // We can determine this by checking if we came from the main auto-analysis effect
+      // which sets hasAttemptedAnalysis.current
+      if (!hasAttemptedAnalysis.current) {
+        toast({
+          title: "Already analyzed",
+          description: "This halaqa has already been analyzed and suggestions generated.",
+        });
+      }
+      hasAttemptedAnalysis.current = true;
+      return;
+    }
+    
+    // Flag to prevent multiple simultaneous calls
     setAnalyzingHalaqa(true);
+    let retryCount = 0;
+    const MAX_RETRIES = 2;
+    
     try {
       const halaqaId = typeof halaqa.id === 'string' ? parseInt(halaqa.id) : halaqa.id;
-      const result = await halaqaService.analyzeHalaqaEntry(halaqaId);
-      setWirdSuggestions(result.wirdSuggestions);
       
-      // Update the halaqa object with the wird suggestions
-      setHalaqa({
-        ...halaqa,
-        wirdSuggestions: result.wirdSuggestions
-      });
+      // Track if this is a fresh analysis or from cache
+      let isFromCache = false;
       
-      toast({
-        title: "Success!",
-        description: "Wird suggestions have been generated for this halaqa.",
-      });
+      // Add a timeout to prevent hanging if the server doesn't respond
+      const fetchWithTimeout = async (id: number) => {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 30000); // 30-second timeout
+        
+        try {
+          // Check if this result will be from cache
+          if (halaqaService.hasAnalysisCached(id)) {
+            isFromCache = true;
+          }
+          
+          const result = await halaqaService.analyzeHalaqaEntry(id, { signal: controller.signal });
+          clearTimeout(timeoutId);
+          return result;
+        } catch (error) {
+          clearTimeout(timeoutId);
+          throw error;
+        }
+      };
+      
+      const result = await fetchWithTimeout(halaqaId);
+      
+      // If the server responded successfully, update the UI
+      if (result) {
+        // Store wird suggestions if available
+        if (result.wirdSuggestions && result.wirdSuggestions.length > 0) {
+          setWirdSuggestions(result.wirdSuggestions);
+          
+          // Update the halaqa object with the wird suggestions
+          setHalaqa(prevHalaqa => {
+            if (!prevHalaqa) return null;
+            return {
+              ...prevHalaqa,
+              wirdSuggestions: result.wirdSuggestions
+            };
+          });
+        }
+        
+        // Store personalized insights if available
+        if (result.personalizedInsights && result.personalizedInsights.length > 0) {
+          setPersonalizedInsights(result.personalizedInsights);
+          
+          console.log("Received personalized insights:", result.personalizedInsights);
+        }
+        
+        // Only show success toast if this wasn't a cached result
+        if (!isFromCache) {
+          toast({
+            title: "Success!",
+            description: "Analysis completed successfully.",
+          });
+        }
+      } else {
+        // If we got a response but no suggestions, show a notification
+        toast({
+          title: "Partial Success",
+          description: "The analysis completed but no suggestions were generated. Please try again later.",
+          variant: "destructive",
+        });
+      }
     } catch (error) {
       console.error("Error analyzing halaqa:", error);
+      
+      // Only retry if it's an abort error (timeout), not for other errors
+      if (error instanceof DOMException && error.name === 'AbortError' && retryCount < MAX_RETRIES) {
+        retryCount++;
+        
+        const retryDelay = 2000 * Math.pow(2, retryCount); // Exponential backoff
+        toast({
+          title: "Retrying...",
+          description: `Attempt ${retryCount} of ${MAX_RETRIES}. Please wait.`,
+          variant: "destructive",
+        });
+        
+        // Wait before retrying
+        await new Promise(resolve => setTimeout(resolve, retryDelay));
+        
+        // Try again, but make sure to reset the analyzing state first
+        setAnalyzingHalaqa(false);
+        
+        // Use setTimeout to avoid potential React state update loops
+        setTimeout(() => {
+          handleAnalyzeHalaqa();
+        }, 100);
+        
+        return;
+      }
+      
+      // If we've reached max retries or it's not an abort error, show an error
       toast({
         title: "Error",
-        description: "Failed to generate Wird suggestions. Please try again.",
+        description: "Failed to analyze halaqa. Please try again later.",
         variant: "destructive",
       });
     } finally {
@@ -201,29 +458,84 @@ export default function HalaqaDetailPage() {
     }
   };
   
-  // Add wird suggestion to wird plan
+  // Add/remove wird suggestion to/from wird plan
   const handleAddToWirdPlan = async (wirdSuggestion: WirdSuggestion) => {
     if (!user?.id || !halaqa) return;
     
-    setAddingToWird(wirdSuggestion.id);
+    const isAlreadyAdded = addedWirds.includes(wirdSuggestion.id);
+    
+    // If already added, remove it
+    if (isAlreadyAdded) {
+      setAddingToWird(wirdSuggestion.id);
+      try {
+        // Here you would call your API to remove the wird from the user's plan
+        // For now, we'll just update the local state
+        // await wirdService.removeFromWirdPlan(user.id, wirdSuggestion.id);
+        
+        // Update local state
+        const newAddedWirds = addedWirds.filter(id => id !== wirdSuggestion.id);
+        setAddedWirds(newAddedWirds);
+        
+        // Save to localStorage
+        localStorage.setItem('addedWirds', JSON.stringify(newAddedWirds));
+        
+        // Store the wird suggestions for reference in the WirdhAI page
+        storeWirdSuggestionsInLocalStorage(halaqa.wirdSuggestions || []);
+        
+        toast({
+          title: "Removed",
+          description: `Removed "${wirdSuggestion.title}" from your Wird plan.`,
+        });
+      } catch (error) {
+        console.error("Error removing wird suggestion from plan:", error);
+        toast({
+          title: "Error",
+          description: "Failed to remove Wird suggestion from your plan. Please try again.",
+          variant: "destructive",
+        });
+      } finally {
+        setAddingToWird(null);
+      }
+    } else {
+      // Add it to the plan
+      setAddingToWird(wirdSuggestion.id);
+      try {
+        // If the wirdService and API are ready, uncomment this to make the actual API call
+        // const result = await wirdService.addToWirdPlan(user.id, wirdSuggestion);
+        
+        // For now, just update local state
+        const newAddedWirds = [...addedWirds, wirdSuggestion.id];
+        setAddedWirds(newAddedWirds);
+        
+        // Save to localStorage
+        localStorage.setItem('addedWirds', JSON.stringify(newAddedWirds));
+        
+        // Store the wird suggestions for reference in the WirdhAI page
+        storeWirdSuggestionsInLocalStorage(halaqa.wirdSuggestions || []);
+        
+        toast({
+          title: "Success!",
+          description: `Added "${wirdSuggestion.title}" to your Wird plan. You can find it in the WirdhAI section.`,
+        });
+      } catch (error) {
+        console.error("Error adding wird suggestion to plan:", error);
+        toast({
+          title: "Error",
+          description: "Failed to add Wird suggestion to your plan. Please try again.",
+          variant: "destructive",
+        });
+      } finally {
+        setAddingToWird(null);
+      }
+    }
+  };
+  
+  // Store wird suggestions in localStorage for the WirdhAI page to access
+  const storeWirdSuggestionsInLocalStorage = (suggestions: WirdSuggestion[]) => {
     try {
-      // Temporarily comment out this functionality until we have a proper API endpoint
-      // Normally we would have an API like:
-      // await halaqaService.addToWirdPlan(user.id, wirdSuggestion.id);
-      
-      toast({
-        title: "Success!",
-        description: `Added "${wirdSuggestion.title}" to your Wird plan.`,
-      });
-    } catch (error) {
-      console.error("Error adding wird suggestion to plan:", error);
-      toast({
-        title: "Error",
-        description: "Failed to add Wird suggestion to your plan. Please try again.",
-        variant: "destructive",
-      });
-    } finally {
-      setAddingToWird(null);
+      localStorage.setItem('wirdSuggestions', JSON.stringify(suggestions));
+    } catch (e) {
+      console.error('Error storing wird suggestions in localStorage:', e);
     }
   };
   
@@ -250,62 +562,42 @@ export default function HalaqaDetailPage() {
     }
   };
   
-  // Toggle action item completion
-  const toggleActionItemCompletion = async (actionItem: HalaqaActionItem) => {
-    if (!halaqa) return;
+  // Get added wird suggestions to display in the added wirds section
+  const getAddedWirdSuggestions = () => {
+    if (!halaqa?.wirdSuggestions) return [];
+    return halaqa.wirdSuggestions.filter(suggestion => 
+      addedWirds.includes(suggestion.id)
+    );
+  };
+
+  // Navigate to WirdhAI page
+  const goToWirdhAI = () => {
+    navigate("/wird");
+  };
+  
+  // Add a robust debugger component to help with troubleshooting
+  const DebugInfo = () => {
+    if (process.env.NODE_ENV === 'production') return null;
     
-    try {
-      const updatedActionItem = { ...actionItem, completed: !actionItem.completed };
-      const updatedHalaqa = await halaqaService.updateActionItem(halaqa.id, actionItem.id, updatedActionItem);
-      setHalaqa(updatedHalaqa);
-    } catch (error) {
-      console.error("Error updating action item:", error);
-      toast({
-        title: "Error",
-        description: "Failed to update action item. Please try again.",
-        variant: "destructive",
-      });
-    }
+    return (
+      <div className="bg-slate-100 p-4 rounded-md mt-8 text-xs font-mono">
+        <h4 className="font-bold mb-2">Debug Info</h4>
+        <div>Loading: {loading ? 'true' : 'false'}</div>
+        <div>Error: {error || 'none'}</div>
+        <div>Halaqa ID: {params?.id || 'none'}</div>
+        <div>Currently Loading ID: {currentlyLoadingId.current || 'none'}</div>
+        <div>Halaqa Loaded: {halaqa ? 'yes' : 'no'}</div>
+        {halaqa && (
+          <div className="mt-2">
+            <div>Title: {halaqa.title}</div>
+            <div>Action Items: {halaqa.actionItems?.length || 0}</div>
+            <div>Wird Suggestions: {halaqa.wirdSuggestions?.length || 0}</div>
+          </div>
+        )}
+      </div>
+    );
   };
-  
-  // Open edit action item dialog
-  const openEditActionDialog = (actionItem: HalaqaActionItem) => {
-    setCurrentActionItem(actionItem);
-    actionItemForm.reset({
-      description: actionItem.description,
-      completed: actionItem.completed,
-    });
-    setShowEditActionDialog(true);
-  };
-  
-  // Save action item changes
-  const handleSaveActionItem = async (values: z.infer<typeof actionItemSchema>) => {
-    if (!halaqa || !currentActionItem) return;
-    
-    try {
-      const updatedActionItem = {
-        ...currentActionItem,
-        description: values.description,
-        completed: values.completed,
-      };
-      
-      const updatedHalaqa = await halaqaService.updateActionItem(halaqa.id, currentActionItem.id, updatedActionItem);
-      setHalaqa(updatedHalaqa);
-      setShowEditActionDialog(false);
-      toast({
-        title: "Success!",
-        description: "Action item has been updated.",
-      });
-    } catch (error) {
-      console.error("Error updating action item:", error);
-      toast({
-        title: "Error",
-        description: "Failed to update action item. Please try again.",
-        variant: "destructive",
-      });
-    }
-  };
-  
+
   // Save halaqa edits
   const handleSaveHalaqaEdit = async (values: z.infer<typeof editHalaqaSchema>) => {
     if (!halaqa) return;
@@ -341,33 +633,247 @@ export default function HalaqaDetailPage() {
     }
   };
   
-  if (loading) {
+  // Get personalized insights for this halaqa content
+  const getPersonalizedInsights = () => {
+    if (!personalizedInsights || personalizedInsights.length === 0) {
+      return (
+        <div className="mt-6">
+          <h3 className="text-lg font-semibold">Personalized Insights</h3>
+          <p className="text-muted-foreground mt-2">
+            No personalized insights available yet. Click "Analyze with AI" to generate insights.
+          </p>
+        </div>
+      );
+    }
+
     return (
-      <Layout title="Loading Halaqa">
-        <div className="container py-8 text-center">
-          <Spinner size="lg" />
-          <p className="mt-4 text-muted-foreground">Loading halaqa entry...</p>
+      <div className="mt-6 space-y-6">
+        <h3 className="text-xl font-semibold">Personalized Insights</h3>
+        <p className="text-sm text-muted-foreground italic">
+          These insights are generated specifically from your reflection content, connecting your words with Islamic principles.
+        </p>
+        
+        {personalizedInsights.map((insight) => (
+          <div key={insight.id} className="p-4 border rounded-lg bg-slate-50 dark:bg-slate-900">
+            <h4 className="text-lg font-medium mb-2">{insight.title}</h4>
+            <div className="prose dark:prose-invert max-w-none">
+              {insight.content.split('\n\n').map((paragraph, idx) => (
+                <p key={idx} className={paragraph.includes('"') ? "italic bg-slate-100 dark:bg-slate-800 p-2 rounded border-l-4 border-primary my-2" : ""}>
+                  {paragraph}
+                </p>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  };
+
+  // Fallback for personalized insights when server-generated ones aren't available
+  const getFallbackInsights = () => {
+    if (!halaqa) return [];
+    
+    // Safe access to halaqa properties with fallbacks
+    const topic = halaqa.topic || 'Islamic Studies';
+    const title = halaqa.title || 'Halaqa Reflection';
+    const keyReflection = halaqa.keyReflection || '';
+    const impact = halaqa.impact || '';
+    
+    return [
+      {
+        id: "insight-1",
+        title: "Connection to Core Beliefs",
+        content: `Your reflection on "${topic}" deeply connects to fundamental Islamic principles of patience, growth, and trust in Allah's plan. 
+        
+The key reflection you shared: "${keyReflection.substring(0, 100)}${keyReflection.length > 100 ? '...' : ''}" reveals your thoughtful contemplation on matters of faith and spiritual development.
+
+This aligns with the Quranic guidance in Surah Al-Imran (3:190-191) where Allah invites us to reflect on His creation as a means of deepening our faith. Your personal journey in understanding ${topic} represents this essential practice of contemplation (tafakkur) that has been emphasized throughout Islamic tradition.
+
+Consider finding a consistent community space where you can share and develop these reflections with like-minded individuals. Regular attendance at community gatherings can help nurture these reflections further through shared learning and discussion.`
+      },
+      {
+        id: "insight-2",
+        title: "Practical Application",
+        content: `Based on your reflection about ${topic} and specifically how you noted that "${impact.substring(0, 80)}${impact.length > 80 ? '...' : ''}", consider incorporating the following practices into your daily routine:
+
+1. **Structured Daily Dhikr**: Allocate 10-15 minutes specifically focused on gratitude and awareness, perhaps after Fajr or Maghrib prayer. The Prophet Muhammad ﷺ emphasized consistency in spiritual practices, saying, "The most beloved of deeds to Allah are those that are consistent, even if they are small."
+
+2. **Knowledge Application**: Take one concept from ${title} each day and consciously apply it in your interactions. For example, if patience was discussed, intentionally practice patience in challenging situations throughout your day.
+
+3. **Reflection Journal**: Document how these teachings are transforming your perspective over time. This complements your goal of developing consistent spiritual practices and creates a valuable record of your growth.
+
+Tracking your spiritual journey through regular journaling can help you recognize patterns and measure your progress over time. This is particularly valuable when reviewing past challenges and recognizing how your response has evolved through implementing these teachings.`
+      }
+    ];
+  };
+
+  // Wird suggestions section
+  const getWirdSuggestionsSection = () => {
+    if (!halaqa || !wirdSuggestions || wirdSuggestions.length === 0) {
+      return (
+        <div className="mt-8">
+          <h3 className="text-lg font-semibold">Personalized Spiritual Practice Suggestions</h3>
+          <p className="text-muted-foreground mt-2">
+            No suggestions available yet. Click "Analyze with AI" to generate personalized spiritual practices.
+          </p>
+        </div>
+      );
+    }
+
+    return (
+      <div className="mt-8">
+        <h3 className="text-xl font-semibold">Personalized Spiritual Practice Suggestions</h3>
+        <p className="text-sm text-muted-foreground italic mb-4">
+          These practices are tailored based on your specific reflection, connecting to the themes and concepts you mentioned.
+        </p>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+          {wirdSuggestions.map((suggestion) => (
+            <div 
+              key={suggestion.id} 
+              className={`p-4 border rounded-lg shadow-sm ${
+                addedWirds.includes(suggestion.id) ? 'bg-primary/10 border-primary' : 'bg-card'
+              }`}
+            >
+              <div className="flex justify-between items-start mb-2">
+                <h4 className="text-lg font-medium">{suggestion.title}</h4>
+                <Badge variant="outline" className="bg-primary/10">
+                  {suggestion.type}
+                </Badge>
+              </div>
+              
+              <p className="mb-3 text-sm">{suggestion.description}</p>
+              
+              <div className="flex items-center justify-between text-xs text-muted-foreground mt-2">
+                <div className="flex gap-3">
+                  <span className="inline-flex items-center">
+                    <Clock className="w-3 h-3 mr-1" /> {suggestion.duration}
+                  </span>
+                  <span className="inline-flex items-center">
+                    <Calendar className="w-3 h-3 mr-1" /> {suggestion.frequency}
+                  </span>
+                </div>
+                {addedWirds.includes(suggestion.id) ? (
+                  <Button 
+                    size="sm" 
+                    variant="outline"
+                    className="h-8"
+                    onClick={() => {
+                      toast({
+                        title: "Already in your Wird Plan",
+                        description: "This suggestion has already been added to your personal Wird Plan"
+                      });
+                    }}
+                  >
+                    <span className="flex items-center">
+                      <Check className="w-3 h-3 mr-1" /> Added to Plan
+                    </span>
+                  </Button>
+                ) : (
+                  <Button 
+                    size="sm" 
+                    variant="default"
+                    className="h-8"
+                    onClick={() => handleAddToWirdPlan(suggestion)}
+                  >
+                    <span className="flex items-center">
+                      <Plus className="w-3 h-3 mr-1" /> Add to Wird Plan
+                    </span>
+                  </Button>
+                )}
+              </div>
+              
+              {suggestion.benefit && (
+                <div className="mt-3 pt-3 border-t text-sm">
+                  <p className="font-medium text-xs text-muted-foreground">Benefit</p>
+                  <p className="mt-1">{suggestion.benefit}</p>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
+  // Use a robust error display
+  if (error) {
+    return (
+      <Layout title="Error">
+        <div className="container py-8">
+          <div className="bg-red-50 border border-red-200 rounded-md p-6 mb-6">
+            <h2 className="text-2xl font-bold mb-4 text-red-700">Error Loading Halaqa</h2>
+            <p className="text-red-600 mb-6">{error}</p>
+            <Button onClick={() => {
+              setError(null);
+              if (params?.id) {
+                const halaqaId = parseInt(params.id, 10);
+                if (!isNaN(halaqaId)) {
+                  fetchHalaqa(halaqaId);
+                }
+              } else {
+                navigate("/halaqa");
+              }
+            }}>
+              Try Again
+            </Button>
+            <Button variant="outline" className="ml-4" onClick={() => navigate("/halaqa")}>
+              <ArrowLeft className="mr-2 h-4 w-4" /> Back to Halaqas
+            </Button>
+          </div>
+          <DebugInfo />
         </div>
       </Layout>
     );
   }
   
-  if (error || !halaqa) {
+  if (loading) {
     return (
-      <Layout title="Error">
-        <div className="container py-8 text-center">
-          <h2 className="text-2xl font-bold mb-4">Error Loading Halaqa</h2>
-          <p className="text-muted-foreground mb-6">{error || "Halaqa not found"}</p>
-          <Button onClick={() => navigate("/halaqa")}>
-            <ArrowLeft className="mr-2 h-4 w-4" /> Back to Halaqas
-          </Button>
+      <Layout title="Loading Halaqa">
+        <div className="container py-8">
+          <div className="text-center mb-8">
+            <Spinner size="lg" />
+            <p className="mt-4 text-muted-foreground">Loading halaqa entry...</p>
+            <p className="text-sm text-muted-foreground mt-2">Loading ID: {params?.id}</p>
+          </div>
+          <DebugInfo />
+        </div>
+      </Layout>
+    );
+  }
+  
+  // If no halaqa data yet, but not in loading state (something went wrong)
+  if (!halaqa && !loading) {
+    return (
+      <Layout title="Halaqa Not Found">
+        <div className="container py-8">
+          <div className="bg-yellow-50 border border-yellow-200 rounded-md p-6 mb-6">
+            <h2 className="text-2xl font-bold mb-4 text-yellow-700">Halaqa Not Found</h2>
+            <p className="text-yellow-600 mb-6">Unable to load the requested halaqa. It may have been deleted or you may not have access.</p>
+            <Button onClick={() => {
+              if (params?.id) {
+                const halaqaId = parseInt(params.id, 10);
+                if (!isNaN(halaqaId)) {
+                  fetchHalaqa(halaqaId);
+                }
+              } else {
+                navigate("/halaqa");
+              }
+            }}>
+              Try Again
+            </Button>
+            <Button variant="outline" className="ml-4" onClick={() => navigate("/halaqa")}>
+              <ArrowLeft className="mr-2 h-4 w-4" /> Back to Halaqas
+            </Button>
+          </div>
+          <DebugInfo />
         </div>
       </Layout>
     );
   }
   
   return (
-    <Layout title={halaqa.title || "Halaqa Details"}>
+    <Layout title={halaqa?.title || "Halaqa Details"}>
       <div className="container py-8 px-4">
         <div className="flex justify-between items-center mb-6">
           <Button variant="outline" size="sm" onClick={() => navigate("/halaqa")}>
@@ -412,93 +918,7 @@ export default function HalaqaDetailPage() {
           </div>
         </div>
         
-        {/* Wird Suggestions Section - At the top */}
-        <Card className="mb-8">
-          <CardHeader className="pb-3">
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle>AI-Generated Insights</CardTitle>
-                <CardDescription>
-                  Spiritual practices suggested based on your halaqa reflections.
-                </CardDescription>
-              </div>
-              
-              <Button
-                onClick={handleAnalyzeHalaqa}
-                disabled={analyzingHalaqa}
-                className="flex items-center"
-              >
-                {analyzingHalaqa ? <Spinner className="mr-2" size="sm" /> : <RotateCw className="mr-2 h-4 w-4" />}
-                {analyzingHalaqa ? "Analyzing..." : "Generate Insights"}
-              </Button>
-            </div>
-          </CardHeader>
-          <CardContent>
-            {analyzingHalaqa ? (
-              <div className="py-8 text-center text-muted-foreground">
-                <Spinner className="mx-auto mb-4" />
-                <p>AI generated suggestions will display here when ready...</p>
-              </div>
-            ) : (!halaqa.wirdSuggestions || halaqa.wirdSuggestions.length === 0) ? (
-              <div className="py-8 text-center text-muted-foreground">
-                <p>No Wird suggestions yet. Click "Generate Insights" to create personalized spiritual practices based on your reflection.</p>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {halaqa.wirdSuggestions.map((suggestion) => (
-                  <Card key={suggestion.id} className="overflow-hidden">
-                    <CardHeader className="bg-muted/50 pb-3">
-                      <div className="flex justify-between items-center">
-                        <CardTitle className="text-base flex items-center gap-2">
-                          <Star className="h-4 w-4 text-primary" />
-                          {suggestion.title}
-                        </CardTitle>
-                        <Button
-                          size="sm"
-                          onClick={() => handleAddToWirdPlan(suggestion)}
-                          disabled={addingToWird === suggestion.id}
-                        >
-                          {addingToWird === suggestion.id ? (
-                            <>
-                              <Spinner className="mr-2" size="sm" />
-                              Adding...
-                            </>
-                          ) : (
-                            <>
-                              <Plus className="mr-2 h-4 w-4" />
-                              Add to Wird
-                            </>
-                          )}
-                        </Button>
-                      </div>
-                    </CardHeader>
-                    <CardContent className="pt-3">
-                      <p className="text-sm text-muted-foreground mb-3">
-                        {suggestion.description}
-                      </p>
-                      <div className="flex flex-wrap gap-x-4 gap-y-2 text-xs text-muted-foreground mt-3">
-                        <div className="flex items-center">
-                          <Tag className="mr-1 h-3 w-3" />
-                          <span>{suggestion.type}</span>
-                        </div>
-                        <div className="flex items-center">
-                          <Clock className="mr-1 h-3 w-3" />
-                          <span>{suggestion.duration}</span>
-                        </div>
-                        <div className="flex items-center">
-                          <Repeat className="mr-1 h-3 w-3" />
-                          <span>{suggestion.frequency}</span>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-        
-        {/* Halaqa Details Section */}
+        {/* Halaqa Details Section - First, so users can quickly see their reflection */}
         {editMode ? (
           <Card className="mb-8">
             <CardHeader>
@@ -608,23 +1028,23 @@ export default function HalaqaDetailPage() {
         ) : (
           <Card className="mb-8">
             <CardHeader>
-              <CardTitle>{halaqa.title || "Untitled Halaqa"}</CardTitle>
+              <CardTitle>{halaqa?.title || "Untitled Halaqa"}</CardTitle>
               <div className="flex flex-wrap gap-2 text-sm text-muted-foreground mt-2">
-                {halaqa.date && (
+                {halaqa?.date && (
                   <div className="flex items-center">
                     <Calendar className="mr-1 h-4 w-4" />
                     <span>{halaqa.date instanceof Date ? format(halaqa.date, 'MMMM d, yyyy') : format(new Date(halaqa.date), 'MMMM d, yyyy')}</span>
                   </div>
                 )}
                 
-                {halaqa.speaker && (
+                {halaqa?.speaker && (
                   <div className="flex items-center">
                     <User className="mr-1 h-4 w-4" />
                     <span>{halaqa.speaker}</span>
                   </div>
                 )}
                 
-                {halaqa.topic && (
+                {halaqa?.topic && (
                   <div className="flex items-center">
                     <Tag className="mr-1 h-4 w-4" />
                     <span>{halaqa.topic}</span>
@@ -636,81 +1056,123 @@ export default function HalaqaDetailPage() {
               <div className="space-y-6">
                 <div>
                   <h3 className="text-lg font-medium mb-2">Key Reflection</h3>
-                  <p className="text-muted-foreground whitespace-pre-line">{halaqa.keyReflection}</p>
+                  <p className="text-muted-foreground whitespace-pre-line">{halaqa?.keyReflection}</p>
                 </div>
                 
                 <div>
                   <h3 className="text-lg font-medium mb-2">Impact</h3>
-                  <p className="text-muted-foreground whitespace-pre-line">{halaqa.impact}</p>
+                  <p className="text-muted-foreground whitespace-pre-line">{halaqa?.impact}</p>
                 </div>
               </div>
             </CardContent>
           </Card>
         )}
         
-        {/* Action Items Section */}
+        {/* Personalized Insights Section - Second, to provide deeper context on the reflection */}
         <Card className="mb-8">
           <CardHeader className="pb-3">
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle>Action Items</CardTitle>
-                <CardDescription>
-                  Concrete steps to implement the insights from this halaqa.
-                </CardDescription>
-              </div>
-              
-              <Button
-                onClick={handleGenerateActions}
-                disabled={generatingActions}
-                className="flex items-center"
-              >
-                {generatingActions ? <Spinner className="mr-2" size="sm" /> : <RotateCw className="mr-2 h-4 w-4" />}
-                {generatingActions ? "Generating..." : "Generate Actions"}
-              </Button>
-            </div>
+            <CardTitle>Personalized Insights</CardTitle>
+            <CardDescription>
+              Insights based on your halaqa reflection and personal context.
+            </CardDescription>
           </CardHeader>
           <CardContent>
-            {generatingActions ? (
+            {analyzingHalaqa ? (
               <div className="py-8 text-center text-muted-foreground">
                 <Spinner className="mx-auto mb-4" />
-                <p>Generating action items...</p>
-              </div>
-            ) : (!halaqa.actionItems || halaqa.actionItems.length === 0) ? (
-              <div className="py-8 text-center text-muted-foreground">
-                <p>No action items yet. Click "Generate Actions" to create some based on your reflection.</p>
+                <p>Generating personalized insights based on your reflection...</p>
               </div>
             ) : (
               <div className="space-y-4">
-                {halaqa.actionItems.map((item) => (
-                  <div key={item.id} className="flex items-start gap-2 p-4 border rounded-lg">
-                    <Button 
-                      variant="ghost" 
-                      size="icon" 
-                      className={`rounded-full h-6 w-6 ${item.completed ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:text-foreground'}`}
-                      onClick={() => toggleActionItemCompletion(item)}
-                    >
-                      <Check className="h-4 w-4" />
-                    </Button>
-                    
-                    <div className="flex-1">
-                      <p className={`${item.completed ? 'line-through text-muted-foreground' : ''}`}>
-                        {item.description}
-                      </p>
-                    </div>
-                    
-                    <Button 
-                      variant="ghost" 
-                      size="icon" 
-                      onClick={() => openEditActionDialog(item)}
-                    >
-                      <Pencil className="h-4 w-4" />
-                    </Button>
-                  </div>
-                ))}
+                {(personalizedInsights && personalizedInsights.length > 0) ? (
+                  // Display server-generated insights
+                  personalizedInsights.map((insight) => (
+                    <Card key={insight.id} className="border-primary/20">
+                      <CardHeader className="pb-3">
+                        <div className="flex justify-between items-center">
+                          <CardTitle className="text-base flex items-center gap-2">
+                            <Star className="h-4 w-4 text-primary" />
+                            {insight.title}
+                          </CardTitle>
+                        </div>
+                      </CardHeader>
+                      <CardContent className="pt-3">
+                        <p className="text-sm text-muted-foreground whitespace-pre-line">
+                          {insight.content}
+                        </p>
+                      </CardContent>
+                    </Card>
+                  ))
+                ) : (
+                  // Display fallback insights if no server-generated insights
+                  getFallbackInsights().map((insight) => (
+                    <Card key={insight.id} className="border-primary/20">
+                      <CardHeader className="pb-3">
+                        <div className="flex justify-between items-center">
+                          <CardTitle className="text-base flex items-center gap-2">
+                            <Star className="h-4 w-4 text-primary" />
+                            {insight.title}
+                          </CardTitle>
+                        </div>
+                      </CardHeader>
+                      <CardContent className="pt-3">
+                        <p className="text-sm text-muted-foreground whitespace-pre-line">
+                          {insight.content}
+                        </p>
+                      </CardContent>
+                    </Card>
+                  ))
+                )}
               </div>
             )}
           </CardContent>
         </Card>
+        
+        {/* Wird Suggestions Section - Last, to provide actionable next steps */}
+        <Card className="mb-8">
+          <CardHeader className="pb-3">
+            <div className="flex justify-between items-center">
+              <div>
+                <CardTitle>Spiritual Practices & Insights</CardTitle>
+                <CardDescription>
+                  Personalized spiritual practices based on your halaqa reflections.
+                </CardDescription>
+              </div>
+              {(halaqa?.wirdSuggestions && halaqa.wirdSuggestions.length > 0 && addedWirds.length > 0) && (
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={goToWirdhAI}
+                >
+                  <BookOpen className="mr-2 h-4 w-4" />
+                  View in WirdhAI
+                </Button>
+              )}
+            </div>
+          </CardHeader>
+          <CardContent>
+            {analyzingHalaqa ? (
+              <div className="py-8 text-center text-muted-foreground">
+                <Spinner className="mx-auto mb-4" />
+                <p>Generating personalized spiritual practices based on your reflection...</p>
+              </div>
+            ) : (!halaqa?.wirdSuggestions || halaqa.wirdSuggestions.length === 0) ? (
+              <div className="py-8 text-center text-muted-foreground">
+                <p>Personalized spiritual practices will appear here shortly.</p>
+                <div className="mt-4">
+                  <Spinner size="sm" className="mx-auto" />
+                </div>
+              </div>
+            ) : (
+              getWirdSuggestionsSection()
+            )}
+          </CardContent>
+        </Card>
+        
+        {/* Add debug info at the bottom in development */}
+        {process.env.NODE_ENV !== 'production' && (
+          <DebugInfo />
+        )}
       </div>
       
       {/* Delete dialog */}
@@ -719,7 +1181,7 @@ export default function HalaqaDetailPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>Are you sure?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will delete your halaqa note. This action cannot be undone.
+              This will permanently delete this halaqa entry. This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -728,60 +1190,6 @@ export default function HalaqaDetailPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-      
-      {/* Edit action item dialog */}
-      <Dialog open={showEditActionDialog} onOpenChange={setShowEditActionDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Edit Action Item</DialogTitle>
-            <DialogDescription>
-              Make changes to your action item below.
-            </DialogDescription>
-          </DialogHeader>
-          
-          <Form {...actionItemForm}>
-            <form onSubmit={actionItemForm.handleSubmit(handleSaveActionItem)} className="space-y-6">
-              <FormField
-                control={actionItemForm.control}
-                name="description"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Description</FormLabel>
-                    <FormControl>
-                      <Textarea 
-                        placeholder="What action will you take?"
-                        {...field}
-                        rows={3}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              
-              <FormField
-                control={actionItemForm.control}
-                name="completed"
-                render={({ field }) => (
-                  <FormItem className="flex items-center space-x-2 space-y-0">
-                    <FormControl>
-                      <Checkbox 
-                        checked={field.value} 
-                        onCheckedChange={field.onChange}
-                      />
-                    </FormControl>
-                    <FormLabel className="cursor-pointer">Mark as completed</FormLabel>
-                  </FormItem>
-                )}
-              />
-              
-              <DialogFooter>
-                <Button type="submit">Save Changes</Button>
-              </DialogFooter>
-            </form>
-          </Form>
-        </DialogContent>
-      </Dialog>
     </Layout>
   );
 } 

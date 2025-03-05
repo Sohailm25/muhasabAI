@@ -10,6 +10,13 @@ export const api = {
   async get(endpoint: string, options = {}) {
     const token = localStorage.getItem('auth_token');
     
+    // For validation endpoint, return early with error if no token exists
+    // This prevents unnecessary network requests and error popups
+    if (endpoint === '/auth/validate' && !token) {
+      console.log('No token found for validation request, skipping');
+      throw new Error('No authentication token');
+    }
+    
     // Check if this is an endpoint requiring auth
     const requiresAuth = endpoint.startsWith('/api/') || 
                          (endpoint.includes('/auth/') && !endpoint.includes('/auth/validate'));
@@ -19,24 +26,33 @@ export const api = {
       throw new Error('Authentication required');
     }
     
-    const response = await fetch(`${BASE_URL}${endpoint}`, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': token ? `Bearer ${token}` : ''
-      },
-      ...options
-    });
+    try {
+      const response = await fetch(`${BASE_URL}${endpoint}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': token ? `Bearer ${token}` : ''
+        },
+        ...options
+      });
 
-    if (!response.ok) {
-      const status = response.status;
-      if (status === 401) {
-        throw new Error('Authentication required');
+      if (!response.ok) {
+        const status = response.status;
+        if (status === 401) {
+          // For 401 errors, clear the token as it's invalid
+          if (token) localStorage.removeItem('auth_token');
+          throw new Error('Authentication required');
+        }
+        throw new Error(`API error: ${status}`);
       }
-      throw new Error(`API error: ${status}`);
-    }
 
-    return await response.json();
+      return await response.json();
+    } catch (error) {
+      // Rethrow with better context
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.error(`API error for ${endpoint}: ${errorMessage}`);
+      throw error;
+    }
   },
 
   // Generic POST request
@@ -56,6 +72,39 @@ export const api = {
     
     const response = await fetch(`${BASE_URL}${endpoint}`, {
       method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': token ? `Bearer ${token}` : ''
+      },
+      body: JSON.stringify(data),
+      ...options
+    });
+
+    if (!response.ok) {
+      const status = response.status;
+      if (status === 401) {
+        throw new Error('Authentication required');
+      }
+      throw new Error(`API error: ${status}`);
+    }
+
+    return await response.json();
+  },
+
+  // Generic PUT request
+  async put(endpoint: string, data = {}, options = {}) {
+    const token = localStorage.getItem('auth_token');
+    
+    // Check if this is an endpoint requiring auth
+    const requiresAuth = endpoint.startsWith('/api/');
+                         
+    if (requiresAuth && !token) {
+      console.error(`Authentication required for ${endpoint} but no token found`);
+      throw new Error('Authentication required');
+    }
+    
+    const response = await fetch(`${BASE_URL}${endpoint}`, {
+      method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': token ? `Bearer ${token}` : ''
