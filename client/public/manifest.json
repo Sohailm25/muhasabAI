@@ -1,6 +1,6 @@
 {
-  "name": "MuhasabAI - Islamic Self-Reflection Tool",
-  "short_name": "MuhasabAI",
+  "name": "SahabAI - Islamic Self-Reflection Tool",
+  "short_name": "SahabAI",
   "description": "An AI-powered tool for Islamic self-reflection and spiritual growth",
   "start_url": "/",
   "display": "standalone",

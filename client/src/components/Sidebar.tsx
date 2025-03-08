@@ -133,9 +133,9 @@ export function Sidebar({ className, onCollapseChange }: SidebarProps) {
             isCollapsed && "justify-center"
           )}>
             {!isCollapsed ? (
-              <h2 className="text-xl font-semibold">MuhasabAI</h2>
+              <h2 className="text-xl font-semibold">SahabAI</h2>
             ) : (
-              <span className="text-xl font-semibold">M</span>
+              <span className="text-xl font-semibold">S</span>
             )}
             <div className="ml-auto">
               <ThemeToggle />

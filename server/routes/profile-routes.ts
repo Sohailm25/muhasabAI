@@ -12,7 +12,7 @@ import {
 } from '../db/index'; // Import specific functions from db/index
 
 const router = express.Router();
-const JWT_SECRET = process.env.JWT_SECRET || 'muhasabai-secret-key';
+const JWT_SECRET = process.env.JWT_SECRET || 'sahabai-secret-key';
 
 /**
  * Get current user profile

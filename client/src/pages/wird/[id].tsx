@@ -267,6 +267,21 @@ export default function WirdDetailPage() {
                   Last updated: {format(new Date(wird.updatedAt), "PPP p")}
                 </p>
               )}
+              
+              {/* Source backlink section */}
+              {wird.sourceType && wird.sourceId && (
+                <div className="mt-4 pt-4 border-t">
+                  <p className="text-sm font-medium">Inspired by:</p>
+                  <Button 
+                    variant="link" 
+                    className="px-0 h-auto text-sm text-primary flex items-center mt-1"
+                    onClick={() => navigate(`/${wird.sourceType === 'reflection' ? 'chat' : 'halaqa'}/${wird.sourceId}`)}
+                  >
+                    <span>{wird.sourceType === 'reflection' ? 'Reflection' : 'Halaqa'}</span>
+                    <ArrowLeft className="h-3 w-3 ml-1 rotate-180" />
+                  </Button>
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>

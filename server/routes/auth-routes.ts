@@ -6,7 +6,7 @@ import { log } from '../vite';
 import { getUserByEmail, createUser, validateToken, invalidateToken, storeToken } from '../db/auth';
 
 const router = express.Router();
-const JWT_SECRET = process.env.JWT_SECRET || 'muhasabai-secret-key';
+const JWT_SECRET = process.env.JWT_SECRET || 'sahabai-secret-key';
 
 // Get the Google OAuth credentials from environment variables
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '';

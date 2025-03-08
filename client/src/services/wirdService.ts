@@ -21,6 +21,8 @@ export interface WirdEntry {
   createdAt: Date;
   updatedAt: Date;
   isArchived: boolean | null;
+  sourceType?: 'reflection' | 'halaqa'; // Type of source that generated this wird
+  sourceId?: number; // ID of the source (reflection or halaqa)
 }
 
 export interface WirdFormData {
@@ -341,12 +343,16 @@ export class WirdService {
    * @param userId User ID
    * @param suggestion Wird suggestion to add
    * @param date Optional date to add the suggestion to (defaults to today)
+   * @param sourceType Optional type of source that generated this suggestion (reflection or halaqa)
+   * @param sourceId Optional ID of the source (reflection or halaqa)
    * @returns Updated wird entry or null if there was an error
    */
   async addToWirdPlan(
     userId: string,
     suggestion: WirdSuggestion,
-    date?: Date
+    date?: Date,
+    sourceType?: 'reflection' | 'halaqa',
+    sourceId?: number
   ): Promise<WirdEntry | null> {
     try {
       const targetDate = date ? date : new Date();
@@ -354,7 +360,9 @@ export class WirdService {
       console.log("Adding suggestion to wird plan:", {
         userId,
         suggestion,
-        date: targetDate.toISOString()
+        date: targetDate.toISOString(),
+        sourceType,
+        sourceId
       });
       
       // Use the correct endpoint path (/wirds/add-suggestion)
@@ -366,7 +374,9 @@ export class WirdService {
         body: JSON.stringify({
           userId,
           wirdSuggestion: suggestion,
-          date: targetDate.toISOString().split('T')[0]
+          date: targetDate.toISOString().split('T')[0],
+          sourceType,
+          sourceId
         }),
       });
       
@@ -407,6 +417,83 @@ export class WirdService {
       };
     } catch (error) {
       console.error("Error adding wird suggestion to plan:", error);
+      throw error; // Rethrow so we can show a toast to the user
+    }
+  }
+
+  /**
+   * Remove a practice from a user's wird plan
+   * @param userId User ID
+   * @param wirdId Wird entry ID
+   * @param practiceId Practice ID to remove
+   * @returns Updated wird entry or null if the wird was deleted
+   */
+  async removePractice(
+    userId: string,
+    wirdId: number,
+    practiceId: string
+  ): Promise<WirdEntry | null> {
+    try {
+      console.log("Removing practice from wird plan:", {
+        userId,
+        wirdId,
+        practiceId
+      });
+      
+      const response = await fetch(`${this.apiBase}/wirds/remove-practice`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          userId,
+          wirdId,
+          practiceId
+        }),
+      });
+      
+      if (!response.ok) {
+        // Try to get more details about the error
+        let errorText = response.statusText;
+        try {
+          const errorJson = await response.json();
+          if (errorJson.error) {
+            errorText = errorJson.error;
+          }
+        } catch (e) {
+          // If we can't parse the JSON, just use the status text
+        }
+        
+        throw new Error(`Failed to remove practice from wird plan: ${errorText}`);
+      }
+      
+      const result = await response.json();
+      
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to remove practice from wird plan');
+      }
+      
+      // If the wird was deleted (no practices left)
+      if (result.deleted) {
+        return null;
+      }
+      
+      // Handle both possible response formats
+      const wirdData = result.result || result.wird;
+      
+      if (!wirdData) {
+        console.error("Invalid response data:", result);
+        throw new Error("Invalid response from server - no wird data");
+      }
+      
+      return {
+        ...wirdData,
+        date: new Date(wirdData.date),
+        createdAt: new Date(wirdData.createdAt),
+        updatedAt: new Date(wirdData.updatedAt),
+      };
+    } catch (error) {
+      console.error("Error removing practice from wird plan:", error);
       throw error; // Rethrow so we can show a toast to the user
     }
   }

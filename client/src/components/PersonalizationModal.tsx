@@ -279,7 +279,7 @@ export function PersonalizationModal({ open, onClose }: { open: boolean; onClose
         {currentStep === "intro" && (
           <>
             <DialogHeader>
-              <DialogTitle className="text-2xl">Welcome to MuhasabAI</DialogTitle>
+              <DialogTitle className="text-2xl">Welcome to SahabAI</DialogTitle>
               <DialogDescription className="text-lg pt-2">
                 Let's personalize your experience to make it more beneficial for your spiritual journey.
               </DialogDescription>
@@ -287,7 +287,7 @@ export function PersonalizationModal({ open, onClose }: { open: boolean; onClose
             
             <div className="py-6 space-y-4">
               <p>
-                MuhasabAI can provide personalized Islamic reflections based on your knowledge level, 
+                SahabAI's MuhasabAI feature can provide personalized Islamic reflections based on your knowledge level, 
                 interests, and spiritual journey. This helps make the guidance more relevant to you.
               </p>
               <p>
@@ -879,18 +879,18 @@ export function PersonalizationModal({ open, onClose }: { open: boolean; onClose
             
             <div className="py-6 space-y-4">
               <div className="max-h-[400px] overflow-y-auto border rounded-md p-4 text-sm">
-                <h2 className="text-xl font-bold mb-3">MuhasabAI Privacy Policy</h2>
+                <h2 className="text-xl font-bold mb-3">SahabAI Privacy Policy</h2>
                 
                 <h3 className="text-lg font-bold mt-4 mb-2">Introduction</h3>
                 <p className="mb-3">
-                  MuhasabAI is committed to protecting your privacy and ensuring the security of your personal information. 
+                  SahabAI is committed to protecting your privacy and ensuring the security of your personal information. 
                   This Privacy Policy explains how we collect, use, store, and protect your data when you use our application, 
                   with a particular focus on our personalization system.
                 </p>
                 
                 <h3 className="text-lg font-bold mt-4 mb-2">Our Commitment to Privacy</h3>
                 <p className="mb-3">
-                  We've designed MuhasabAI with privacy as a foundational principle. Our application implements:
+                  We've designed SahabAI with privacy as a foundational principle. Our application implements:
                 </p>
                 <ol className="list-decimal pl-6 mb-3 space-y-1">
                   <li><strong>End-to-end encryption</strong> for sensitive personal data</li>
@@ -934,7 +934,7 @@ export function PersonalizationModal({ open, onClose }: { open: boolean; onClose
                 <h3 className="text-lg font-bold mt-4 mb-2">How We Use Your Information</h3>
                 
                 <h4 className="font-bold mt-3 mb-2">Personalization</h4>
-                <p className="mb-2">MuhasabAI uses your information to:</p>
+                <p className="mb-2">SahabAI uses your information to:</p>
                 <ul className="list-disc pl-6 mb-3 space-y-1">
                   <li>Personalize Islamic reflections to your spiritual journey</li>
                   <li>Adapt content to match your knowledge level and interests</li>
@@ -972,7 +972,7 @@ export function PersonalizationModal({ open, onClose }: { open: boolean; onClose
                 </ul>
                 
                 <h3 className="text-lg font-bold mt-4 mb-2">Your Privacy Controls</h3>
-                <p className="mb-2">MuhasabAI gives you comprehensive control over your data:</p>
+                <p className="mb-2">SahabAI gives you comprehensive control over your data:</p>
                 
                 <h4 className="font-bold mt-3 mb-2">Privacy Settings</h4>
                 <ul className="list-disc pl-6 mb-3 space-y-1">
@@ -994,7 +994,7 @@ export function PersonalizationModal({ open, onClose }: { open: boolean; onClose
                   If you have any questions about this Privacy Policy, please contact us at:
                 </p>
                 <ul className="list-disc pl-6 mb-3 space-y-1">
-                  <li>Email: privacy@muhasabai.com</li>
+                  <li>Email: privacy@sahabai.com</li>
                 </ul>
               </div>
               
@@ -1033,7 +1033,7 @@ export function PersonalizationModal({ open, onClose }: { open: boolean; onClose
             
             <div className="py-6 space-y-4">
               <p>
-                Thank you for personalizing your MuhasabAI experience. You're all set to begin
+                Thank you for personalizing your SahabAI experience. You're all set to begin
                 your journey with reflections that are tailored to your needs.
               </p>
               

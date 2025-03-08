@@ -9,6 +9,7 @@ import { Edit, Lightbulb, BookOpen } from "lucide-react";
 
 export default function NewReflection() {
   const [isLoading, setIsLoading] = useState(false);
+  const [loadingType, setLoadingType] = useState<'text' | 'audio'>('text');
   const { toast } = useToast();
   const [, setLocation] = useLocation();
 
@@ -103,7 +104,14 @@ export default function NewReflection() {
 
   return (
     <Layout title="New Reflection">
-      {isLoading && <LoadingAnimation message="Processing your reflection..." />}
+      {isLoading && (
+        <LoadingAnimation 
+          message={loadingType === 'audio' 
+            ? "Processing your audio reflection..." 
+            : "Processing your reflection..."} 
+          fullScreen={true}
+        />
+      )}
       
       <div className="container max-w-4xl mx-auto py-8 px-4">
         <div className="grid grid-cols-1 md:grid-cols-[1fr,2fr] gap-6">
@@ -170,6 +178,7 @@ export default function NewReflection() {
                 isLoading={isLoading} 
                 setIsLoading={setIsLoading}
                 redirectToChat={false} // We'll handle redirection in this component
+                onTabChange={(tab) => setLoadingType(tab as 'text' | 'audio')}
               />
             </div>
           </div>

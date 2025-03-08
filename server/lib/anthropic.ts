@@ -1724,3 +1724,157 @@ function getDefaultFrameworkSuggestions(componentType: string) {
     feedback: "Start small and build gradually for lasting spiritual growth."
   };
 }
+
+/**
+ * Generates suggestions for a wird practice using the CLEAR framework
+ * @param practice The wird practice to generate suggestions for
+ * @returns Suggestions for each aspect of the CLEAR framework
+ */
+export async function generateCLEARSuggestions(practice: any): Promise<{
+  cue: string[];
+  lowFriction: string[];
+  expandable: string[];
+  adaptable: string[];
+  rewardLinked: string[];
+}> {
+  const logger = createLogger("generateCLEARSuggestions");
+  logger.info(`Generating CLEAR suggestions for practice: ${practice.name}`);
+
+  // Prepare the prompt for Claude
+  const prompt = `You are an expert Islamic habit coach specializing in the "CLEAR" framework for effective habit formation. 
+
+Based on the following information about a spiritual practice (wird), please generate suggestions for each component of the CLEAR framework:
+      
+PRACTICE DETAILS:
+Name: ${practice.name}
+Category: ${practice.category}
+Target: ${practice.target} ${practice.unit}
+      
+Please provide 3-5 suggestions for each component of the CLEAR framework:
+
+1. Cue → Clear triggers for when to perform this practice
+  • Examples: "After Fajr prayer", "Before going to bed", "When entering the masjid"
+
+2. Low Friction → Ways to make this practice easier to do even on busy days
+  • Examples: "Keep a small Quran in your bag", "Set a specific minimum (even just 1 verse)"
+
+3. Expandable → Ways to scale this practice up when more time is available
+  • Examples: "Start with one page, but read more if time allows", "Begin with basic dhikr, add optional ones when possible"
+
+4. Adaptable → How to adjust this practice to different situations
+  • Examples: "If you miss the morning time, do it after Asr instead", "If traveling, use a mobile app version"
+
+5. Reward Linked → Connect this practice to intrinsic or extrinsic rewards
+  • Examples: "Notice the sense of peace after completion", "Track your streak in a journal"
+
+Format your response as a JSON object with the following structure:
+{
+  "cue": ["suggestion 1", "suggestion 2", "suggestion 3"],
+  "lowFriction": ["suggestion 1", "suggestion 2", "suggestion 3"],
+  "expandable": ["suggestion 1", "suggestion 2", "suggestion 3"],
+  "adaptable": ["suggestion 1", "suggestion 2", "suggestion 3"],
+  "rewardLinked": ["suggestion 1", "suggestion 2", "suggestion 3"]
+}
+
+Only return the JSON object, with no additional text before or after.`;
+
+  try {
+    logger.info("Calling Claude API for CLEAR suggestions");
+    
+    if (!isValidApiKey(process.env.ANTHROPIC_API_KEY || "")) {
+      logger.error("Invalid Anthropic API key");
+      return getDefaultCLEARSuggestions();
+    }
+
+    const anthropic = new Anthropic({
+      apiKey: process.env.ANTHROPIC_API_KEY || "",
+    });
+    
+    const response = await anthropic.messages.create({
+      model: 'claude-3-sonnet-20240229',
+      messages: [{ role: 'user', content: prompt }],
+      max_tokens: 1024,
+      temperature: 0.7,
+    });
+
+    const content = response.content[0].text;
+    
+    try {
+      // Try to parse the JSON response
+      const suggestions = JSON.parse(content);
+      
+      // Validate the structure of the response
+      if (suggestions.cue && suggestions.lowFriction && 
+          suggestions.expandable && suggestions.adaptable && 
+          suggestions.rewardLinked) {
+        
+        return {
+          cue: suggestions.cue,
+          lowFriction: suggestions.lowFriction,
+          expandable: suggestions.expandable,
+          adaptable: suggestions.adaptable,
+          rewardLinked: suggestions.rewardLinked
+        };
+      }
+    } catch (parseError) {
+      logger.error(`Failed to parse Claude response as JSON: ${parseError}`);
+    }
+    
+    // If we reach here, there was an issue with the response format
+    logger.warn("Using default CLEAR suggestions due to invalid response format");
+    return getDefaultCLEARSuggestions();
+    
+  } catch (error) {
+    logger.error(`Error generating CLEAR suggestions: ${error}`);
+    handleAnthropicError(error, "generateCLEARSuggestions");
+    
+    // Return default suggestions when API fails
+    return getDefaultCLEARSuggestions();
+  }
+}
+
+function getDefaultCLEARSuggestions(): {
+  cue: string[];
+  lowFriction: string[];
+  expandable: string[];
+  adaptable: string[];
+  rewardLinked: string[];
+} {
+  return {
+    cue: [
+      "Link to prayer times - perform right after one of the daily prayers",
+      "Associate with a physical location in your home",
+      "Use a specific time of day as your trigger",
+      "Connect to an existing daily habit or routine",
+      "Set a digital reminder on your phone"
+    ],
+    lowFriction: [
+      "Keep necessary materials organized and visible",
+      "Start with just 1-2 minutes on difficult days",
+      "Break the practice into smaller, manageable parts",
+      "Remove distractions beforehand",
+      "Prepare everything needed the night before"
+    ],
+    expandable: [
+      "Set a baseline minimum and preferred higher target",
+      "Create 'levels' of practice from beginner to advanced",
+      "Add complementary practices when time permits",
+      "Increase duration or intensity on weekends/days off",
+      "Have expansion options for special times like Ramadan"
+    ],
+    adaptable: [
+      "Create a portable/travel version of the practice",
+      "Have alternate times in your day as backup options",
+      "Prepare simplified versions for busy/difficult days",
+      "Create different methods for different environments",
+      "Develop variations for different energy/focus levels"
+    ],
+    rewardLinked: [
+      "Take a moment to reflect on feelings after completion",
+      "Track your streak in a visible way",
+      "Share your progress with a friend or accountability partner",
+      "Connect to a higher purpose or spiritual goal",
+      "Give yourself small rewards after completing milestones"
+    ]
+  };
+}

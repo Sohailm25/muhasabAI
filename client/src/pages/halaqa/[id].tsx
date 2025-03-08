@@ -500,10 +500,16 @@ export default function HalaqaDetailPage() {
       // Add it to the plan
       setAddingToWird(wirdSuggestion.id);
       try {
-        // If the wirdService and API are ready, uncomment this to make the actual API call
-        // const result = await wirdService.addToWirdPlan(user.id, wirdSuggestion);
+        // Call wirdService to add the suggestion to the plan with backlink to halaqa
+        await wirdService.addToWirdPlan(
+          user.id, 
+          wirdSuggestion, 
+          undefined, // use default date (today)
+          'halaqa',  // source type
+          halaqa.id  // source id
+        );
         
-        // For now, just update local state
+        // Update local state
         const newAddedWirds = [...addedWirds, wirdSuggestion.id];
         setAddedWirds(newAddedWirds);
         

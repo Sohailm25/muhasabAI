@@ -5,7 +5,6 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { AudioRecorder } from "@/components/AudioRecorder";
-import { LoadingAnimation } from "@/components/LoadingAnimation";
 import { useReflectionService } from "@/services/reflectionService";
 
 export interface ReflectionInputProps {
@@ -13,6 +12,7 @@ export interface ReflectionInputProps {
   isLoading?: boolean;
   setIsLoading?: React.Dispatch<React.SetStateAction<boolean>>;
   redirectToChat?: boolean; // Add option to control redirect behavior
+  onTabChange?: (tab: string) => void; // Add prop for tab change
 }
 
 export function ReflectionInput({ 
@@ -20,6 +20,7 @@ export function ReflectionInput({
   isLoading = false,
   setIsLoading,
   redirectToChat = true, // Default to true for backward compatibility
+  onTabChange,
 }: ReflectionInputProps) {
   const [text, setText] = useState("");
   const [activeTab, setActiveTab] = useState("text");
@@ -33,6 +34,14 @@ export function ReflectionInput({
   // Use a single loading state, preferring the external one if provided
   const loading = setIsLoading ? isLoading : localLoading;
   const updateLoading = setIsLoading || setLocalLoading;
+
+  // Handle tab changes and notify parent component
+  const handleTabChange = (value: string) => {
+    setActiveTab(value);
+    if (onTabChange) {
+      onTabChange(value);
+    }
+  };
 
   const handleTextSubmit = async () => {
     if (!text.trim()) {
@@ -108,9 +117,15 @@ export function ReflectionInput({
       const formData = new FormData();
       formData.append("audio", audioData);
 
+      // Get the auth token from localStorage
+      const token = localStorage.getItem('auth_token');
+
       // Make the API request
       const response = await fetch("/api/reflection/audio", {
         method: "POST",
+        headers: {
+          'Authorization': token ? `Bearer ${token}` : ''
+        },
         body: formData,
       });
 
@@ -167,13 +182,11 @@ export function ReflectionInput({
 
   return (
     <>
-      {loading && <LoadingAnimation message={activeTab === "voice" ? "Processing your audio..." : `${isPersonalizationEnabled() ? "Personalizing" : "Processing"} your reflection...`} />}
-      
       <div className="w-full max-w-md">
         <Tabs
           defaultValue="text"
           value={activeTab}
-          onValueChange={setActiveTab}
+          onValueChange={handleTabChange}
           className="w-full"
         >
           <TabsList className="grid w-full grid-cols-2">

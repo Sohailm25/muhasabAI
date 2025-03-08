@@ -8,6 +8,7 @@ export const reflections = pgTable("reflections", {
   type: text("type", { enum: ["audio", "text"] }).notNull(),
   timestamp: timestamp("timestamp").defaultNow().notNull(),
   transcription: text("transcription"),
+  audioData: text("audio_data"),
 });
 
 export const conversations = pgTable("conversations", {
@@ -117,6 +118,14 @@ export type WirdPractice = {
   completed: number;
   unit: string;  // e.g., "pages", "times", "minutes"
   isCompleted: boolean;
+  // CLEAR framework fields
+  clearFramework?: {
+    cue: string;
+    lowFriction: string;
+    expandable: string;
+    adaptable: string;
+    rewardLinked: string;
+  };
 };
 
 export type WirdSuggestion = {
@@ -142,6 +151,8 @@ export type WirdEntry = {
   createdAt: Date;
   updatedAt: Date;
   isArchived: boolean | null;
+  sourceType?: 'reflection' | 'halaqa'; // Type of source that generated this wird
+  sourceId?: number; // ID of the source (reflection or halaqa)
 };
 
 export type Halaqa = {
@@ -164,6 +175,7 @@ export const insertReflectionSchema = createInsertSchema(reflections).pick({
   content: true,
   type: true,
   transcription: true,
+  audioData: true,
 });
 
 export const insertConversationSchema = createInsertSchema(conversations).pick({

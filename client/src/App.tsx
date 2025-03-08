@@ -24,11 +24,13 @@ import HalaqaEdit from "@/pages/halaqa/edit/[id]"; // Halaqa edit view
 import WirdPage from "@/pages/wird"; // Wird main page
 import WirdNew from "@/pages/wird/new"; // New Wird entry
 import WirdDetail from "@/pages/wird/[id]"; // Wird detail view
+import WirdhPage from "@/pages/wirdh"; // Wirdh main page
+import WirdhNew from "@/pages/wirdh/new"; // New Wirdh entry
+import WirdhDetail from "@/pages/wirdh/[id]"; // Wirdh detail view
 import Help from "@/pages/help";
 import Profile from "@/pages/profile";
 import NotFound from "@/pages/not-found";
 import PersonalActionPlan from "@/pages/personal-action-plan";
-import MasjidPage from "@/pages/masjid";
 import DashboardPage from "@/pages/dashboard";
 import SettingsPage from "@/pages/settings";
 import ReflectionsPage from "@/pages/reflections";
@@ -144,6 +146,23 @@ const AppContent = () => {
         </Route>
         
         {/* WirdhAI routes - specific routes first! */}
+        <Route path="/wirdh/new">
+          <RequireAuth>
+            <WirdhNew />
+          </RequireAuth>
+        </Route>
+        <Route path="/wirdh/:id">
+          <RequireAuth>
+            <WirdhDetail />
+          </RequireAuth>
+        </Route>
+        <Route path="/wirdh">
+          <RequireAuth>
+            <WirdhPage />
+          </RequireAuth>
+        </Route>
+        
+        {/* Keep old wird routes for backward compatibility */}
         <Route path="/wird/new">
           <RequireAuth>
             <WirdNew />
@@ -168,11 +187,6 @@ const AppContent = () => {
         <Route path="/personal-action-plan">
           <RequireAuth>
             <PersonalActionPlan />
-          </RequireAuth>
-        </Route>
-        <Route path="/masjid">
-          <RequireAuth>
-            <MasjidPage />
           </RequireAuth>
         </Route>
         <Route>

@@ -113,7 +113,7 @@ export default function Home() {
       description: "Track your daily Islamic practices and habits",
       icon: <ClipboardList className="h-6 w-6 text-primary" />,
       action: "Explore WirdhAI",
-      onClick: () => setLocation('/wird'),
+      onClick: () => setLocation('/wirdh'),
       color: "bg-amber-500/10 dark:bg-amber-500/20",
       iconColor: "text-amber-500"
     }

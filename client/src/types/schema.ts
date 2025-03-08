@@ -54,15 +54,28 @@ export interface WirdPractice {
   completed: number;
   unit: string;
   isCompleted: boolean;
+  // CLEAR framework fields
+  clearFramework?: {
+    cue: string;
+    lowFriction: string;
+    expandable: string;
+    adaptable: string;
+    rewardLinked: string;
+  };
 }
 
 export interface WirdSuggestion {
   id: string;
-  title: string;
-  description: string;
-  type: string; // e.g., "Quran", "Dhikr", "Dua" 
-  duration: string; // e.g., "5 minutes", "10 minutes"
-  frequency: string; // e.g., "daily", "weekly"
+  title?: string;
+  name: string;
+  type?: string;
+  category: string;
+  target: number;
+  unit?: string;
+  description?: string;
+  duration?: string;
+  frequency?: string;
+  benefit?: string;
 }
 
 export interface WirdEntry {
@@ -74,6 +87,8 @@ export interface WirdEntry {
   createdAt: Date;
   updatedAt: Date;
   isArchived: boolean | null;
+  sourceType?: 'reflection' | 'halaqa'; // Type of source that generated this wird
+  sourceId?: number; // ID of the source (reflection or halaqa)
 }
 
 export interface WirdFormData {

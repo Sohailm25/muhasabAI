@@ -3,6 +3,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Link } from "wouter";
 import { motion } from "framer-motion";
 import { ChevronRight, Star, ShieldCheck, Clock, BookOpen, PenLine, ClipboardList } from "lucide-react";
+import { useState } from "react";
+import { PrivacyPolicyModal } from "@/components/PrivacyPolicyModal";
 
 // Core features with detailed descriptions
 const coreFeatures = [
@@ -81,8 +83,13 @@ const scaleIn = {
 };
 
 export default function LandingPage() {
+  const [privacyPolicyOpen, setPrivacyPolicyOpen] = useState(false);
+  
   return (
     <div className="min-h-screen flex flex-col overflow-hidden">
+      {/* Privacy Policy Modal */}
+      <PrivacyPolicyModal open={privacyPolicyOpen} onOpenChange={setPrivacyPolicyOpen} />
+      
       {/* Islamic Pattern Background - Subtle and tasteful */}
       <div className="absolute inset-0 opacity-[0.03] dark:opacity-[0.02] pointer-events-none z-0 bg-repeat" 
            style={{ backgroundImage: "url('https://www.transparenttextures.com/patterns/arabesque.png')" }} />
@@ -96,7 +103,7 @@ export default function LandingPage() {
             transition={{ duration: 0.5 }}
             className="flex items-center gap-2"
           >
-            <h1 className="text-2xl font-bold text-primary">MuhasabAI</h1>
+            <h1 className="text-2xl font-bold text-primary">SahabAI</h1>
             <span className="text-xl text-primary/70 font-arabic">محاسبة</span>
           </motion.div>
           <motion.div 
@@ -422,7 +429,7 @@ export default function LandingPage() {
               custom={1}
               className="text-xl text-muted-foreground mb-8 mx-auto max-w-2xl"
             >
-              Join a community of Muslims using MuhasabAI to enhance their spiritual growth with privacy-focused, 
+              Join a community of Muslims using SahabAI to enhance their spiritual growth with privacy-focused, 
               personalized Islamic guidance.
             </motion.p>
             
@@ -443,7 +450,7 @@ export default function LandingPage() {
       <footer className="w-full py-12 px-4 md:px-8 relative z-10 border-t">
         <div className="container mx-auto text-center">
           <div className="flex justify-center items-center gap-2 mb-6">
-            <h2 className="text-xl font-bold text-primary">MuhasabAI</h2>
+            <h2 className="text-xl font-bold text-primary">SahabAI</h2>
             <span className="text-lg text-primary/70 font-arabic">محاسبة</span>
           </div>
           
@@ -451,9 +458,12 @@ export default function LandingPage() {
             <Link href="/help" className="text-muted-foreground hover:text-foreground transition-colors">
               Help & Support
             </Link>
-            <Link href="/help" className="text-muted-foreground hover:text-foreground transition-colors">
+            <button 
+              onClick={() => setPrivacyPolicyOpen(true)} 
+              className="text-muted-foreground hover:text-foreground transition-colors"
+            >
               Privacy Policy
-            </Link>
+            </button>
             <Link href="/help" className="text-muted-foreground hover:text-foreground transition-colors">
               Terms of Use
             </Link>
@@ -463,7 +473,7 @@ export default function LandingPage() {
           </div>
           
           <div className="text-muted-foreground">
-            <p>© {new Date().getFullYear()} MuhasabAI. All rights reserved.</p>
+            <p>© {new Date().getFullYear()} SahabAI. All rights reserved.</p>
             <p className="text-sm mt-2">
               "Whoever takes a path to gain knowledge, Allah will make easy for him the path to Paradise." - Prophet Muhammad ﷺ
             </p>

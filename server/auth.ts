@@ -1,7 +1,7 @@
 import { type Request, type Response, type NextFunction } from "express";
 import jwt from "jsonwebtoken";
 
-const JWT_SECRET = process.env.JWT_SECRET || "muhasabai-secret-key";
+const JWT_SECRET = process.env.JWT_SECRET || "sahabai-secret-key";
 
 /**
  * Middleware to verify authentication token

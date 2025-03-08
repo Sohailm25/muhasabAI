@@ -23,6 +23,7 @@ interface ConversationViewProps {
   onResponse?: (response: any) => void;
   onNewMessage?: (messages: Message[]) => void;
   onSelectedQuestion?: (question: string) => void;
+  onAnimationStart?: () => void;
   isFirstSubmission?: boolean;
   selectedQuestion?: string | null;
 }
@@ -51,7 +52,7 @@ const TypingAnimation = React.memo(({
     console.log(`[${animationId.current}] TypingAnimation setup - skipAnimation: ${skipAnimation}, textLength: ${text.length}, hasAnimated: ${hasAnimatedRef.current}, messageId: ${messageId}`);
     
     // If we should skip animation or already animated once, show full text immediately
-    if (skipAnimation || hasAnimatedRef.current) {
+    if (skipAnimation && hasAnimatedRef.current) {
       if (!isDone) {
         console.log(`[${animationId.current}] Skipping animation, showing full text immediately`);
         setDisplayText(text);
@@ -69,7 +70,7 @@ const TypingAnimation = React.memo(({
     }
     
     // Reset text if re-animating
-    if (!skipAnimation && !hasAnimatedRef.current) {
+    if (!hasAnimatedRef.current) {
       setDisplayText('');
     }
     
@@ -289,6 +290,7 @@ export function ConversationView({
   onResponse,
   onNewMessage,
   onSelectedQuestion,
+  onAnimationStart,
   isFirstSubmission = true,
   selectedQuestion: propSelectedQuestion = null,
 }: ConversationViewProps) {
@@ -496,13 +498,18 @@ export function ConversationView({
       return true;
     }
     
-    // If we're in initial load, don't skip animations
+    // If we're in initial load, don't skip animations but mark them to be animated
     if (initialLoad) {
       console.log(`Animation WILL RUN for message ${index} (initial load)`);
-      animatedMessageIdsRef.current.add(messageKey);
+      // Notify parent that animation is starting
+      if (onAnimationStart && index === messages.length - 1 && messages[index].role === "assistant") {
+        console.log("Notifying parent that animation is starting");
+        onAnimationStart();
+      }
+      // DO NOT add to animated set yet - we'll add it after animation completes
       
       // This is the last message and it's the AI's response, show questions after animation
-      if (index === messages.length - 1 && index % 2 === 1) {
+      if (index === messages.length - 1 && messages[index].role === "assistant") {
         console.log("Last AI message detected, will show questions after animation");
         // Add a small delay before showing questions
         setTimeout(() => {
@@ -512,23 +519,37 @@ export function ConversationView({
       return false;
     }
     
-    // For already existing messages before response submission, skip animation
-    // Only animate messages that are newly added (index > lastMessageId)
+    // For newly added messages, always run animation
+    // Compare with lastMessageId to determine if this is a new message
     const shouldSkip = lastMessageId !== null && index <= lastMessageId;
     
-    console.log(`Animation Check - Message ${index}, lastMessageId: ${lastMessageId}, shouldSkip: ${shouldSkip}`);
+    console.log(`Animation Check - Message ${index}, lastMessageId: ${lastMessageId}, shouldSkip: ${shouldSkip}, role: ${messages[index].role}`);
     
-    // If we're actually animating (not skipping), add to the set of animated messages
+    // Never skip animation for new AI responses (assistant role)
+    if (messages[index].role === "assistant" && !animatedMessageIdsRef.current.has(messageKey)) {
+      console.log(`Force animation for new AI message ${index}`);
+      // Notify parent that animation is starting for new messages
+      if (onAnimationStart) {
+        console.log("Notifying parent that animation is starting for new message");
+        onAnimationStart();
+      }
+      return false;
+    }
+    
+    // If we're actually animating (not skipping), DON'T add to the set of animated messages yet
+    // We'll do that after animation completes
     if (!shouldSkip) {
       console.log(`Animation WILL RUN for message ${index}`);
-      animatedMessageIdsRef.current.add(messageKey);
     }
     
     return shouldSkip;
-  }, [conversationId, lastMessageId, initialLoad]);
+  }, [conversationId, lastMessageId, initialLoad, messages, onAnimationStart]);
   
   // Stable function to handle when a message animation completes
   const handleMessageAnimationCompleted = useCallback((messageKey: string) => {
+    console.log(`Animation completed for message key ${messageKey}, marking as animated`);
+    // NOW we add to the set of animated messages
+    animatedMessageIdsRef.current.add(messageKey);
     completedAnimationsRef.current.add(messageKey);
     setShowQuestions(true);
   }, []);
@@ -782,7 +803,7 @@ export function ConversationView({
       })()}
       
       {/* Full screen loading animation ONLY for first-time submissions */}
-      {isSubmitting && isFirstSubmission && <LoadingAnimation message="Processing your response..." />}
+      {isSubmitting && isFirstSubmission && <LoadingAnimation message="Processing your response..." fullScreen={true} />}
       
       {/* Container with improved slide-in animation - key based on conversationId for animation on change */}
       <div 

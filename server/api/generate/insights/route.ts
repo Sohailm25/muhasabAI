@@ -3,10 +3,31 @@ import { generateInsights, PersonalizationContext } from "../../../lib/anthropic
 
 export async function POST(req: NextRequest) {
   try {
-    const { conversation, personalizationContext } = await req.json();
+    console.log("Insights API called");
+    
+    // Parse the request body
+    let conversation;
+    let personalizationContext;
+    
+    try {
+      const body = await req.json();
+      conversation = body.conversation;
+      personalizationContext = body.personalizationContext;
+      
+      console.log("Request body parsed successfully");
+      console.log("Conversation length:", conversation?.length || 0);
+      console.log("Has personalization:", !!personalizationContext);
+    } catch (parseError) {
+      console.error("Error parsing request body:", parseError);
+      return NextResponse.json(
+        { error: "Invalid request format" },
+        { status: 400 }
+      );
+    }
     
     // Validate the request
     if (!conversation) {
+      console.error("Missing conversation content");
       return NextResponse.json(
         { error: "Missing conversation content" },
         { status: 400 }
@@ -72,23 +93,41 @@ ${conversation}
 Respond with only a JSON array of 3-5 insights, with each insight as a string in the array.
 `;
     
-    // Generate insights with personalization if available
-    const insights = await generateInsights(
-      conversation,
-      personalizationContext as PersonalizationContext,
-      customPrompt
-    );
-    
-    // Structure the response
-    const response = {
-      insights
-    };
-    
-    return NextResponse.json(response);
+    try {
+      // Generate insights with personalization if available
+      console.log("Calling generateInsights function");
+      const insights = await generateInsights(
+        conversation,
+        personalizationContext as PersonalizationContext,
+        customPrompt
+      );
+      
+      console.log("Insights generated successfully:", insights?.length || 0);
+      
+      // Structure the response
+      const response = {
+        insights
+      };
+      
+      // Set appropriate headers
+      const headers = new Headers();
+      headers.set('Content-Type', 'application/json');
+      
+      return NextResponse.json(response, { headers });
+    } catch (generationError: unknown) {
+      console.error("Error in insights generation:", generationError);
+      return NextResponse.json(
+        { 
+          error: "Failed to generate insights", 
+          details: generationError instanceof Error ? generationError.message : String(generationError) 
+        },
+        { status: 500 }
+      );
+    }
   } catch (error) {
-    console.error("Error generating insights:", error);
+    console.error("Unhandled error in insights API:", error);
     return NextResponse.json(
-      { error: "Failed to generate insights" },
+      { error: "Failed to process request" },
       { status: 500 }
     );
   }

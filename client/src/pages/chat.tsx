@@ -1,27 +1,39 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Layout } from "@/components/Layout";
 import { ConversationView, Message } from "@/components/ConversationView";
 import { ActionItems } from "@/components/ActionItems";
 import { Insights } from "@/components/Insights";
 import { useToast } from "@/hooks/use-toast";
-import { useLocation, useRoute } from "wouter";
+import { useLocation, useRoute, useParams } from "wouter";
 import { LoadingAnimation } from "@/components/LoadingAnimation";
 import { useAuth } from "@/hooks/useAuth";
+import { wirdService } from "@/services/wirdService";
+import { Button } from "@/components/ui/button";
+import { CalendarCheck } from "lucide-react";
+import { WirdhSuggestions } from "@/components/WirdhSuggestions";
+import { WirdSuggestion } from "@/services/wirdService";
 
 export default function Chat() {
-  const [, params] = useRoute<{ id: string }>("/chat/:id");
-  const reflectionId = params ? parseInt(params.id) : null;
+  const [loading, setLoading] = useState(true);
+  const { id } = useParams();
+  const reflectionId = id ? parseInt(id) : null;
+  const [, navigate] = useLocation();
+  const { toast } = useToast();
+  const { user } = useAuth();
   
+  // Core data state
   const [messages, setMessages] = useState<Message[]>([]);
   const [questions, setQuestions] = useState<string[]>([]);
   const [actionItems, setActionItems] = useState<string[]>([]);
   const [insights, setInsights] = useState<string[]>([]);
-  const [followUpCount, setFollowUpCount] = useState(0);
-  const [isLoading, setIsLoading] = useState(false);
+  const [wirdSuggestions, setWirdSuggestions] = useState<WirdSuggestion[]>([]);
+  
+  // UI state
   const [isGeneratingItems, setIsGeneratingItems] = useState(false);
   const [isGeneratingInsights, setIsGeneratingInsights] = useState(false);
-  const { toast } = useToast();
-  const [, setLocation] = useLocation();
+  const [selectedQuestion, setSelectedQuestion] = useState<string | null>(null);
+  const [followUpCount, setFollowUpCount] = useState(0);
+  const hasDynamicContent = useRef(false);
 
   // Track if insights can be generated (3+ follow-up questions answered)
   const canGenerateInsights = followUpCount >= 3;
@@ -47,70 +59,40 @@ export default function Chat() {
             console.log("- Questions:", parsedSession.questions?.length || 0);
           }
           
-          // First, check for new format with understanding and original content
-          if (parsedSession.understanding && parsedSession.original) {
-            console.log("Using new reflection format with understanding and original");
-            // Convert to message format for ConversationView
-            const initialMessages: Message[] = [
-              { role: "user", content: parsedSession.original || "" },
-              { role: "assistant", content: parsedSession.understanding || "" }
-            ];
-            
-            setMessages(initialMessages);
-            setQuestions(parsedSession.questions || emptyArray);
-            setActionItems(parsedSession.actionItems || emptyArray);
-            setInsights(parsedSession.insights || emptyArray);
-            
-            // Log the extracted questions to verify they're loaded correctly
-            console.log("Loaded questions:", parsedSession.questions || emptyArray);
-          } 
-          // Then check for old format with messages array
-          else if (parsedSession.messages && parsedSession.messages.length > 0) {
-            console.log("Using old conversation format with messages array");
-            // Old format - ensure messages are properly formatted with the correct types
-            const formattedMessages = parsedSession.messages?.map((msg: any) => ({
-              role: msg.role || "user",
-              content: msg.content || ""
-            }));
-            
-            setMessages(formattedMessages || []);
-            setQuestions(parsedSession.questions || emptyArray);
-            setActionItems(parsedSession.actionItems || emptyArray);
-            setInsights(parsedSession.insights || emptyArray);
-          }
-          // Finally check if we have individual message fields but not in an array
-          else if (parsedSession.original) {
-            console.log("Using extracted individual fields");
-            // Construct messages from individual fields
+          // Set messages
+          if (parsedSession.messages) {
+            console.log(`Setting ${parsedSession.messages.length} messages from localStorage`);
+            setMessages(parsedSession.messages);
+          } else {
+            // Convert original and understanding to message format
             const initialMessages: Message[] = [
               { role: "user", content: parsedSession.original || "" }
             ];
             
-            // Add assistant message if we have an understanding
             if (parsedSession.understanding) {
               initialMessages.push({ role: "assistant", content: parsedSession.understanding });
-              console.log("Added assistant understanding message:", parsedSession.understanding);
-            } else {
-              console.warn("No understanding found in session data");
             }
             
+            console.log(`Converted to ${initialMessages.length} messages`);
             setMessages(initialMessages);
-            
-            // Make sure to extract questions if they exist
-            if (parsedSession.questions && parsedSession.questions.length > 0) {
-              console.log("Found questions in session data:", parsedSession.questions);
-              setQuestions(parsedSession.questions);
-            } else {
-              console.warn("No questions found in session data");
-              setQuestions(emptyArray);
-            }
-            
-            setActionItems(parsedSession.actionItems || emptyArray);
-            setInsights(parsedSession.insights || emptyArray);
           }
+          
+          // Set other data
+          setQuestions(parsedSession.questions || emptyArray);
+          setActionItems(parsedSession.actionItems || emptyArray);
+          setInsights(parsedSession.insights || emptyArray);
           
           // Count existing follow-up questions
           countFollowUps();
+          
+          // Add safety timeout to hide loading indicator after 5 seconds
+          // This ensures it doesn't stay visible forever if animation doesn't start
+          setTimeout(() => {
+            if (loading) {
+              console.log("Safety timeout: forcing loading state to false after 5 seconds");
+              setLoading(false);
+            }
+          }, 5000);
         } else {
           // If not in localStorage, try to fetch from server
           console.log("No data in localStorage, trying server fetch");
@@ -123,19 +105,22 @@ export default function Chat() {
           description: "Could not load the saved session.",
           variant: "destructive",
         });
+        setLoading(false); // Ensure loading is set to false on error
       }
     }
   }, [reflectionId]); // Only run when reflectionId changes
 
   // Fetch reflection data from server (fallback if not in localStorage)
   const fetchReflectionFromServer = async (id: number) => {
-    setIsLoading(true);
+    console.log(`Starting server fetch for reflection ${id}, setting loading=true`);
+    setLoading(true);
     try {
       // First try the new reflection endpoint
       const response = await fetch(`/api/reflection/${id}`);
       
       if (!response.ok) {
         // If that fails, try the old conversation endpoint
+        console.log(`New reflection endpoint failed, trying conversation endpoint for ${id}`);
         const oldResponse = await fetch(`/api/conversation/${id}`);
         
         if (!oldResponse.ok) {
@@ -174,7 +159,8 @@ export default function Chat() {
         variant: "destructive",
       });
     } finally {
-      setIsLoading(false);
+      console.log(`Server fetch complete for reflection ${id}, setting loading=false`);
+      setLoading(false);
     }
   };
 
@@ -200,29 +186,32 @@ export default function Chat() {
   const saveConversation = (
     updatedMessages: Message[], 
     updatedActionItems: string[] = actionItems,
-    updatedInsights: string[] = insights
+    updatedInsights: string[] = insights,
+    updatedWirdSuggestions: WirdSuggestion[] = wirdSuggestions
   ) => {
     if (!reflectionId) return;
     
     try {
-      const sessionData = {
-        reflectionId: reflectionId,
+      // Get existing session data if any
+      let sessionData = localStorage.getItem(`reflection_${reflectionId}`);
+      let existingData = sessionData ? JSON.parse(sessionData) : {};
+      
+      // Update with new values
+      const updatedData = {
+        ...existingData,
+        id: reflectionId,
+        reflectionId,
         messages: updatedMessages,
-        questions: questions,
         actionItems: updatedActionItems,
         insights: updatedInsights,
-        timestamp: new Date().toISOString()
+        wirdSuggestions: updatedWirdSuggestions,
+        lastUpdated: new Date().toISOString()
       };
       
-      localStorage.setItem(`ramadanReflection_${reflectionId}`, JSON.stringify(sessionData));
+      localStorage.setItem(`reflection_${reflectionId}`, JSON.stringify(updatedData));
       console.log("Saved session to localStorage");
     } catch (error) {
-      console.error("Error saving session:", error);
-      toast({
-        title: "Session Error",
-        description: "Could not save session data.",
-        variant: "destructive",
-      });
+      console.error("Error saving reflection data to localStorage:", error);
     }
   };
 
@@ -230,26 +219,38 @@ export default function Chat() {
   const handleNewMessage = (newMessages: Message[]) => {
     console.log("Updating messages:", newMessages);
     setMessages(newMessages);
+    
+    // Save the conversation to localStorage
     saveConversation(newMessages);
     
-    // Update follow-up count based on new messages
-    const followUpResponses = newMessages.filter(msg => 
-      msg.role === "user" && 
-      msg.content.startsWith("Q: ") && 
-      msg.content.includes("\n\nA: ")
+    // Count follow-up responses from the user
+    const followUpResponses = newMessages.filter(
+      msg => 
+        msg.role === "user" && 
+        msg.content.startsWith("Q: ") && 
+        msg.content.includes("\n\nA: ")
     );
     
     setFollowUpCount(followUpResponses.length);
+    
+    // Auto-generate insights after 2-3 follow-up messages if insights haven't been generated yet
+    if (followUpResponses.length >= 2 && insights.length === 0 && !isGeneratingInsights) {
+      console.log("Auto-generating insights after 2 follow-up messages");
+      // Add a small delay to ensure UI updates first
+      setTimeout(() => {
+        handleGenerateInsights();
+      }, 1000);
+    }
   };
 
   const handleActionItemsChange = (newActionItems: string[]) => {
     setActionItems(newActionItems);
-    saveConversation(messages, newActionItems, insights);
+    saveConversation(messages, newActionItems, insights, wirdSuggestions);
   };
 
   const handleInsightsChange = (newInsights: string[]) => {
     setInsights(newInsights);
-    saveConversation(messages, actionItems, newInsights);
+    saveConversation(messages, actionItems, newInsights, wirdSuggestions);
   };
 
   const handleSelectedQuestion = (question: string) => {
@@ -258,8 +259,10 @@ export default function Chat() {
     setSelectedQuestion(question);
   };
 
-  // Add a new state to track the selected question
-  const [selectedQuestion, setSelectedQuestion] = useState<string | null>(null);
+  const handleWirdSuggestionsChange = (newSuggestions: WirdSuggestion[]) => {
+    setWirdSuggestions(newSuggestions);
+    saveConversation(messages, actionItems, insights, newSuggestions);
+  };
 
   const handleGenerateActionItems = async () => {
     if (!reflectionId) return;
@@ -311,7 +314,7 @@ export default function Chat() {
         setActionItems(newActionItems);
         
         // Save to localStorage
-        saveConversation(messages, newActionItems, insights);
+        saveConversation(messages, newActionItems, insights, wirdSuggestions);
         
         toast({
           title: "Action Items Generated",
@@ -354,15 +357,25 @@ export default function Chat() {
         console.error("Error getting personalization context:", error);
       }
       
+      // Get the authentication token
+      const token = localStorage.getItem('auth_token');
+      if (!token) {
+        console.error("No authentication token found");
+        throw new Error("Authentication required");
+      }
+      
       // Convert messages to a string representation for the API
       const conversationText = messages.map(msg => 
         `${msg.role === 'user' ? 'User' : 'AI'}: ${msg.content}`
       ).join('\n\n');
       
+      console.log("Sending insights generation request with auth token");
+      
       const response = await fetch("/api/generate/insights", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
         },
         body: JSON.stringify({
           conversation: conversationText,
@@ -371,7 +384,8 @@ export default function Chat() {
       });
       
       if (!response.ok) {
-        throw new Error("Failed to generate insights");
+        console.error(`API error: ${response.status} - ${response.statusText}`);
+        throw new Error(`Failed to generate insights: ${response.status}`);
       }
       
       const data = await response.json();
@@ -382,7 +396,7 @@ export default function Chat() {
         setInsights(newInsights);
         
         // Save to localStorage
-        saveConversation(messages, actionItems, newInsights);
+        saveConversation(messages, actionItems, newInsights, wirdSuggestions);
         
         toast({
           title: "Insights Generated",
@@ -403,27 +417,208 @@ export default function Chat() {
     }
   };
 
+  const handleGenerateWirdSuggestions = async () => {
+    if (!reflectionId || !user?.id) return;
+    
+    setIsGeneratingItems(true); // Reuse the loading state
+    console.log("Starting wirdh suggestion generation with messages:", messages.length);
+    
+    try {
+      // Get personalization context if available
+      let personalizationContext = null;
+      try {
+        // Try to get personalization context from localStorage
+        const profileData = localStorage.getItem('userProfile');
+        if (profileData) {
+          const parsedProfile = JSON.parse(profileData);
+          // Check if personalization is enabled
+          if (parsedProfile.privacySettings?.allowPersonalization) {
+            personalizationContext = parsedProfile.privateProfile || null;
+            console.log("Using personalization for wird suggestions");
+          }
+        }
+      } catch (error) {
+        console.error("Error getting personalization context:", error);
+      }
+      
+      // Convert messages to a string representation for the API
+      // Include the full conversation context
+      const conversationText = messages.map(msg => 
+        `${msg.role === 'user' ? 'User' : 'AI'}: ${msg.content}`
+      ).join('\n\n');
+      
+      console.log("Prepared conversation context for wird suggestions:", 
+        conversationText.length > 100 ? 
+        `${conversationText.substring(0, 100)}... (${conversationText.length} chars total)` : 
+        conversationText);
+      
+      // Generate fallback suggestions if API call fails
+      const generateFallbackSuggestions = () => {
+        console.log("Using fallback wird suggestions");
+        const fallbackSuggestions = [
+          {
+            id: `wird-${Date.now()}-1`,
+            name: "Daily Quran Reading",
+            title: "Daily Quran Reading",
+            category: "Quran",
+            type: "Quran",
+            target: 5,
+            unit: "pages",
+            description: "Read portions of the Quran daily to strengthen your connection with Allah's words",
+            duration: "15-20 minutes",
+            frequency: "daily"
+          },
+          {
+            id: `wird-${Date.now()}-2`,
+            name: "Morning and Evening Adhkar",
+            title: "Morning and Evening Adhkar",
+            category: "Dhikr",
+            type: "Dhikr",
+            target: 1,
+            unit: "times",
+            description: "Recite the morning and evening remembrances to protect yourself and gain blessings",
+            duration: "10 minutes",
+            frequency: "twice daily"
+          }
+        ];
+        return fallbackSuggestions;
+      };
+      
+      try {
+        // Try to call the API to generate wird suggestions
+        console.log("Calling API to generate wird suggestions");
+        const response = await fetch("/api/generate/wird-suggestions", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            conversation: conversationText,
+            messages: messages, // Send full messages array for better context
+            personalizationContext
+          }),
+        });
+        
+        if (!response.ok) {
+          console.error(`API error: ${response.status} - ${response.statusText}`);
+          throw new Error("Failed to generate wird suggestions");
+        }
+        
+        const data = await response.json();
+        console.log("Generated wird suggestions:", data);
+        
+        if (data.wirdSuggestions && Array.isArray(data.wirdSuggestions)) {
+          // First, store the suggestions in localStorage for the WirdhAI page
+          storeWirdSuggestionsInLocalStorage(data.wirdSuggestions);
+          
+          // Add them to the user's wird plan with a backlink to this reflection
+          // Choose the first suggestion to automatically add as an example
+          if (data.wirdSuggestions.length > 0) {
+            const suggestion = data.wirdSuggestions[0];
+            await wirdService.addToWirdPlan(
+              user.id,
+              suggestion,
+              undefined, // Use current date
+              'reflection', // sourceType
+              reflectionId // sourceId
+            );
+          }
+          
+          toast({
+            title: "Wird Suggestions Generated",
+            description: "Spiritual practices have been suggested based on your reflection.",
+          });
+        } else {
+          throw new Error("Invalid response format");
+        }
+      } catch (error) {
+        console.error("API endpoint for wird suggestions not available, using fallback:", error);
+        
+        // Use fallback suggestions if API call fails
+        const fallbackSuggestions = generateFallbackSuggestions();
+        storeWirdSuggestionsInLocalStorage(fallbackSuggestions);
+        
+        // Add the first fallback suggestion to the user's wird plan
+        await wirdService.addToWirdPlan(
+          user.id,
+          fallbackSuggestions[0],
+          undefined, // Use current date
+          'reflection', // sourceType
+          reflectionId // sourceId
+        );
+        
+        toast({
+          title: "Wird Suggestions Generated",
+          description: "Spiritual practices have been suggested based on your reflection.",
+        });
+      }
+    } catch (error) {
+      console.error("Error generating wird suggestions:", error);
+      toast({
+        title: "Error",
+        description: "Failed to generate wird suggestions. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsGeneratingItems(false);
+    }
+  };
+  
+  // Store Wird suggestions in localStorage
+  const storeWirdSuggestionsInLocalStorage = (suggestions: WirdSuggestion[]) => {
+    try {
+      // Store in chat-specific state
+      setWirdSuggestions(suggestions);
+      
+      // Save to this reflection session
+      saveConversation(messages, actionItems, insights, suggestions);
+      
+      // Also store in global wirdSuggestions for the WirdhAI page
+      const existingSuggestions = localStorage.getItem('wirdSuggestions');
+      let allSuggestions = suggestions;
+      
+      if (existingSuggestions) {
+        const parsed = JSON.parse(existingSuggestions);
+        // Combine with new suggestions, avoiding duplicates by id
+        const existingIds = new Set(parsed.map((s: any) => s.id));
+        const uniqueNewSuggestions = suggestions.filter(s => !existingIds.has(s.id));
+        allSuggestions = [...parsed, ...uniqueNewSuggestions];
+      }
+      
+      // Save to localStorage
+      localStorage.setItem('wirdSuggestions', JSON.stringify(allSuggestions));
+    } catch (error) {
+      console.error("Error storing wird suggestions in localStorage:", error);
+    }
+  };
+
   // Get the user's first message for title
   const firstUserMessage = messages.find(msg => msg.role === "user");
   const chatTitle = firstUserMessage?.content || "Reflection";
   const displayTitle = chatTitle.length > 30 ? chatTitle.substring(0, 30) + "..." : chatTitle;
 
+  // Add a handler for when animation starts
+  const handleAnimationStart = () => {
+    console.log("Animation started in ConversationView, hiding loading spinner");
+    setLoading(false);
+  };
+
   return (
     <Layout title={displayTitle}>
-      {isLoading && <LoadingAnimation message="Loading conversation..." />}
+      {loading && <LoadingAnimation message="Loading conversation..." fullScreen={true} />}
       
-      <div className="container max-w-4xl mx-auto py-4 md:py-8 h-full px-3 md:px-4">
-        {/* On mobile, stack action items below conversation (reverse order) for better UX */}
-        <div className="grid grid-cols-1 md:grid-cols-[1fr,2fr] gap-4 md:gap-6 animate-slide-in">
-          {/* Action Items and Insights Column (Left on desktop, Bottom on mobile) */}
-          <div className="w-full order-2 md:order-1 space-y-4 md:space-y-6">
-            {/* Action Items Card */}
-            <div>
-              <h2 className="text-lg font-semibold mb-2 md:hidden">Action Items</h2>
-              <ActionItems 
-                items={actionItems} 
-                onChange={handleActionItemsChange}
-                onGenerate={handleGenerateActionItems}
+      <div className="container max-w-[95%] mx-auto py-4 md:py-8 h-full px-3 md:px-4">
+        {/* On mobile, stack wirdhSuggestions below conversation (reverse order) for better UX */}
+        <div className="grid grid-cols-1 md:grid-cols-[1.2fr,2.5fr] gap-6 md:gap-8 animate-slide-in">
+          {/* Suggestions and Insights Column (Left on desktop, Bottom on mobile) */}
+          <div className="w-full order-2 md:order-1 space-y-6 md:space-y-8">
+            {/* Wirdh Suggestions Card */}
+            <div className="bg-card rounded-lg shadow-sm p-4">
+              <h2 className="text-lg font-semibold mb-4">Spiritual Practices</h2>
+              <WirdhSuggestions 
+                suggestions={wirdSuggestions} 
+                onChange={handleWirdSuggestionsChange}
+                onGenerate={handleGenerateWirdSuggestions}
                 isGenerating={isGeneratingItems}
                 conversationId={reflectionId?.toString() || ""}
                 conversationTitle={displayTitle}
@@ -431,8 +626,8 @@ export default function Chat() {
             </div>
             
             {/* Spiritual Insights Card */}
-            <div>
-              <h2 className="text-lg font-semibold mb-2 md:hidden">Spiritual Insights</h2>
+            <div className="bg-card rounded-lg shadow-sm p-4">
+              <h2 className="text-lg font-semibold mb-4">Spiritual Insights</h2>
               <Insights 
                 insights={insights} 
                 onChange={handleInsightsChange}
@@ -444,16 +639,19 @@ export default function Chat() {
           </div>
           
           {/* Conversation View (Right on desktop, Top on mobile) */}
-          <div className="w-full order-1 md:order-2 mb-4 md:mb-0">
-            <ConversationView 
-              conversationId={reflectionId || undefined}
-              messages={messages} 
-              onNewMessage={handleNewMessage}
-              questions={questions}
-              onSelectedQuestion={handleSelectedQuestion}
-              isFirstSubmission={messages.length <= 2}
-              selectedQuestion={selectedQuestion}
-            />
+          <div className="w-full order-1 md:order-2 mb-6 md:mb-0">
+            <div className="bg-card rounded-lg shadow-sm p-4">
+              <ConversationView 
+                conversationId={reflectionId || undefined}
+                messages={messages} 
+                onNewMessage={handleNewMessage}
+                questions={questions}
+                onSelectedQuestion={handleSelectedQuestion}
+                isFirstSubmission={messages.length <= 2}
+                selectedQuestion={selectedQuestion}
+                onAnimationStart={handleAnimationStart}
+              />
+            </div>
           </div>
         </div>
       </div>

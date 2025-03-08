@@ -165,6 +165,8 @@ const createWirdSchema = z.object({
     })
   ),
   notes: z.string().optional(),
+  sourceType: z.enum(['reflection', 'halaqa']).optional(),
+  sourceId: z.number().optional(),
 });
 
 // POST /api/wirds - Create a new wird entry
@@ -216,6 +218,8 @@ const updateWirdSchema = z.object({
   ).optional(),
   notes: z.string().optional(),
   isArchived: z.boolean().optional(),
+  sourceType: z.enum(['reflection', 'halaqa']).optional(),
+  sourceId: z.number().optional(),
 });
 
 // PUT /api/wirds/:id - Update a wird entry
@@ -353,6 +357,8 @@ const AddWirdSuggestionSchema = z.object({
     unit: z.string().optional(),
   }),
   date: z.string().optional(),
+  sourceType: z.enum(['reflection', 'halaqa']).optional(),
+  sourceId: z.number().optional(),
 });
 
 // POST /api/wirds/add-suggestion - Add a wird suggestion to user's wird plan
@@ -361,7 +367,7 @@ router.post("/add-suggestion", async (req, res) => {
     console.log("Received add-suggestion request:", JSON.stringify(req.body, null, 2));
     
     // Validate the request body
-    const { userId, wirdSuggestion, date } = AddWirdSuggestionSchema.parse(req.body);
+    const { userId, wirdSuggestion, date, sourceType, sourceId } = AddWirdSuggestionSchema.parse(req.body);
     
     if (!userId) {
       return res.status(400).json({ 
@@ -422,6 +428,14 @@ router.post("/add-suggestion", async (req, res) => {
           updatedPractices
         );
         
+        // If source information is provided, update the wird with it
+        if (sourceType && sourceId) {
+          await storage.updateWird(wirdForDate.id, {
+            sourceType,
+            sourceId
+          });
+        }
+        
         console.log(`Added practice to existing wird ${wirdForDate.id}`);
       } else {
         // Create a new wird with this practice
@@ -429,7 +443,9 @@ router.post("/add-suggestion", async (req, res) => {
           userId,
           date: targetDate,
           practices: [simplePractice],
-          notes: ""
+          notes: "",
+          sourceType,
+          sourceId,
         });
         
         console.log(`Created new wird with ID ${result.id}`);
@@ -455,6 +471,92 @@ router.post("/add-suggestion", async (req, res) => {
       success: false, 
       error: errorMessage,
       stack: process.env.NODE_ENV === 'development' ? (error as Error).stack : undefined
+    });
+  }
+});
+
+// POST /api/wirds/remove-practice - Remove a practice from a user's wird plan
+router.post("/remove-practice", async (req, res) => {
+  try {
+    console.log("Received remove-practice request:", JSON.stringify(req.body, null, 2));
+    
+    // Validate the request body
+    const { userId, wirdId, practiceId } = req.body;
+    
+    if (!userId) {
+      return res.status(400).json({ 
+        success: false, 
+        error: "User ID is required" 
+      });
+    }
+    
+    if (!wirdId) {
+      return res.status(400).json({ 
+        success: false, 
+        error: "Wird ID is required" 
+      });
+    }
+    
+    if (!practiceId) {
+      return res.status(400).json({ 
+        success: false, 
+        error: "Practice ID is required" 
+      });
+    }
+    
+    try {
+      // Get the wird entry
+      const wird = await storage.getWird(wirdId);
+      
+      if (!wird) {
+        return res.status(404).json({ 
+          success: false, 
+          error: "Wird entry not found" 
+        });
+      }
+      
+      // Verify the wird belongs to the user
+      if (wird.userId !== userId) {
+        return res.status(403).json({ 
+          success: false, 
+          error: "You don't have permission to modify this wird" 
+        });
+      }
+      
+      // Filter out the practice to remove
+      const updatedPractices = wird.practices.filter(
+        practice => practice.id !== practiceId
+      );
+      
+      // If all practices are removed, delete the wird entry
+      if (updatedPractices.length === 0) {
+        await storage.deleteWird(wirdId);
+        return res.json({ 
+          success: true, 
+          message: "Wird entry deleted as it had no remaining practices",
+          deleted: true
+        });
+      }
+      
+      // Update the wird with the filtered practices
+      const result = await storage.updateWirdPractices(
+        wirdId,
+        updatedPractices
+      );
+      
+      return res.json({ 
+        success: true, 
+        result 
+      });
+    } catch (innerError) {
+      console.error("Inner error in remove-practice:", innerError);
+      throw new Error(`Failed to remove practice: ${innerError.message}`);
+    }
+  } catch (error) {
+    console.error("Error removing practice from wird plan:", error);
+    return res.status(500).json({ 
+      success: false, 
+      error: error.message || "Failed to remove practice from wird plan" 
     });
   }
 });

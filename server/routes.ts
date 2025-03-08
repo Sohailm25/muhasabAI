@@ -23,12 +23,12 @@ import jwt from "jsonwebtoken";
 // Import debug middleware
 import { authDebugMiddleware } from "./middleware/auth-debug";
 
-// Define JWT secret
-const JWT_SECRET = process.env.JWT_SECRET || "muhasabai-secret-key";
-
 // Get current directory for ES modules (replacement for __dirname)
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+// Define JWT secret
+const JWT_SECRET = process.env.JWT_SECRET || "sahabai-secret-key";
 
 // Configure multer for in-memory storage
 const upload = multer({
@@ -959,12 +959,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       console.log(`Received audio file of size ${file.size} bytes`);
       
+      // Make sure the file size is reasonable
+      if (file.size > 25 * 1024 * 1024) { // 25 MB limit
+        return res.status(400).json({ 
+          error: "Audio file is too large. Please keep recordings under 25 MB or reduce the recording quality." 
+        });
+      }
+      
+      if (file.size === 0) {
+        return res.status(400).json({ error: "Audio file is empty. Please try recording again." });
+      }
+      
       // Convert the audio buffer to base64
       const audioBase64 = `data:audio/wav;base64,${file.buffer.toString('base64')}`;
       
       try {
-        // Transcribe the audio
-        const transcription = await transcribeAudio(audioBase64);
+        // Add a timeout promise for the transcription process to prevent hanging requests
+        const timeoutPromise = new Promise<never>((_, reject) => {
+          setTimeout(() => reject(new Error("Transcription timed out after 90 seconds")), 90000);
+        });
+        
+        // Transcribe the audio with timeout protection
+        const transcriptionPromise = transcribeAudio(audioBase64);
+        const transcription = await Promise.race([transcriptionPromise, timeoutPromise]);
+        
         if (!transcription || transcription.trim().length === 0) {
           return res.status(400).json({
             error: "No speech detected in the audio. Please try again and speak clearly."
@@ -973,11 +991,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         
         console.log("Audio transcription successful:", transcription);
         
-        // Create a reflection entry with the transcribed content
+        // Create a reflection entry with the transcribed content as the primary content
         const reflection = await storage.createReflection({
-          content: audioBase64,
+          content: transcription, // Store the transcribed text, not the audio data
           type: "audio",
-          transcription
+          transcription, // Also keep the transcription in the transcription field
+          audioData: audioBase64 // Store the audio data in a separate field
         });
         
         // Default questions in case API fails
@@ -1024,8 +1043,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       } catch (error) {
         console.error("Error in audio transcription:", error);
-        res.status(500).json({ 
-          error: "Failed to process audio reflection",
+        
+        // Provide more specific error messages based on error type
+        let errorMessage = "Failed to process audio reflection";
+        let statusCode = 500;
+        
+        if (error instanceof Error) {
+          if (error.message.includes("timed out")) {
+            errorMessage = "The transcription process took too long. Please try a shorter audio clip or try again later.";
+            statusCode = 408; // Request Timeout
+          } else if (error.message.includes("ECONNRESET") || error.message.includes("Connection error")) {
+            errorMessage = "Connection to the transcription service was interrupted. Please try again later.";
+            statusCode = 503; // Service Unavailable
+          } else if (error.message.includes("Invalid API key")) {
+            errorMessage = "Server configuration error with the transcription service. Please contact support.";
+            statusCode = 500;
+          } else if (error.message.includes("Rate limit")) {
+            errorMessage = "The transcription service is currently experiencing high demand. Please try again in a few minutes.";
+            statusCode = 429; // Too Many Requests
+          }
+        }
+        
+        res.status(statusCode).json({ 
+          error: errorMessage,
           details: process.env.NODE_ENV === "development" ? (error instanceof Error ? error.message : String(error)) : undefined
         });
       }

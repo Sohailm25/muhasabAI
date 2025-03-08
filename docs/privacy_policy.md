@@ -1,8 +1,8 @@
-# MuhasabAI Privacy Policy
+# SahabAI Privacy Policy
 
 ## Introduction
 
-MuhasabAI is committed to protecting your privacy and ensuring the security of your personal information. This Privacy Policy explains how we collect, use, store, and protect your data when you use our application, with a particular focus on our personalization system.
+SahabAI is committed to protecting your privacy and ensuring the security of your personal information. This Privacy Policy explains how we collect, use, store, and protect your data when you use our application, with a particular focus on our personalization system.
 
 ## Our Commitment to Privacy
 
@@ -90,7 +90,7 @@ We implement the following security measures:
 
 ## Your Privacy Controls
 
-MuhasabAI gives you comprehensive control over your data:
+SahabAI gives you comprehensive control over your data:
 
 ### Privacy Settings
 
@@ -107,7 +107,7 @@ MuhasabAI gives you comprehensive control over your data:
 
 ## Children's Privacy
 
-MuhasabAI is not directed to children under 13 years of age. We do not knowingly collect personal information from children under 13.
+SahabAI is not directed to children under 13 years of age. We do not knowingly collect personal information from children under 13.
 
 ## Changes to This Privacy Policy
 
@@ -117,9 +117,9 @@ We may update our Privacy Policy from time to time. We will notify you of any ch
 
 If you have any questions about this Privacy Policy, please contact us at:
 
-- Email: privacy@muhasabai.com
+- Email: privacy@sahabai.com
 - Address: [Your Physical Address]
 
 ## Last Updated
 
-This Privacy Policy was last updated on [Current Date]. 
+This Privacy Policy was last updated on 05/06/2025

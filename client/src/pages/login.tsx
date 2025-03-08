@@ -112,7 +112,7 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-b from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-950 p-4">
       <div className="text-center mb-8">
-        <h1 className="text-3xl font-bold text-primary mb-2">MuhasabAI</h1>
+        <h1 className="text-3xl font-bold text-primary mb-2">SahabAI</h1>
         <p className="text-gray-600 dark:text-gray-400">Your personal Islamic reflection companion</p>
       </div>
       
@@ -128,7 +128,7 @@ export default function LoginPage() {
             <form onSubmit={handleLogin}>
               <CardHeader>
                 <CardTitle>Welcome Back</CardTitle>
-                <CardDescription>Login to your MuhasabAI account</CardDescription>
+                <CardDescription>Login to your SahabAI account</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="space-y-2">
@@ -203,7 +203,7 @@ export default function LoginPage() {
             <form onSubmit={handleSignup}>
               <CardHeader>
                 <CardTitle>Create Account</CardTitle>
-                <CardDescription>Sign up for a MuhasabAI account</CardDescription>
+                <CardDescription>Sign up for a SahabAI account</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="space-y-2">
