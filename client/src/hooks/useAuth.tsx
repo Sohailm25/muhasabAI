@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, createContext, useContext } from 'react';
-import { api } from '../lib/api';
+import { API } from '../lib/api';
 import { useProfile } from './useProfile';
 
 // Types for authentication
@@ -37,6 +37,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const { resetProfile } = useProfile();
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   
   // Check if user is already logged in
   useEffect(() => {
@@ -61,48 +62,40 @@ export function AuthProvider({ children }: AuthProviderProps) {
         
         const validateToken = async (): Promise<void> => {
           try {
-            console.log('[Auth Debug] Validating token with server... Attempt:', validationAttempts + 1);
-            const userData = await api.get('/auth/validate');
-            console.log('[Auth Debug] Token validation successful, user data:', userData);
-            setUser(userData);
+            console.log('[AUTH] Validating token...');
+            setIsLoading(true);
             
-            // Only try to get or create profile if we have valid user data
-            if (userData && userData.id) {
-              try {
-                console.log('Checking for user profile on app load...');
-                await api.get('/api/profile');
-                console.log('Profile exists');
-              } catch (error) {
-                const profileError = error as { status?: number };
-                if (profileError.status === 404) {
-                  console.log('Profile not found on app load, creating new profile');
-                  try {
-                    // Use the ensureUserProfile function to create a profile
-                    await ensureUserProfile(userData.id);
-                    console.log('Profile created successfully on app load');
-                  } catch (createError) {
-                    console.error('Error creating profile on app load:', createError);
-                    // Don't fail authentication if profile creation fails
-                    // Just continue with the authenticated user
-                  }
-                } else {
-                  console.error('Error checking for profile:', profileError);
-                  // Don't fail authentication if profile check fails
-                }
-              }
+            const userData = await API.validateToken();
+            console.log('[AUTH] Token validation successful:', userData);
+            
+            if (userData) {
+              setUser({
+                id: userData.id,
+                email: userData.email,
+                name: userData.name,
+                isFirstLogin: userData.isFirstLogin || false,
+                hasAcceptedPrivacyPolicy: userData.hasAcceptedPrivacyPolicy || false,
+                createdAt: userData.createdAt ? new Date(userData.createdAt) : new Date(),
+                updatedAt: userData.updatedAt ? new Date(userData.updatedAt) : new Date()
+              });
+              setIsAuthenticated(true);
+              
+              // Ensure user profile exists
+              console.log('[AUTH] Ensuring user profile exists after token validation');
+              await ensureUserProfile(userData.id);
+            } else {
+              console.log('[AUTH] No user data returned from token validation');
+              setUser(null);
+              setIsAuthenticated(false);
+              localStorage.removeItem('auth_token');
             }
           } catch (error) {
-            console.log('Token validation failed:', error);
-            validationAttempts++;
-            
-            if (validationAttempts < maxAttempts) {
-              console.log(`Retrying validation... Attempt ${validationAttempts + 1} of ${maxAttempts}`);
-              await validateToken();
-            } else {
-              console.log('Max validation attempts reached, clearing auth state');
-              localStorage.removeItem('auth_token');
-              setUser(null);
-            }
+            console.error('[AUTH] Token validation error:', error);
+            setUser(null);
+            setIsAuthenticated(false);
+            localStorage.removeItem('auth_token');
+          } finally {
+            setIsLoading(false);
           }
         };
         
@@ -121,24 +114,24 @@ export function AuthProvider({ children }: AuthProviderProps) {
   // Function to ensure a user profile exists
   const ensureUserProfile = async (userId: string) => {
     try {
-      console.log('Ensuring user profile exists for:', userId);
+      console.log('[AUTH] Ensuring user profile exists for:', userId);
       
       // Check if profile already exists
-      console.log('Checking if profile already exists...');
+      console.log('[AUTH] Checking if profile exists...');
       try {
-        const existingProfile = await api.getUserProfile();
-        console.log('Profile check result:', existingProfile ? 'Found' : 'Not found');
+        const existingProfile = await API.getUserProfile();
+        console.log('[AUTH] Profile check result:', existingProfile ? 'Found' : 'Not found');
         
         if (existingProfile) {
-          console.log('Profile already exists, no need to create');
+          console.log('[AUTH] Profile already exists, no need to create');
           return existingProfile;
         }
       } catch (profileError) {
-        console.log('Profile not found, creating new one...');
+        console.log('[AUTH] Profile not found, creating new one...');
       }
       
       // Create profile directly using the new API method
-      console.log('Creating profile directly for user:', userId);
+      console.log('[AUTH] Creating profile directly for user:', userId);
       const profileData = {
         userId,
         generalPreferences: {
@@ -153,14 +146,20 @@ export function AuthProvider({ children }: AuthProviderProps) {
         }
       };
       
-      console.log('Sending direct profile creation request with data:', profileData);
-      const createdProfile = await api.createOrUpdateUserProfile(profileData);
-      console.log('Profile created successfully:', createdProfile);
-      
-      return createdProfile;
+      console.log('[AUTH] Sending direct profile creation request with data:', profileData);
+      try {
+        const createdProfile = await API.createOrUpdateUserProfile(profileData);
+        console.log('[AUTH] Profile created successfully:', createdProfile);
+        return createdProfile;
+      } catch (createError) {
+        console.error('[AUTH] Error creating profile:', createError);
+        setError('Failed to set up your profile. Please try again.');
+        return null;
+      }
     } catch (error) {
-      console.error('Error ensuring user profile exists:', error);
-      throw error;
+      console.error('[AUTH] Error ensuring user profile exists:', error);
+      setError('Failed to set up your profile. Please try again.');
+      return null;
     }
   };
   
@@ -171,7 +170,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       setError(null);
       
       // Call register API
-      const response = await api.post('/auth/register', { email, password, name });
+      const response = await API.post('/auth/register', { email, password, name });
       
       // Save token
       const { token, user } = response;
@@ -202,7 +201,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       setError(null);
       
       // Call login API
-      const response = await api.post('/auth/login', { email, password });
+      const response = await API.post('/auth/login', { email, password });
       
       // Save token
       const { token, user } = response;
@@ -422,7 +421,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       setIsLoading(true);
       
       // Call logout API
-      await api.post('/auth/logout');
+      await API.post('/auth/logout');
       
       // Clear local storage
       localStorage.removeItem('auth_token');
@@ -443,7 +442,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   // Memoized context value
   const contextValue: AuthContextType = {
     user,
-    isAuthenticated: !!user,
+    isAuthenticated,
     isLoading,
     error,
     login,

@@ -6,9 +6,10 @@ import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { initializeDatabase } from "./db";
 import cors from 'cors';
+import bodyParser from 'body-parser';
 
 // Import route modules
-import profileRoutes from './routes/profile-routes';
+import profileRoutes, { initProfileRoutes } from './routes/profile-routes';
 import healthRoutes from './routes/health-routes';
 import halaqaRoutes from './routes/halaqa-routes';
 import wirdRoutes from './routes/wird-routes';
@@ -21,6 +22,13 @@ import reflectionRoutes from "./routes/reflection-routes";
 import transcriptionRoutes from './src/routes/transcription';
 import { authRequired } from './auth';
 import { generateWirdRecommendations } from './lib/anthropic';
+
+// Import middleware
+import { errorHandler } from './middleware/error-handler';
+import { requestLogger } from './middleware/request-logger';
+
+// Import database utilities
+import { runMigrations, validateDatabaseSchema } from './database/migration-manager';
 
 // Import or define the missing functions
 // import { testConnection } from './db/postgres';
@@ -204,128 +212,137 @@ async function testConnection(): Promise<boolean> {
   }
 }
 
-(async () => {
-  // Check environment variables
-  checkRequiredEnvVars();
+// Initialize database and run migrations
+async function initializeDatabaseWithMigrations() {
+  console.log('🔍 [SERVER INIT] Initializing database...');
   
-  console.log("\n\n🔍 [SERVER INIT] Starting server initialization...");
-  console.log("🔍 [SERVER INIT] Initialization timestamp:", new Date().toISOString());
-  console.log("🔍 [SERVER INIT] Environment:", process.env.NODE_ENV);
-  
-  // Initialize database for Railway deployment
-  if (process.env.NODE_ENV === 'production') {
-    try {
-      console.log('[DB INIT] Starting database initialization...');
-      console.log('[DB INIT] Database URL configured:', process.env.DATABASE_URL ? 'Yes' : 'No');
-      console.log('[DB INIT] Environment:', process.env.NODE_ENV);
-      
-      await initializeDatabase();
-      
-      console.log('[DB INIT] Database initialization completed successfully');
-      log('Database initialization completed successfully', 'database');
-      
-      // Test database connection
-      try {
-        console.log('[DB INIT] Testing database connection...');
-        const isConnected = await testConnection();
-        console.log(`[DB INIT] Database connection test ${isConnected ? 'successful' : 'failed'}`);
-        
-        if (isConnected) {
-          // Log some database stats
-          console.log('[DB INIT] Checking for users in database...');
-          const userCount = await getUserCount();
-          console.log(`[DB INIT] Found ${userCount} users in database`);
-        }
-      } catch (connectionError) {
-        console.error('[DB INIT] Database connection test error:', connectionError);
-      }
-    } catch (error) {
-      console.error('[DB INIT] Database initialization error:', error);
-      log(`Database initialization error: ${error instanceof Error ? error.message : String(error)}`, 'error');
-      // Don't exit on database error - allow fallback to in-memory storage
-      console.log('[DB INIT] Falling back to in-memory storage');
+  try {
+    // Initialize database connection
+    await db.initialize();
+    
+    // Validate database schema
+    console.log('🔍 [SERVER INIT] Validating database schema...');
+    const schemaValid = await validateDatabaseSchema(db.getPool());
+    
+    if (!schemaValid) {
+      console.warn('⚠️ [SERVER INIT] Database schema validation failed. Running migrations...');
     }
+    
+    // Run migrations
+    console.log('🔍 [SERVER INIT] Running database migrations...');
+    await runMigrations(db.getPool());
+    
+    console.log('✅ [SERVER INIT] Database initialization completed successfully');
+    return true;
+  } catch (error) {
+    console.error('❌ [SERVER INIT] Database initialization failed:', error);
+    throw error;
   }
+}
+
+// Register routes
+function registerRoutes() {
+  console.log('🔍 [SERVER INIT] Registering routes...');
   
-  // Register main routes
-  console.log("🔍 [SERVER INIT] Registering main routes via registerRoutes()...");
-  const server = await registerRoutes(app);
-  console.log("🔍 [SERVER INIT] Main routes registered successfully");
-
-  // Register additional routes for security personalization feature
-  console.log("🔍 [SERVER INIT] Registering additional routes...");
-  console.log("🔍 [SERVER INIT] Registering profile routes at /api");
-  app.use('/api', profileRoutes);
-  console.log("🔍 [SERVER INIT] Registering health routes at /api");
-  app.use('/api', healthRoutes);
-  console.log("🔍 [SERVER INIT] Registering insights routes at /api");
-  app.use('/api', insightsRoutes);
-
-  // Add a special route to log and debug requests to /api/generate/wird-suggestions
-  app.use('/api/generate/wird-suggestions', (req, res, next) => {
-    console.log('🔍 DEBUGGING ROUTE: /api/generate/wird-suggestions');
-    console.log('🔍 Method:', req.method);
-    console.log('🔍 Headers:', JSON.stringify(req.headers));
-    console.log('🔍 Body:', JSON.stringify(req.body));
-    console.log('🔍 Passing to next handler...');
-    next();
+  // Add request logger middleware
+  app.use(requestLogger);
+  
+  // Register health check endpoint
+  app.get('/health', (req, res) => {
+    res.json({ status: 'ok', timestamp: new Date().toISOString() });
   });
-
-  console.log('🚀 ROUTE REGISTRATION ORDER:');
-  console.log('1. Registering wird routes at /api');
   
-  // Feature-specific API routes - IMPORTANT: Register wird routes BEFORE halaqa routes
-  app.use('/api', wirdRoutes); // Register wird routes first to ensure /api/generate/wird-suggestions is handled correctly
+  // Register API routes
+  console.log('🔍 [SERVER INIT] Registering API routes...');
   
-  console.log('2. Registering user routes at /api/user');
-  app.use('/api/user', userRoutes);
+  // Define API prefixes
+  const API_PREFIX = '/api';
+  const AUTH_PREFIX = `${API_PREFIX}/auth`;
+  const PROFILE_PREFIX = `${API_PREFIX}/profile`;
   
-  console.log('3. Registering reflection routes at /api/reflections');
-  app.use('/api/reflections', reflectionRoutes);
-  
-  console.log('4. Registering halaqa routes at /api/halaqas');
-  app.use('/api/halaqas', halaqaRoutes); // Register halaqa routes after wird routes
-  
-  // Mount auth routes at both /api/auth and /auth to handle both API and OAuth callback
+  // Register auth routes
   console.log("🔍 [SERVER INIT] Registering auth routes at /auth");
   app.use('/auth', authRoutes);
   console.log("🔍 [SERVER INIT] Registering auth routes at /api/auth");
-  app.use('/api/auth', authRoutes);
-
-  // Register additional routes for client compatibility
+  app.use(AUTH_PREFIX, authRoutes);
+  
+  // Register profile routes
+  console.log("🔍 [SERVER INIT] Registering profile routes at /api/profile");
+  app.use(PROFILE_PREFIX, initProfileRoutes(db.getPool()));
+  
+  // Register compatibility routes
   console.log("🔍 [SERVER INIT] Registering compatibility routes");
+  
+  // Redirect /api/auth/validate to /auth/validate-with-fallback
   app.get('/api/auth/validate', (req, res, next) => {
     console.log("🔍 [COMPAT] Redirecting /api/auth/validate to /auth/validate-with-fallback");
-    // Redirect to the validate-with-fallback endpoint
     res.redirect(307, '/auth/validate-with-fallback');
   });
-
-  // Register transcription routes
+  
+  // Register other routes
   console.log("🔍 [SERVER INIT] Registering transcription routes");
   app.use('/api/transcribe', transcriptionRoutes);
-
-  // Add a catch-all route for debugging unhandled API requests
-  app.use('/api/*', (req, res, next) => {
-    console.log(`⚠️ UNHANDLED API REQUEST: ${req.method} ${req.path}`);
-    next();
+  
+  // Register wird routes
+  console.log("🔍 [SERVER INIT] Registering wird routes at /api");
+  app.use('/api', wirdRoutes);
+  
+  // Register user routes
+  console.log("🔍 [SERVER INIT] Registering user routes at /api/user");
+  app.use('/api/user', userRoutes);
+  
+  // Register reflection routes
+  console.log("🔍 [SERVER INIT] Registering reflection routes at /api/reflections");
+  app.use('/api/reflections', reflectionRoutes);
+  
+  // Register halaqa routes
+  console.log("🔍 [SERVER INIT] Registering halaqa routes at /api/halaqas");
+  app.use('/api/halaqas', halaqaRoutes);
+  
+  // Register error handler middleware (must be after routes)
+  app.use(errorHandler);
+  
+  // Log all registered routes for debugging
+  console.log('🚀 REGISTERED ROUTES:');
+  app._router.stack.forEach((middleware: any) => {
+    if (middleware.route) {
+      console.log(`${middleware.route.stack[0].method.toUpperCase()} ${middleware.route.path}`);
+    } else if (middleware.name === 'router') {
+      middleware.handle.stack.forEach((handler: any) => {
+        if (handler.route) {
+          const method = handler.route.stack[0].method.toUpperCase();
+          const path = handler.route.path;
+          console.log(`${method} ${middleware.regexp} ${path}`);
+        }
+      });
+    }
   });
+  
+  console.log('✅ [SERVER INIT] Routes registered successfully');
+}
 
-  app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
-    const status = err.status || err.statusCode || 500;
-    const message = err.message || "Internal Server Error";
-    log(`Error: ${err.stack || err}`, 'error');
-    res.status(status).json({ error: message });
-  });
-
-  if (app.get("env") === "development") {
-    await setupVite(app, server);
-  } else {
-    serveStatic(app);
+// Start server
+async function startServer() {
+  console.log(`🔍 [SERVER INIT] Starting server initialization...`);
+  console.log(`🔍 [SERVER INIT] Initialization timestamp: ${new Date().toISOString()}`);
+  console.log(`🔍 [SERVER INIT] Environment: ${process.env.NODE_ENV}`);
+  
+  try {
+    // Initialize database
+    await initializeDatabaseWithMigrations();
+    
+    // Register routes
+    registerRoutes();
+    
+    // Start server
+    app.listen(PORT, () => {
+      console.log(`🚀 [SERVER] Server running on port ${PORT}`);
+    });
+  } catch (error) {
+    console.error('❌ [SERVER INIT] Failed to start server:', error);
+    process.exit(1);
   }
+}
 
-  // Use Railway's PORT environment variable or fall back to 3000
-  const port = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
-  server.listen(port, "0.0.0.0", () => {
-    log(`Server running on port ${port}`, 'info');
-  });
-})();
+// Start the server
+startServer();
