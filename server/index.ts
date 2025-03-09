@@ -292,6 +292,14 @@ async function testConnection(): Promise<boolean> {
   console.log("🔍 [SERVER INIT] Registering auth routes at /api/auth");
   app.use('/api/auth', authRoutes);
 
+  // Register additional routes for client compatibility
+  console.log("🔍 [SERVER INIT] Registering compatibility routes");
+  app.get('/api/auth/validate', (req, res, next) => {
+    console.log("🔍 [COMPAT] Redirecting /api/auth/validate to /auth/validate-with-fallback");
+    // Redirect to the validate-with-fallback endpoint
+    res.redirect(307, '/auth/validate-with-fallback');
+  });
+
   // Register transcription routes
   console.log("🔍 [SERVER INIT] Registering transcription routes");
   app.use('/api/transcribe', transcriptionRoutes);

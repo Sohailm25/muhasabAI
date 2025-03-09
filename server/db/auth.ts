@@ -81,28 +81,57 @@ export async function getUserById(id: string): Promise<User | null> {
  */
 export async function createUser(userData: Partial<User>): Promise<User> {
   try {
-    // Generate a unique ID if not provided
-    const id = userData.id || generateUniqueId();
-    const data: User = {
-      id: id,
-      email: userData.email!,
-      name: userData.name!,
+    console.log(`[USER CREATION] Starting user creation process with data:`, {
+      email: userData.email,
+      name: userData.name,
+      googleId: userData.googleId ? 'Present' : 'Not present',
+      isFirstLogin: userData.isFirstLogin
+    });
+    
+    // Check if usersStore is initialized
+    if (!usersStore) {
+      console.error('[USER CREATION] usersStore is not initialized');
+      throw new Error('User store not initialized');
+    }
+    
+    console.log(`[USER CREATION] Current users in store: ${usersStore.size}`);
+    
+    // Generate a unique ID for the user
+    const userId = userData.id || generateUniqueId();
+    console.log(`[USER CREATION] Generated/provided user ID: ${userId}`);
+    
+    // Create user object with required fields
+    const user: User = {
+      id: userId,
+      email: userData.email || '',
+      name: userData.name || '',
       password: userData.password,
       googleId: userData.googleId,
-      isFirstLogin: userData.isFirstLogin ?? true,
-      hasAcceptedPrivacyPolicy: userData.hasAcceptedPrivacyPolicy ?? false,
+      isFirstLogin: userData.isFirstLogin !== undefined ? userData.isFirstLogin : true,
+      hasAcceptedPrivacyPolicy: userData.hasAcceptedPrivacyPolicy || false,
       createdAt: userData.createdAt || new Date(),
       updatedAt: userData.updatedAt || new Date()
     };
     
-    // Store user and create email index
-    usersStore.set(id, data);
-    emailIndex.set(data.email, id);
+    // Store user in memory
+    usersStore.set(userId, user);
     
-    log(`Created new user: ${id} (${data.email})`, 'debug');
-    return data;
+    // Index user by email for quick lookup
+    if (user.email) {
+      emailIndex.set(user.email, userId);
+      console.log(`[USER CREATION] User indexed by email: ${user.email}`);
+    }
+    
+    console.log(`[USER CREATION] User created successfully with ID: ${userId}`);
+    console.log(`[USER CREATION] Updated users in store: ${usersStore.size}`);
+    
+    // Log a few user IDs from the store for debugging
+    const userIds = Array.from(usersStore.keys()).slice(0, 5);
+    console.log(`[USER CREATION] Sample user IDs in store: ${userIds.join(', ')}`);
+    
+    return user;
   } catch (error) {
-    console.error('Error creating user:', error);
+    console.error('[USER CREATION] Error creating user:', error);
     throw error;
   }
 }

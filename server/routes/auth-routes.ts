@@ -43,23 +43,36 @@ function generateToken(userId: string): string {
  */
 router.post('/register', async (req, res) => {
   try {
+    console.log('[REGISTER] Starting user registration process');
+    console.log('[REGISTER] Request body:', {
+      email: req.body.email ? 'Present' : 'Not present',
+      password: req.body.password ? 'Present' : 'Not present',
+      name: req.body.name ? 'Present' : 'Not present'
+    });
+    
     const { email, password, name } = req.body;
     
     // Validate input
     if (!email || !password || !name) {
+      console.log('[REGISTER] Missing required fields');
       return res.status(400).json({ error: 'Email, password, and name are required' });
     }
     
     // Check if user already exists
+    console.log(`[REGISTER] Checking if user with email ${email} already exists`);
     const existingUser = await getUserByEmail(email);
+    
     if (existingUser) {
+      console.log(`[REGISTER] User with email ${email} already exists`);
       return res.status(409).json({ error: 'User with this email already exists' });
     }
     
     // Hash password
+    console.log('[REGISTER] Hashing password');
     const hashedPassword = await hashPassword(password as string);
     
     // Create user
+    console.log('[REGISTER] Creating new user');
     const newUser = await createUser({
       email,
       password: hashedPassword,
@@ -69,17 +82,28 @@ router.post('/register', async (req, res) => {
       updatedAt: new Date()
     });
     
+    console.log(`[REGISTER] User created successfully with ID: ${newUser.id}`);
+    
     // Generate token
+    console.log(`[REGISTER] Generating token for user ID: ${newUser.id}`);
     const token = generateToken(newUser.id);
+    console.log(`[REGISTER] Token generated successfully: ${token.substring(0, 10)}...`);
+    
+    // Store token in database
+    console.log(`[REGISTER] Storing token in database`);
+    await storeToken(newUser.id, token);
+    console.log(`[REGISTER] Token stored successfully`);
     
     // Return user info (excluding password) and token
     const { password: _, ...userWithoutPassword } = newUser;
     
+    console.log(`[REGISTER] Registration complete, returning user data and token`);
     res.status(201).json({ 
       user: userWithoutPassword,
       token
     });
   } catch (error) {
+    console.error(`[REGISTER] Error in registration: ${error instanceof Error ? error.message : String(error)}`);
     log(`Error in registration: ${error instanceof Error ? error.message : String(error)}`, 'error');
     res.status(500).json({ error: 'Registration failed' });
   }
@@ -157,7 +181,17 @@ router.get('/validate', async (req, res) => {
     // Verify token
     try {
       console.log('[Validate Debug] Verifying JWT token with secret:', JWT_SECRET ? `${JWT_SECRET.substring(0, 5)}...` : 'None');
-      const decoded = jwt.verify(token, JWT_SECRET) as { userId: string };
+      const decoded = jwt.verify(token, JWT_SECRET) as any;
+      
+      // Ensure we have a userId
+      if (!decoded || typeof decoded !== 'object' || !decoded.userId) {
+        console.log('[Validate Debug] Invalid token payload - no userId:', decoded);
+        return res.status(401).json({
+          success: false,
+          message: 'Invalid token format'
+        });
+      }
+      
       console.log('[Validate Debug] JWT verification successful, user id:', decoded.userId);
       console.log('[Validate Debug] Full decoded payload:', JSON.stringify(decoded));
       
@@ -195,6 +229,107 @@ router.get('/validate', async (req, res) => {
     }
   } catch (error) {
     console.error('[Validate Debug] Unexpected error:', error);
+    return res.status(401).json({
+      success: false,
+      message: 'Invalid or expired token'
+    });
+  }
+});
+
+/**
+ * Validate token with user creation fallback
+ * This endpoint will create a user if the token is valid but the user doesn't exist
+ */
+router.get('/validate-with-fallback', async (req, res) => {
+  try {
+    console.log('[Validate Fallback] Starting token validation with fallback');
+    console.log('[Validate Fallback] Request path:', req.path);
+    console.log('[Validate Fallback] Request method:', req.method);
+    
+    // Get token from header
+    const authHeader = req.headers.authorization;
+    console.log('[Validate Fallback] Auth header present:', !!authHeader);
+    console.log('[Validate Fallback] Auth header:', authHeader ? `${authHeader.substring(0, 15)}...` : 'None');
+    
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      console.log('[Validate Fallback] Invalid auth header format');
+      return res.status(401).json({
+        success: false,
+        message: 'No token provided'
+      });
+    }
+    
+    const token = authHeader.split(' ')[1];
+    console.log('[Validate Fallback] Token extracted from header:', token ? `${token.substring(0, 10)}...` : 'None');
+    
+    // Verify token
+    try {
+      console.log('[Validate Fallback] Verifying JWT token with secret:', JWT_SECRET ? `${JWT_SECRET.substring(0, 5)}...` : 'None');
+      const decoded = jwt.verify(token, JWT_SECRET) as any;
+      
+      // Ensure we have a userId
+      if (!decoded || typeof decoded !== 'object' || !decoded.userId) {
+        console.log('[Validate Fallback] Invalid token payload - no userId:', decoded);
+        return res.status(401).json({
+          success: false,
+          message: 'Invalid token format'
+        });
+      }
+      
+      console.log('[Validate Fallback] JWT verification successful, user id:', decoded.userId);
+      console.log('[Validate Fallback] Full decoded payload:', JSON.stringify(decoded));
+      
+      // Get user data
+      console.log('[Validate Fallback] Fetching user data from database for userId:', decoded.userId);
+      let user = await getUserById(decoded.userId);
+      console.log('[Validate Fallback] Database lookup result:', user ? 'User found' : 'User not found');
+      
+      // If user doesn't exist but token is valid, create the user
+      if (!user) {
+        console.log('[Validate Fallback] User not found in database, creating user');
+        
+        // Create a basic user with the ID from the token
+        // Note: email and name might not be in the token payload, so we provide defaults
+        const email = typeof decoded === 'object' && decoded.email ? decoded.email : `user-${decoded.userId}@example.com`;
+        const name = typeof decoded === 'object' && decoded.name ? decoded.name : `User ${decoded.userId.substring(0, 8)}`;
+        
+        user = await createUser({
+          id: decoded.userId,
+          email: email,
+          name: name,
+          isFirstLogin: true,
+          createdAt: new Date(),
+          updatedAt: new Date()
+        });
+        
+        console.log('[Validate Fallback] User created successfully:', JSON.stringify({
+          id: user.id,
+          email: user.email,
+          name: user.name
+        }));
+      }
+      
+      console.log('[Validate Fallback] User found/created, returning data:', JSON.stringify({
+        id: user.id,
+        email: user.email,
+        name: user.name
+      }));
+      
+      // Return user info
+      return res.json({
+        id: user.id,
+        email: user.email,
+        name: user.name
+      });
+    } catch (jwtError) {
+      console.log('[Validate Fallback] JWT verification failed:', jwtError);
+      return res.status(401).json({
+        success: false,
+        message: 'Invalid or expired token'
+      });
+    }
+  } catch (error) {
+    console.error('[Validate Fallback] Unexpected error:', error);
     return res.status(401).json({
       success: false,
       message: 'Invalid or expired token'

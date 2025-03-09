@@ -118,17 +118,27 @@ export function AuthProvider({ children }: AuthProviderProps) {
     checkAuthStatus();
   }, []);
   
-  // Add this function to directly create a profile without using the API abstraction
-  const createProfileDirectly = async (userId: string) => {
+  // Function to ensure a user profile exists
+  const ensureUserProfile = async (userId: string) => {
     try {
-      console.log('Creating profile directly for user:', userId);
-      const token = localStorage.getItem('auth_token');
+      console.log('Ensuring user profile exists for:', userId);
       
-      if (!token) {
-        console.error('No auth token found for direct profile creation');
-        return null;
+      // Check if profile already exists
+      console.log('Checking if profile already exists...');
+      try {
+        const existingProfile = await api.getUserProfile();
+        console.log('Profile check result:', existingProfile ? 'Found' : 'Not found');
+        
+        if (existingProfile) {
+          console.log('Profile already exists, no need to create');
+          return existingProfile;
+        }
+      } catch (profileError) {
+        console.log('Profile not found, creating new one...');
       }
       
+      // Create profile directly using the new API method
+      console.log('Creating profile directly for user:', userId);
       const profileData = {
         userId,
         generalPreferences: {
@@ -143,83 +153,15 @@ export function AuthProvider({ children }: AuthProviderProps) {
         }
       };
       
-      console.log('Sending direct profile creation request with data:', JSON.stringify(profileData));
+      console.log('Sending direct profile creation request with data:', profileData);
+      const createdProfile = await api.createOrUpdateUserProfile(profileData);
+      console.log('Profile created successfully:', createdProfile);
       
-      // Make a direct fetch request to create the profile
-      const response = await fetch(`${api.baseUrl}/api/profile`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify(profileData)
-      });
-      
-      console.log('Direct profile creation response status:', response.status);
-      
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('Direct profile creation failed:', response.status, errorText);
-        return null;
-      }
-      
-      const data = await response.json();
-      console.log('Profile created directly:', data);
-      return data;
+      return createdProfile;
     } catch (error) {
-      console.error('Error in direct profile creation:', error);
-      return null;
+      console.error('Error ensuring user profile exists:', error);
+      throw error;
     }
-  };
-  
-  // Modify the ensureUserProfile function to use the direct method as a fallback
-  const ensureUserProfile = async (userId: string) => {
-    console.log('Ensuring user profile exists for:', userId);
-    
-    try {
-      // First try to get the profile
-      try {
-        console.log('Checking if profile already exists...');
-        const profile = await api.getUserProfile();
-        console.log('Profile exists:', profile);
-        return profile;
-      } catch (error) {
-        // If 404, create the profile
-        console.log('Profile not found, creating new one...');
-        if (error instanceof Error && error.message.includes('404')) {
-          try {
-            console.log('Creating new profile with userId:', userId);
-            const newProfile = await api.createUserProfile({
-              userId,
-              generalPreferences: {
-                inputMethod: 'text',
-                reflectionFrequency: 'daily',
-                languagePreferences: 'english'
-              },
-              privacySettings: {
-                localStorageOnly: false,
-                allowPersonalization: true,
-                enableSync: true
-              }
-            });
-            console.log('Profile created successfully:', newProfile);
-            return newProfile;
-          } catch (createError) {
-            console.error('Error creating profile with API:', createError);
-            // Try the direct method as a fallback
-            console.log('Trying direct profile creation as fallback...');
-            return await createProfileDirectly(userId);
-          }
-        } else {
-          console.error('Unexpected error checking profile:', error);
-        }
-      }
-    } catch (e) {
-      console.error('Error in ensureUserProfile:', e);
-    }
-    
-    // Final fallback - try direct creation
-    return await createProfileDirectly(userId);
   };
   
   // Modify the register function to ensure profile creation

@@ -167,20 +167,28 @@ router.post('/profile', async (req, res) => {
   try {
     console.log('[PROFILE ROUTES] POST /profile - Starting profile creation');
     console.log('[PROFILE ROUTES] Request body:', JSON.stringify(req.body));
+    console.log('[PROFILE ROUTES] Request headers:', JSON.stringify(req.headers));
     
     // Get token from authorization header
     const authHeader = req.headers.authorization;
+    console.log('[PROFILE ROUTES] Auth header present:', !!authHeader);
+    console.log('[PROFILE ROUTES] Auth header:', authHeader ? `${authHeader.substring(0, 15)}...` : 'None');
+    
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
       console.log('[PROFILE ROUTES] Authentication required - no valid auth header');
       return res.status(401).json({ error: 'Authentication required' });
     }
     
     const token = authHeader.split(' ')[1];
+    console.log('[PROFILE ROUTES] Token extracted from header:', token ? `${token.substring(0, 10)}...` : 'None');
     
     try {
       // Verify token and extract userId
+      console.log('[PROFILE ROUTES] Verifying JWT token with secret:', JWT_SECRET ? `${JWT_SECRET.substring(0, 5)}...` : 'None');
       const decoded = jwt.verify(token, JWT_SECRET) as { userId: string };
       const userId = decoded.userId;
+      console.log('[PROFILE ROUTES] JWT verification successful, userId:', userId);
+      console.log('[PROFILE ROUTES] Full decoded payload:', JSON.stringify(decoded));
       
       if (!userId) {
         console.log('[PROFILE ROUTES] Invalid token - no userId in payload');
@@ -190,7 +198,10 @@ router.post('/profile', async (req, res) => {
       console.log(`[PROFILE ROUTES] Creating profile for user: ${userId}`);
       
       // Check if profile already exists
+      console.log(`[PROFILE ROUTES] Checking if profile already exists for userId: ${userId}`);
       const existingProfile = await getUserProfile(userId);
+      console.log(`[PROFILE ROUTES] Profile exists check result: ${existingProfile ? 'Found' : 'Not found'}`);
+      
       if (existingProfile) {
         console.log('[PROFILE ROUTES] Profile already exists, returning 409');
         return res.status(409).json({ error: 'Profile already exists' });
@@ -198,6 +209,10 @@ router.post('/profile', async (req, res) => {
       
       // Extract profile data from request body
       const { generalPreferences, privacySettings } = req.body;
+      console.log('[PROFILE ROUTES] Extracted preferences from request body:', {
+        generalPreferences: generalPreferences ? 'Present' : 'Not present',
+        privacySettings: privacySettings ? 'Present' : 'Not present'
+      });
       
       // Create profile object
       const profileData = {
@@ -219,9 +234,10 @@ router.post('/profile', async (req, res) => {
       console.log('[PROFILE ROUTES] Creating profile with data:', JSON.stringify(profileData));
       
       // Create profile in database
+      console.log('[PROFILE ROUTES] Calling createUserProfile function');
       const newProfile = await createUserProfile(profileData);
       
-      console.log('[PROFILE ROUTES] Profile created successfully');
+      console.log('[PROFILE ROUTES] Profile created successfully:', JSON.stringify(newProfile));
       
       // Transform to client format
       const clientProfile = {
@@ -245,6 +261,7 @@ router.post('/profile', async (req, res) => {
         }
       };
       
+      console.log('[PROFILE ROUTES] Returning client profile:', JSON.stringify(clientProfile));
       res.status(201).json(clientProfile);
     } catch (tokenError) {
       console.error('[PROFILE ROUTES] Token validation error:', tokenError);
@@ -455,6 +472,134 @@ router.delete('/profile/:userId/encrypted', async (req, res) => {
   } catch (error) {
     log(`Error deleting encrypted data: ${error instanceof Error ? error.message : String(error)}`, 'error');
     res.status(500).json({ error: 'Failed to delete encrypted data' });
+  }
+});
+
+/**
+ * Create or update user profile - direct endpoint for client use
+ * This endpoint allows creating a profile without checking if it exists first
+ */
+router.post('/profile/create', async (req, res) => {
+  try {
+    console.log('[PROFILE ROUTES] POST /profile/create - Starting direct profile creation');
+    console.log('[PROFILE ROUTES] Request body:', JSON.stringify(req.body));
+    console.log('[PROFILE ROUTES] Request headers:', JSON.stringify(req.headers));
+    
+    // Get token from authorization header
+    const authHeader = req.headers.authorization;
+    console.log('[PROFILE ROUTES] Auth header present:', !!authHeader);
+    console.log('[PROFILE ROUTES] Auth header:', authHeader ? `${authHeader.substring(0, 15)}...` : 'None');
+    
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      console.log('[PROFILE ROUTES] Authentication required - no valid auth header');
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+    
+    const token = authHeader.split(' ')[1];
+    console.log('[PROFILE ROUTES] Token extracted from header:', token ? `${token.substring(0, 10)}...` : 'None');
+    
+    try {
+      // Verify token and extract userId
+      console.log('[PROFILE ROUTES] Verifying JWT token with secret:', JWT_SECRET ? `${JWT_SECRET.substring(0, 5)}...` : 'None');
+      const decoded = jwt.verify(token, JWT_SECRET) as { userId: string };
+      const userId = decoded.userId;
+      console.log('[PROFILE ROUTES] JWT verification successful, userId:', userId);
+      console.log('[PROFILE ROUTES] Full decoded payload:', JSON.stringify(decoded));
+      
+      if (!userId) {
+        console.log('[PROFILE ROUTES] Invalid token - no userId in payload');
+        return res.status(401).json({ error: 'Invalid authentication token' });
+      }
+      
+      console.log(`[PROFILE ROUTES] Creating/updating profile for user: ${userId}`);
+      
+      // Extract profile data from request body
+      const { userId: bodyUserId, generalPreferences, privacySettings } = req.body;
+      
+      // Ensure the userId in the token matches the one in the request body, if provided
+      if (bodyUserId && bodyUserId !== userId) {
+        console.log(`[PROFILE ROUTES] UserId mismatch: token=${userId}, body=${bodyUserId}`);
+        return res.status(403).json({ error: 'Unauthorized - userId mismatch' });
+      }
+      
+      console.log('[PROFILE ROUTES] Extracted preferences from request body:', {
+        generalPreferences: generalPreferences ? 'Present' : 'Not present',
+        privacySettings: privacySettings ? 'Present' : 'Not present'
+      });
+      
+      // Create profile object
+      const profileData = {
+        userId,
+        preferences: generalPreferences || {
+          inputMethod: 'text',
+          reflectionFrequency: 'daily',
+          languagePreferences: 'english'
+        },
+        sharingPreferences: privacySettings || {
+          localStorageOnly: false,
+          allowPersonalization: true,
+          enableSync: true
+        },
+        createdAt: new Date(),
+        updatedAt: new Date()
+      };
+      
+      console.log('[PROFILE ROUTES] Creating/updating profile with data:', JSON.stringify(profileData));
+      
+      // Check if profile already exists
+      console.log(`[PROFILE ROUTES] Checking if profile already exists for userId: ${userId}`);
+      const existingProfile = await getUserProfile(userId);
+      console.log(`[PROFILE ROUTES] Profile exists check result: ${existingProfile ? 'Found' : 'Not found'}`);
+      
+      let profile;
+      
+      if (existingProfile) {
+        // Update existing profile
+        console.log(`[PROFILE ROUTES] Updating existing profile for userId: ${userId}`);
+        profile = await updateUserProfile(userId, {
+          preferences: profileData.preferences,
+          sharingPreferences: profileData.sharingPreferences
+        });
+        console.log('[PROFILE ROUTES] Profile updated successfully');
+      } else {
+        // Create new profile
+        console.log(`[PROFILE ROUTES] Creating new profile for userId: ${userId}`);
+        profile = await createUserProfile(profileData);
+        console.log('[PROFILE ROUTES] Profile created successfully');
+      }
+      
+      // Transform to client format
+      const clientProfile = {
+        userId: profile.userId,
+        createdAt: profile.createdAt || new Date(),
+        updatedAt: profile.updatedAt || new Date(),
+        generalPreferences: profile.preferences || {
+          inputMethod: 'text',
+          reflectionFrequency: 'daily',
+          languagePreferences: 'english'
+        },
+        privacySettings: profile.sharingPreferences || {
+          localStorageOnly: false,
+          allowPersonalization: true,
+          enableSync: true
+        },
+        usageStats: {
+          reflectionCount: 0,
+          lastActiveDate: new Date(),
+          streakDays: 0
+        }
+      };
+      
+      console.log('[PROFILE ROUTES] Returning client profile:', JSON.stringify(clientProfile));
+      res.status(200).json(clientProfile);
+    } catch (tokenError) {
+      console.error('[PROFILE ROUTES] Token validation error:', tokenError);
+      return res.status(401).json({ error: 'Invalid authentication token' });
+    }
+  } catch (error) {
+    console.error('[PROFILE ROUTES] Error creating/updating profile:', error);
+    log(`Error creating/updating profile: ${error instanceof Error ? error.message : String(error)}`, 'error');
+    res.status(500).json({ error: 'Failed to create/update profile' });
   }
 });
 
