@@ -9,6 +9,9 @@ import { log } from '../vite';
 // PostgreSQL connection pool
 let pool: pg.Pool | null = null;
 
+// Export the pool for use in other modules
+export { pool };
+
 try {
   console.log('[POSTGRES] Initializing PostgreSQL connection pool');
   console.log('[POSTGRES] Database URL configured:', process.env.DATABASE_URL ? 'Yes' : 'No');
