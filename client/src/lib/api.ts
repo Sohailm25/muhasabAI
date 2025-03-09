@@ -163,30 +163,50 @@ export const api = {
     }
     
     console.log('Creating profile with token:', token ? 'Token exists' : 'No token');
+    console.log('Profile data being sent:', JSON.stringify(profile));
     
-    const response = await fetch(`${BASE_URL}/api/profile`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
-      },
-      body: JSON.stringify(profile)
-    });
+    try {
+      const response = await fetch(`${BASE_URL}/api/profile`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(profile)
+      });
 
-    if (!response.ok) {
-      const status = response.status;
-      if (status === 409) {
-        console.log('Profile already exists (409 status)');
-        throw new Error('Profile already exists');
+      console.log('Profile creation response status:', response.status);
+      
+      if (!response.ok) {
+        const status = response.status;
+        if (status === 409) {
+          console.log('Profile already exists (409 status)');
+          // If profile already exists, try to get it instead
+          return await this.getUserProfile();
+        }
+        if (status === 401) {
+          console.error('Authentication failed when creating profile');
+          throw new Error('Authentication required');
+        }
+        
+        // Try to get error details from response
+        try {
+          const errorData = await response.json();
+          console.error('Profile creation error details:', errorData);
+        } catch (e) {
+          console.error('Could not parse error response');
+        }
+        
+        throw new Error(`Failed to create profile: ${status}`);
       }
-      if (status === 401) {
-        console.error('Authentication failed when creating profile');
-        throw new Error('Authentication required');
-      }
-      throw new Error(`Failed to create profile: ${status}`);
+
+      const data = await response.json();
+      console.log('Profile created successfully:', data);
+      return data;
+    } catch (error) {
+      console.error('Error in createUserProfile:', error);
+      throw error;
     }
-
-    return await response.json();
   },
 
   // Get user profile

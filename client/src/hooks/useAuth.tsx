@@ -77,51 +77,40 @@ export function AuthProvider({ children }: AuthProviderProps) {
                 if (profileError.status === 404) {
                   console.log('Profile not found on app load, creating new profile');
                   try {
-                    await api.post('/api/profile', {
-                      userId: userData.id,
-                      generalPreferences: {
-                        inputMethod: 'text',
-                        reflectionFrequency: 'daily',
-                        languagePreferences: 'english'
-                      },
-                      privacySettings: {
-                        localStorageOnly: false,
-                        allowPersonalization: true,
-                        enableSync: true
-                      }
-                    });
+                    // Use the ensureUserProfile function to create a profile
+                    await ensureUserProfile(userData.id);
                     console.log('Profile created successfully on app load');
                   } catch (createError) {
                     console.error('Error creating profile on app load:', createError);
+                    // Don't fail authentication if profile creation fails
+                    // Just continue with the authenticated user
                   }
                 } else {
                   console.error('Error checking for profile:', profileError);
+                  // Don't fail authentication if profile check fails
                 }
               }
             }
-          } catch (validationError) {
-            console.error('Token validation failed:', validationError);
+          } catch (error) {
+            console.log('Token validation failed:', error);
             validationAttempts++;
             
             if (validationAttempts < maxAttempts) {
               console.log(`Retrying validation... Attempt ${validationAttempts + 1} of ${maxAttempts}`);
-              await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second between attempts
-              return validateToken();
+              await validateToken();
+            } else {
+              console.log('Max validation attempts reached, clearing auth state');
+              localStorage.removeItem('auth_token');
+              setUser(null);
             }
-            
-            // If all attempts fail, clear token and user state
-            console.error(`Token validation failed after ${maxAttempts} attempts`);
-            localStorage.removeItem('auth_token');
-            setUser(null);
           }
         };
         
         await validateToken();
-      } catch (err) {
-        console.error('Unexpected error in auth check:', err);
-        localStorage.removeItem('auth_token');
+        setIsLoading(false);
+      } catch (error) {
+        console.error('Error checking auth status:', error);
         setUser(null);
-      } finally {
         setIsLoading(false);
       }
     };
@@ -129,23 +118,18 @@ export function AuthProvider({ children }: AuthProviderProps) {
     checkAuthStatus();
   }, []);
   
-  // Add this function to the AuthProvider component
-  const createUserProfile = async (userId: string) => {
+  // Add this function to directly create a profile without using the API abstraction
+  const createProfileDirectly = async (userId: string) => {
     try {
-      console.log('Creating user profile for:', userId);
+      console.log('Creating profile directly for user:', userId);
+      const token = localStorage.getItem('auth_token');
       
-      // Try to get existing profile first
-      try {
-        const profile = await api.getUserProfile();
-        console.log('Profile already exists:', profile);
-        return profile;
-      } catch (error) {
-        console.log('Profile not found, creating new one');
-        // Continue to create profile if not found
+      if (!token) {
+        console.error('No auth token found for direct profile creation');
+        return null;
       }
       
-      // Create new profile with default settings
-      const newProfile = await api.createUserProfile({
+      const profileData = {
         userId,
         generalPreferences: {
           inputMethod: 'text',
@@ -157,52 +141,88 @@ export function AuthProvider({ children }: AuthProviderProps) {
           allowPersonalization: true,
           enableSync: true
         }
+      };
+      
+      console.log('Sending direct profile creation request with data:', JSON.stringify(profileData));
+      
+      // Make a direct fetch request to create the profile
+      const response = await fetch(`${api.baseUrl}/api/profile`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(profileData)
       });
       
-      console.log('Profile created successfully:', newProfile);
-      return newProfile;
+      console.log('Direct profile creation response status:', response.status);
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Direct profile creation failed:', response.status, errorText);
+        return null;
+      }
+      
+      const data = await response.json();
+      console.log('Profile created directly:', data);
+      return data;
     } catch (error) {
-      console.error('Error creating profile:', error);
-      // Don't throw error here, just log it and continue
-      // This prevents profile creation issues from blocking authentication
+      console.error('Error in direct profile creation:', error);
       return null;
     }
   };
   
-  // Modify the login function to create a profile after successful login
-  const login = useCallback(async (email: string, password: string, rememberMe = false) => {
+  // Modify the ensureUserProfile function to use the direct method as a fallback
+  const ensureUserProfile = async (userId: string) => {
+    console.log('Ensuring user profile exists for:', userId);
+    
     try {
-      setIsLoading(true);
-      setError(null);
-      
-      const response = await api.post('/auth/login', { email, password });
-      
-      if (response.token) {
-        localStorage.setItem('auth_token', response.token);
-        setUser(response.user);
-        
-        // Create profile after successful login
-        try {
-          await createUserProfile(response.user.id);
-        } catch (profileError) {
-          console.error('Profile creation failed but login succeeded:', profileError);
-          // Continue with login even if profile creation fails
+      // First try to get the profile
+      try {
+        console.log('Checking if profile already exists...');
+        const profile = await api.getUserProfile();
+        console.log('Profile exists:', profile);
+        return profile;
+      } catch (error) {
+        // If 404, create the profile
+        console.log('Profile not found, creating new one...');
+        if (error instanceof Error && error.message.includes('404')) {
+          try {
+            console.log('Creating new profile with userId:', userId);
+            const newProfile = await api.createUserProfile({
+              userId,
+              generalPreferences: {
+                inputMethod: 'text',
+                reflectionFrequency: 'daily',
+                languagePreferences: 'english'
+              },
+              privacySettings: {
+                localStorageOnly: false,
+                allowPersonalization: true,
+                enableSync: true
+              }
+            });
+            console.log('Profile created successfully:', newProfile);
+            return newProfile;
+          } catch (createError) {
+            console.error('Error creating profile with API:', createError);
+            // Try the direct method as a fallback
+            console.log('Trying direct profile creation as fallback...');
+            return await createProfileDirectly(userId);
+          }
+        } else {
+          console.error('Unexpected error checking profile:', error);
         }
-        
-        return;
       }
-      
-      throw new Error('Login failed: No token received');
-    } catch (error) {
-      console.error('Login error:', error);
-      setError(error instanceof Error ? error.message : 'Login failed');
-      throw error;
-    } finally {
-      setIsLoading(false);
+    } catch (e) {
+      console.error('Error in ensureUserProfile:', e);
     }
-  }, []);
+    
+    // Final fallback - try direct creation
+    return await createProfileDirectly(userId);
+  };
   
-  // Register new user
+  // Modify the register function to ensure profile creation
   const register = useCallback(async (email: string, password: string, name: string) => {
     try {
       setIsLoading(true);
@@ -217,30 +237,54 @@ export function AuthProvider({ children }: AuthProviderProps) {
       
       setUser(user);
       
-      // Create user profile after successful registration
+      // Explicitly ensure profile exists
       try {
-        console.log('Creating user profile after successful registration...');
-        const profileResponse = await api.post('/api/profile', {
-          userId: user.id,
-          generalPreferences: {
-            inputMethod: 'text',
-            reflectionFrequency: 'daily',
-            languagePreferences: 'english'
-          },
-          privacySettings: {
-            localStorageOnly: false,
-            allowPersonalization: true,
-            enableSync: true
-          }
-        });
-        
-        console.log('Profile created successfully:', profileResponse);
+        console.log('Creating profile after registration...');
+        await ensureUserProfile(user.id);
       } catch (profileError) {
-        console.error('Error creating profile:', profileError);
-        // Don't fail the registration if profile creation fails
+        console.error('Profile creation failed but registration succeeded:', profileError);
+        // Continue with registration even if profile creation fails
       }
     } catch (err) {
       setError((err as Error).message || 'Registration failed. Please try again.');
+      throw err;
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+  
+  // Modify the login function to ensure profile creation
+  const login = useCallback(async (email: string, password: string, rememberMe = false) => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      
+      // Call login API
+      const response = await api.post('/auth/login', { email, password });
+      
+      // Save token
+      const { token, user } = response;
+      localStorage.setItem('auth_token', token);
+      
+      // Handle remember me
+      if (rememberMe) {
+        localStorage.setItem('remember_auth', 'true');
+      } else {
+        localStorage.removeItem('remember_auth');
+      }
+      
+      setUser(user);
+      
+      // Explicitly ensure profile exists
+      try {
+        console.log('Ensuring profile exists after login...');
+        await ensureUserProfile(user.id);
+      } catch (profileError) {
+        console.error('Profile creation failed but login succeeded:', profileError);
+        // Continue with login even if profile creation fails
+      }
+    } catch (err) {
+      setError((err as Error).message || 'Login failed. Please check your credentials.');
       throw err;
     } finally {
       setIsLoading(false);
