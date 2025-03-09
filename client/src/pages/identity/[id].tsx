@@ -22,7 +22,7 @@ import {
   CheckCircle,
   Calendar
 } from 'lucide-react';
-import { api } from '@/lib/api';
+import { API } from '@/lib/api';
 import { IdentityFramework, FrameworkComponent } from '@shared/schema';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { SuggestionGroup } from '@/components/SuggestionButton';
@@ -176,7 +176,7 @@ export default function FrameworkEditor() {
       if (!params?.id) throw new Error('Framework ID is required');
       
       try {
-        const response = await api.get(`/api/identity-frameworks/${params.id}`);
+        const response = await API.get(`/api/identity-frameworks/${params.id}`);
         return response.framework;
       } catch (error) {
         console.error('Error fetching framework:', error);
@@ -223,7 +223,7 @@ export default function FrameworkEditor() {
       
       try {
         // Use the new api.put method
-        const response = await api.put(`/api/identity-frameworks/${params.id}`, { title });
+        const response = await API.put(`/api/identity-frameworks/${params.id}`, { title });
         return response;
       } catch (error) {
         console.error('Error updating title:', error);
@@ -253,7 +253,7 @@ export default function FrameworkEditor() {
       if (!params?.id) throw new Error('Framework ID is required');
       
       try {
-        const response = await api.post(`/api/identity-frameworks/${params.id}/components`, { 
+        const response = await API.post(`/api/identity-frameworks/${params.id}/components`, { 
           componentType, 
           content 
         });

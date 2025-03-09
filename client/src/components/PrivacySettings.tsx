@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useProfile } from '../hooks/useProfile';
 import { exportKeyForBackup } from '../lib/encryption';
-import { api } from '../lib/api';
+import { API } from '../lib/api';
 
 export function PrivacySettings() {
   const { publicProfile, updateProfile, error } = useProfile();
@@ -194,7 +194,7 @@ async function exportAllUserData() {
     // Get public profile
     let publicProfile;
     try {
-      publicProfile = await api.getUserProfile();
+      publicProfile = await API.getUserProfile();
     } catch (err) {
       console.log('No public profile found or not logged in');
       publicProfile = null;
@@ -252,7 +252,7 @@ async function deleteAllUserData() {
   try {
     // Delete server-side data
     try {
-      await api.deleteUserProfile();
+      await API.deleteUserProfile();
     } catch (err) {
       console.error('Error deleting server profile:', err);
       // Continue with local deletion even if server delete fails

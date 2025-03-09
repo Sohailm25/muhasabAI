@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { ArrowLeft } from 'lucide-react';
-import { api } from '@/lib/api';
+import { API } from '@/lib/api';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 
 export default function NewIdentityFramework() {
@@ -22,7 +22,7 @@ export default function NewIdentityFramework() {
   const createFramework = useMutation({
     mutationFn: async (title: string) => {
       try {
-        const response = await api.post('/api/identity-frameworks', { title });
+        const response = await API.post('/api/identity-frameworks', { title });
         return response;
       } catch (error) {
         console.error('Error creating framework:', error);

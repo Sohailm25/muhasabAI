@@ -19,7 +19,7 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAuth } from '@/hooks/useAuth';
-import { api } from '@/lib/api';
+import { API } from '@/lib/api';
 import { IdentityFramework, FrameworkComponent } from '@shared/schema';
 import { formatDistanceToNow } from 'date-fns';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -85,7 +85,7 @@ export default function IdentityPage() {
     queryFn: async () => {
       // Use the api util instead of direct fetch
       try {
-        const response = await api.get('/api/identity-frameworks');
+        const response = await API.get('/api/identity-frameworks');
         
         // Fetch components for each framework
         const frameworks = response.frameworks || [];
@@ -94,7 +94,7 @@ export default function IdentityPage() {
         const extendedFrameworks: ExtendedFramework[] = await Promise.all(
           frameworks.map(async (framework: IdentityFramework) => {
             try {
-              const componentsResponse = await api.get(`/api/identity-frameworks/${framework.id}`);
+              const componentsResponse = await API.get(`/api/identity-frameworks/${framework.id}`);
               return {
                 ...framework,
                 components: componentsResponse.framework?.components || []

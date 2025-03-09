@@ -1,4 +1,4 @@
-import { api } from '@/lib/api';
+import { API } from '@/lib/api';
 import { IdentityFramework, FrameworkComponent } from '@shared/schema';
 
 /**
@@ -27,7 +27,7 @@ export async function fetchFrameworkGuidance(
 ): Promise<FrameworkGuidance> {
   console.log(`Fetching guidance for ${componentType} based on "${input}"`);
   try {
-    const response = await api.post('/api/framework-guidance', {
+    const response = await API.post('/api/framework-guidance', {
       input,
       componentType,
       previousComponents,

@@ -9,7 +9,7 @@ import {
   decryptData, 
   getEncryptionKey
 } from '../lib/encryption';
-import { api } from '../lib/api';
+import { API } from '../lib/api';
 
 // Generate a random IV for encryption
 function generateIv(): Uint8Array {
@@ -83,7 +83,7 @@ export function useProfile() {
       
       // Fetch public profile from API
       try {
-        const profile = await api.getUserProfile();
+        const profile = await API.getUserProfile();
         setPublicProfile(profile);
         
         // If we have a user ID, load private profile
@@ -122,7 +122,7 @@ export function useProfile() {
       const key = await getEncryptionKey();
       
       // Get encrypted data from API
-      const encryptedData = await api.getEncryptedProfileData(userId);
+      const encryptedData = await API.getEncryptedProfileData(userId);
       
       // If no encrypted data, return
       if (!encryptedData.data || encryptedData.data.length === 0) {
@@ -171,7 +171,7 @@ export function useProfile() {
         // After initialization completes, re-check our profile state
         if (!publicProfile && publicUpdates) {
           // The profile might have been loaded by another component
-          const currentProfile = await api.getUserProfile().catch(() => null);
+          const currentProfile = await API.getUserProfile().catch(() => null);
           if (currentProfile) {
             setPublicProfile(currentProfile);
             
@@ -206,7 +206,7 @@ export function useProfile() {
           // First, try to fetch the profile - it may exist but we don't have it locally
           try {
             console.log('Checking if profile already exists...');
-            const existingProfile = await api.getUserProfile();
+            const existingProfile = await API.getUserProfile();
             console.log('Profile already exists, using existing profile');
             setPublicProfile(existingProfile);
             
@@ -225,7 +225,7 @@ export function useProfile() {
           }
           
           // Create new profile
-          const newPublicProfile = await api.createUserProfile(publicUpdates);
+          const newPublicProfile = await API.createUserProfile(publicUpdates);
           setPublicProfile(newPublicProfile);
           
           // If we also have private updates, handle those
@@ -239,7 +239,7 @@ export function useProfile() {
           if (err instanceof Error && (err.message.includes('409') || err.message.includes('already exists'))) {
             console.log('Profile already exists (409), fetching instead of creating');
             try {
-              const existingProfile = await api.getUserProfile();
+              const existingProfile = await API.getUserProfile();
               setPublicProfile(existingProfile);
               
               // If we also have private updates, handle those
@@ -262,7 +262,7 @@ export function useProfile() {
       // Handle updates to existing profile
       if (publicUpdates && publicProfile) {
         // Update public profile
-        const updatedPublicProfile = await api.updateUserProfile({
+        const updatedPublicProfile = await API.updateUserProfile({
           ...publicUpdates,
           userId: publicProfile.userId,
         });
@@ -298,8 +298,9 @@ export function useProfile() {
   // Helper to update private profile
   const updatePrivateProfile = async (userId: string, updates: Partial<PrivateProfile>) => {
     try {
-      // Get the current private profile or create new one with empty objects for nested properties
+      // Get the current private profile or create new one with required fields
       const currentPrivate = privateProfile || {
+        // Required fields according to PrivateProfile type
         spiritualJourneyStage: '',
         primaryGoals: [],
         knowledgeLevel: '',
@@ -309,34 +310,44 @@ export function useProfile() {
         reflectionStyle: '',
         guidancePreferences: [],
         topicsOfInterest: [],
-        // Initialize these as empty objects to prevent type errors
+        // Optional fields with defaults
         dynamicAttributes: {
           topicsEngagedWith: {},
           preferredReferences: {},
           emotionalResponsiveness: {},
-          languageComplexity: 5
+          languageComplexity: 1
         },
-        observedPatterns: {},
-        recentInteractions: {}
+        observedPatterns: {
+          recurringChallenges: [],
+          strongEmotionalTopics: [],
+          growthAreas: [],
+          spiritualStrengths: [],
+          avoidedTopics: []
+        },
+        recentInteractions: {
+          lastTopics: [],
+          lastActionItems: [],
+          completedActionItems: []
+        }
       };
       
-      // Merge updates with current profile
-      const updatedPrivateProfile = {
+      // Create a properly merged object that satisfies the PrivateProfile type
+      const updatedPrivateProfile: PrivateProfile = {
         ...currentPrivate,
         ...updates,
-        // Handle nested updates
+        // Ensure nested objects are properly merged with type assertions
         dynamicAttributes: {
           ...currentPrivate.dynamicAttributes,
           ...(updates.dynamicAttributes || {})
-        },
+        } as PrivateProfile['dynamicAttributes'],
         observedPatterns: {
           ...currentPrivate.observedPatterns,
           ...(updates.observedPatterns || {})
-        },
+        } as PrivateProfile['observedPatterns'],
         recentInteractions: {
           ...currentPrivate.recentInteractions,
           ...(updates.recentInteractions || {})
-        },
+        } as PrivateProfile['recentInteractions']
       };
       
       // Get encryption key
@@ -345,7 +356,7 @@ export function useProfile() {
       // Generate IV for encryption
       const iv = generateIv();
       
-      // Encrypt the private profile
+      // Encrypt data
       const encryptedData = await encryptData(
         JSON.stringify(updatedPrivateProfile),
         key,
@@ -353,12 +364,12 @@ export function useProfile() {
       );
       
       // Save encrypted data to API
-      await api.updateEncryptedProfileData(userId, {
+      await API.updateEncryptedProfileData(userId, {
         data: encryptedData,
         iv: Array.from(iv),
       });
       
-      // Update local state
+      // Update local state with the properly typed object
       setPrivateProfile(updatedPrivateProfile);
       
     } catch (err) {
@@ -377,7 +388,7 @@ export function useProfile() {
       }
       
       // Delete profile from API
-      await api.deleteUserProfile();
+      await API.deleteUserProfile();
       
       // Clear local state
       setPublicProfile(null);
