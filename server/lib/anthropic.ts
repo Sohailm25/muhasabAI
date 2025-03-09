@@ -533,6 +533,33 @@ ${conversationText}`;
     // Process the output into a list of insights
     console.log("Claude response (raw):", responseText);
     
+    // Handle XML-like tags in the response
+    if (responseText.includes('<UNDERSTANDING_RESPONSE>')) {
+      // Extract content between tags
+      const match = responseText.match(/<UNDERSTANDING_RESPONSE>([\s\S]*?)<\/UNDERSTANDING_RESPONSE>/);
+      if (match && match[1]) {
+        responseText = match[1].trim();
+        console.log("Extracted content from UNDERSTANDING_RESPONSE tags:", responseText);
+      }
+    }
+    
+    // Check for REFLECTION_QUESTIONS section and remove it
+    if (responseText.includes('<REFLECTION_QUESTIONS>')) {
+      responseText = responseText.split('<REFLECTION_QUESTIONS>')[0].trim();
+      console.log("Removed REFLECTION_QUESTIONS section");
+    }
+    
+    // Try to parse as JSON first (in case Claude returned a JSON array directly)
+    try {
+      const jsonData = JSON.parse(responseText);
+      if (Array.isArray(jsonData)) {
+        console.log("Successfully parsed JSON array from Claude response");
+        return jsonData.map(item => item.toString().trim()).filter(item => item.length > 0);
+      }
+    } catch (jsonError) {
+      console.log("Response is not a JSON array, processing as text");
+    }
+    
     // Split by newlines and clean up
     const insights = responseText
       .split('\n')

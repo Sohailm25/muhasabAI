@@ -13,6 +13,7 @@ import healthRoutes from './routes/health-routes';
 import halaqaRoutes from './routes/halaqa-routes';
 import wirdRoutes from './routes/wird-routes';
 import authRoutes from './routes/auth-routes';
+import insightsRoutes from './routes/insights-routes';
 
 // Import route handlers
 import userRoutes from "./routes/user-routes";
@@ -100,6 +101,7 @@ app.use((req, res, next) => {
   // Register additional routes for security personalization feature
   app.use('/api', profileRoutes);
   app.use('/api', healthRoutes);
+  app.use('/api', insightsRoutes);
 
   // Feature-specific API routes
   app.use('/api/user', userRoutes);

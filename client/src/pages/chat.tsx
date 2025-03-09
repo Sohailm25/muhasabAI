@@ -327,6 +327,40 @@ export default function Chat() {
   const handleGenerateInsights = async () => {
     if (!reflectionId) return;
     
+    // For debugging: Test the API endpoint first
+    try {
+      console.log("Testing original insights API endpoint...");
+      const testResponse = await fetch("/api/generate/insights/test");
+      if (testResponse.ok) {
+        const testData = await testResponse.json();
+        console.log("Original test API response:", testData);
+      } else {
+        console.error("Original test API failed:", testResponse.status, testResponse.statusText);
+      }
+      
+      console.log("Testing new insights API endpoint...");
+      const newTestResponse = await fetch("/api/insights/test");
+      if (newTestResponse.ok) {
+        const newTestData = await newTestResponse.json();
+        console.log("New test API response:", newTestData);
+      } else {
+        console.error("New test API failed:", newTestResponse.status, newTestResponse.statusText);
+      }
+      
+      // Also test the debug endpoint that simulates Claude's XML response
+      console.log("Testing debug endpoint with mock Claude response...");
+      const debugResponse = await fetch("/api/generate/insights/debug");
+      if (debugResponse.ok) {
+        const debugData = await debugResponse.json();
+        console.log("Debug API response:", debugData);
+        console.log("Processed insights from mock Claude response:", debugData.insights);
+      } else {
+        console.error("Debug API failed:", debugResponse.status, debugResponse.statusText);
+      }
+    } catch (testError) {
+      console.error("Error testing API:", testError);
+    }
+    
     setIsGeneratingInsights(true);
     try {
       // Get personalization context if available
@@ -360,45 +394,143 @@ export default function Chat() {
       
       console.log("Sending insights generation request with auth token");
       
-      const response = await fetch("/api/generate/insights", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          conversation: conversationText,
-          personalizationContext
-        }),
+      // Try the new endpoint first, then fall back to the original if needed
+      let response;
+      let endpointUsed;
+      
+      try {
+        // First try the new endpoint
+        console.log("Trying new /api/insights endpoint...");
+        response = await fetch("/api/insights", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            conversation: conversationText,
+            personalizationContext
+          }),
+        });
+        endpointUsed = "/api/insights";
+        
+        // If the response is not OK, throw an error to try the fallback
+        if (!response.ok) {
+          throw new Error(`New endpoint failed with status: ${response.status}`);
+        }
+        
+        console.log("Successfully used new /api/insights endpoint");
+      } catch (newEndpointError) {
+        console.warn("New endpoint failed, falling back to original endpoint:", newEndpointError);
+        
+        // Fall back to the original endpoint
+        console.log("Falling back to original /api/generate/insights endpoint...");
+        response = await fetch("/api/generate/insights", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            conversation: conversationText,
+            personalizationContext
+          }),
+        });
+        endpointUsed = "/api/generate/insights";
+      }
+      
+      // Log detailed response information
+      console.log(`Response from ${endpointUsed} - status: ${response.status} ${response.statusText}`);
+      
+      // Log headers in a way that's compatible with the TypeScript configuration
+      const headerObj: Record<string, string> = {};
+      response.headers.forEach((value, key) => {
+        headerObj[key] = value;
       });
+      console.log(`Response headers:`, headerObj);
       
       if (!response.ok) {
         console.error(`API error: ${response.status} - ${response.statusText}`);
+        // Clone the response to read it twice
+        const clonedResponse = response.clone();
+        try {
+          // Try to get the error as JSON first
+          const errorData = await clonedResponse.json();
+          console.error("Error response data:", errorData);
+        } catch (jsonError) {
+          // If it's not JSON, get the raw text
+          const errorText = await response.text();
+          console.error("Error response text:", errorText);
+        }
         throw new Error(`Failed to generate insights: ${response.status}`);
       }
       
-      const data = await response.json();
-      console.log("Generated insights:", data);
+      // Clone the response to read it twice in case JSON parsing fails
+      const clonedResponse = response.clone();
       
-      if (data.insights && Array.isArray(data.insights)) {
-        const newInsights = data.insights;
-        setInsights(newInsights);
+      try {
+        const data = await response.json();
+        console.log("Generated insights:", data);
         
-        // Save to localStorage
-        saveConversation(messages, actionItems, newInsights, wirdSuggestions);
+        // Check for success flag first
+        if (data.success === false) {
+          console.warn("API returned success: false", data.error || "Unknown error");
+          if (data.insights && Array.isArray(data.insights)) {
+            // Still use the fallback insights if provided
+            console.log("Using fallback insights provided by API");
+            const newInsights = data.insights;
+            setInsights(newInsights);
+            
+            // Save to localStorage
+            saveConversation(messages, actionItems, newInsights, wirdSuggestions);
+            
+            toast({
+              title: "Insights Generated (Fallback)",
+              description: "We've provided some general insights while our system is processing.",
+              variant: "default",
+            });
+            return;
+          } else {
+            throw new Error(data.error || "Failed to generate insights");
+          }
+        }
         
-        toast({
-          title: "Insights Generated",
-          description: "Your personalized spiritual insights have been created.",
-        });
-      } else {
-        throw new Error("Invalid response format");
+        if (data.insights && Array.isArray(data.insights)) {
+          const newInsights = data.insights;
+          setInsights(newInsights);
+          
+          // Save to localStorage
+          saveConversation(messages, actionItems, newInsights, wirdSuggestions);
+          
+          // Show appropriate toast based on whether fallback insights were used
+          if (data.fallback) {
+            toast({
+              title: "Insights Generated (Fallback)",
+              description: "We've provided some general insights while our system is processing.",
+              variant: "default",
+            });
+          } else {
+            toast({
+              title: "Insights Generated",
+              description: "Your personalized spiritual insights have been created.",
+            });
+          }
+        } else {
+          console.error("Invalid response format:", data);
+          throw new Error("Invalid response format");
+        }
+      } catch (jsonError) {
+        console.error("Error parsing JSON response:", jsonError);
+        // Get the raw text to see what was actually returned
+        const rawText = await clonedResponse.text();
+        console.error("Raw response text:", rawText);
+        throw new Error(`Failed to parse response: ${jsonError instanceof Error ? jsonError.message : String(jsonError)}`);
       }
     } catch (error) {
       console.error("Error generating insights:", error);
       toast({
         title: "Error",
-        description: "Failed to generate insights. Please try again.",
+        description: `Failed to generate insights: ${error instanceof Error ? error.message : String(error)}`,
         variant: "destructive",
       });
     } finally {
@@ -595,6 +727,28 @@ export default function Chat() {
     console.log('[Chat Debug] Animation completed');
   }, []);
 
+  // Handle response from conversation
+  const handleConversationResponse = (response: any) => {
+    console.log("[Chat Debug] Handling conversation response:", response);
+    
+    if (response.conversation?.messages) {
+      setMessages(response.conversation.messages);
+    }
+    
+    if (response.questions) {
+      console.log("[Chat Debug] Updating questions:", response.questions);
+      setQuestions(response.questions);
+    }
+    
+    // Save to localStorage
+    saveConversation(
+      response.conversation?.messages || messages,
+      actionItems,
+      insights,
+      wirdSuggestions
+    );
+  };
+
   return (
     <Layout title={displayTitle}>
       {loading ? (
@@ -637,12 +791,11 @@ export default function Chat() {
                   conversationId={reflectionId || undefined}
                   messages={messages} 
                   onNewMessage={handleNewMessage}
+                  onResponse={handleConversationResponse}
                   questions={questions}
                   onSelectedQuestion={handleSelectedQuestion}
                   isFirstSubmission={messages.length <= 2}
                   selectedQuestion={selectedQuestion}
-                  onAnimationStart={handleAnimationStart}
-                  onAnimationComplete={handleAnimationComplete}
                 />
               </div>
             </div>
