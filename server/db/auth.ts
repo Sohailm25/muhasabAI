@@ -12,6 +12,7 @@ export interface User {
   password?: string;
   googleId?: string;
   isFirstLogin: boolean;
+  hasAcceptedPrivacyPolicy: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -70,6 +71,7 @@ export async function createUser(userData: Partial<User>): Promise<User> {
       password: userData.password,
       googleId: userData.googleId,
       isFirstLogin: userData.isFirstLogin ?? true,
+      hasAcceptedPrivacyPolicy: userData.hasAcceptedPrivacyPolicy ?? false,
       createdAt: userData.createdAt || new Date(),
       updatedAt: userData.updatedAt || new Date()
     };

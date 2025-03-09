@@ -113,47 +113,47 @@ export type HalaqaActionItem = {
 export type WirdPractice = {
   id: string;
   name: string;
-  category: string;
-  target: number;
-  completed: number;
-  unit: string;  // e.g., "pages", "times", "minutes"
-  isCompleted: boolean;
-  // CLEAR framework fields
-  clearFramework?: {
-    cue: string;
-    lowFriction: string;
-    expandable: string;
-    adaptable: string;
-    rewardLinked: string;
-  };
+  type: 'general' | 'rakat' | 'dhikr';
+  status: 'completed' | 'incomplete';
+  count?: number;
+  notes?: string;
 };
 
 export type WirdSuggestion = {
-  id: string;       // Unique identifier
-  type?: string;    // e.g., "Quran", "Dhikr", "Dua", "Salah", etc.
-  category?: string; // Alternative name for type
-  title?: string;   // Name of the practice
-  name: string;     // Alternative name for title
-  description?: string; // What to do
-  frequency?: string;   // How often
-  duration?: string;    // How long
-  benefit?: string;     // Benefits
-  target: number;    // Target amount
-  unit?: string;     // Unit of measurement (e.g., "pages", "times")
+  id: string;
+  name: string;
+  title?: string;
+  type?: string;
+  category?: string;
+  target?: number;
+  unit?: string;
 };
 
-export type WirdEntry = {
-  id: number;
-  userId: string;
-  date: string | Date;
+export interface CLEARFrameworkChoice {
+  id: string;
+  text: string;
+  selected: boolean;
+}
+
+export interface CLEARFrameworkData {
+  cueChoices: CLEARFrameworkChoice[];
+  lowFrictionChoices: CLEARFrameworkChoice[];
+  expandableChoices: CLEARFrameworkChoice[];
+  adaptableChoices: CLEARFrameworkChoice[];
+  rewardChoices: CLEARFrameworkChoice[];
+  summary: string;
+}
+
+export interface WirdEntry {
+  id: string;
+  title: string;
+  date: Date;
   practices: WirdPractice[];
-  notes: string | null;
-  createdAt: Date;
-  updatedAt: Date;
-  isArchived: boolean | null;
-  sourceType?: 'reflection' | 'halaqa'; // Type of source that generated this wird
-  sourceId?: number; // ID of the source (reflection or halaqa)
-};
+  notes?: string;
+  clearFramework?: CLEARFrameworkData;
+  sourceType?: 'reflection' | 'halaqa';
+  sourceId?: number;
+}
 
 export type Halaqa = {
   id: number;
@@ -289,3 +289,49 @@ export type HabitTracking = {
 export type IdentityFrameworkRow = typeof identity_frameworks.$inferSelect;
 export type FrameworkComponentRow = typeof framework_components.$inferSelect;
 export type HabitTrackingRow = typeof habit_tracking.$inferSelect;
+
+export const AddWirdSchema = {
+  type: 'object',
+  properties: {
+    userId: { type: 'string' },
+    date: { type: 'string', pattern: '^\d{4}-\d{2}-\d{2}$' },
+    practices: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          id: { type: 'string' },
+          name: { type: 'string' },
+          category: { type: 'string' },
+          target: { type: 'number', minimum: 1 },
+          completed: { type: 'number', default: 0 },
+          unit: { type: 'string' },
+          isCompleted: { type: 'boolean', default: false },
+        },
+        required: ['name', 'category', 'target'],
+      },
+    },
+    notes: { type: 'string' },
+    sourceType: { type: 'string', enum: ['reflection', 'halaqa'] },
+    sourceId: { type: 'number' },
+  },
+  required: ['userId', 'date', 'practices'],
+};
+
+export const WirdPracticeSchema = {
+  type: 'object',
+  properties: {
+    id: { type: 'string' },
+    name: { type: 'string' },
+    type: { type: 'string', enum: ['general', 'rakat', 'dhikr'] },
+    status: { type: 'string', enum: ['completed', 'incomplete'] },
+    count: { type: 'number' },
+    notes: { type: 'string' },
+  },
+  required: ['id', 'name', 'type', 'status'],
+};
+
+export const UpdatePracticesSchema = {
+  type: 'array',
+  items: WirdPracticeSchema,
+};

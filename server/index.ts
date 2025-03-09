@@ -5,6 +5,7 @@ import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { initializeDatabase } from "./db";
+import cors from 'cors';
 
 // Import route modules
 import profileRoutes from './routes/profile-routes';
@@ -16,6 +17,7 @@ import authRoutes from './routes/auth-routes';
 // Import route handlers
 import userRoutes from "./routes/user-routes";
 import reflectionRoutes from "./routes/reflection-routes";
+import transcriptionRoutes from './src/routes/transcription';
 
 // Check for required environment variables
 function checkRequiredEnvVars() {
@@ -36,6 +38,16 @@ function checkRequiredEnvVars() {
 const app = express();
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: false, limit: '50mb' }));
+
+// Configure CORS
+app.use(cors({
+  origin: process.env.NODE_ENV === 'production' 
+    ? ['https://your-production-domain.com'] // Replace with your production domain
+    : ['http://localhost:3000', 'http://localhost:5000', 'http://127.0.0.1:3000', 'http://127.0.0.1:5000'],
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
 
 app.use((req, res, next) => {
   const start = Date.now();
@@ -94,7 +106,13 @@ app.use((req, res, next) => {
   app.use('/api/reflections', reflectionRoutes);
   app.use('/api/halaqas', halaqaRoutes);
   app.use('/api', wirdRoutes);
-  app.use('/api', authRoutes);
+  
+  // Mount auth routes at both /api/auth and /auth to handle both API and OAuth callback
+  app.use('/auth', authRoutes);
+  app.use('/api/auth', authRoutes);
+
+  // Register transcription routes
+  app.use('/api', transcriptionRoutes);
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
@@ -111,7 +129,7 @@ app.use((req, res, next) => {
 
   // Use Railway's PORT environment variable or fall back to 3000
   const port = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
-  server.listen(port, "127.0.0.1", () => {
+  server.listen(port, "0.0.0.0", () => {
     log(`Server running on port ${port}`, 'info');
   });
 })();

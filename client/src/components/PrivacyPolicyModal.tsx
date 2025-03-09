@@ -1,34 +1,46 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
-  DialogClose
+  DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { X } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
+import { useAuth } from "@/hooks/useAuth";
 
 interface PrivacyPolicyModalProps {
   open: boolean;
-  onOpenChange: (open: boolean) => void;
+  onOpenChange?: (open: boolean) => void;
+  onAccept?: () => void;
+  showAcceptButton?: boolean;
 }
 
-export function PrivacyPolicyModal({ open, onOpenChange }: PrivacyPolicyModalProps) {
+export function PrivacyPolicyModal({ 
+  open, 
+  onOpenChange, 
+  onAccept,
+  showAcceptButton = false 
+}: PrivacyPolicyModalProps) {
+  const [accepted, setAccepted] = useState(false);
+  const { user } = useAuth();
+
+  const handleAccept = () => {
+    if (accepted && onAccept) {
+      onAccept();
+    }
+  };
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={onOpenChange ?? (() => {})} modal>
       <DialogContent className="sm:max-w-[700px] max-h-[80vh] p-0">
         <DialogHeader className="p-6 pb-2 sticky top-0 bg-background z-10">
           <div className="flex items-center justify-between w-full">
             <DialogTitle className="text-xl font-bold">SahabAI Privacy Policy</DialogTitle>
-            <DialogClose asChild>
-              <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full">
-                <X className="h-4 w-4" />
-                <span className="sr-only">Close</span>
-              </Button>
-            </DialogClose>
           </div>
           <DialogDescription>
             Last updated on 05/06/2025
@@ -184,6 +196,26 @@ export function PrivacyPolicyModal({ open, onOpenChange }: PrivacyPolicyModalPro
             </ul>
           </div>
         </ScrollArea>
+        {showAcceptButton && (
+          <DialogFooter className="px-6 py-4 border-t">
+            <div className="flex items-center space-x-2 mb-4">
+              <Checkbox 
+                id="accept-privacy" 
+                checked={accepted} 
+                onCheckedChange={(checked) => setAccepted(checked as boolean)}
+              />
+              <Label htmlFor="accept-privacy">
+                I have read and accept the Privacy Policy
+              </Label>
+            </div>
+            <Button 
+              onClick={handleAccept}
+              disabled={!accepted}
+            >
+              Continue
+            </Button>
+          </DialogFooter>
+        )}
       </DialogContent>
     </Dialog>
   );

@@ -29,7 +29,6 @@ type Step =
   | "topics" 
   | "goals" 
   | "guidance" 
-  | "privacy" 
   | "complete";
 
 export function PersonalizationModal({ open, onClose }: { open: boolean; onClose: () => void }) {
@@ -49,7 +48,6 @@ export function PersonalizationModal({ open, onClose }: { open: boolean; onClose
   const [culturalBackground, setCulturalBackground] = useState<string>("");
   const [reflectionStyle, setReflectionStyle] = useState<string>("balanced");
   const [guidancePreferences, setGuidancePreferences] = useState<string[]>(["practical", "spiritual"]);
-  const [privacyRead, setPrivacyRead] = useState(false);
   
   // Track whether a field was skipped
   const [skippedFields, setSkippedFields] = useState<string[]>([]);
@@ -169,9 +167,6 @@ export function PersonalizationModal({ open, onClose }: { open: boolean; onClose
       
       console.log("Personalization data saved successfully");
       
-      // Mark user as no longer first login
-      // This would normally update the user in the database
-      
       // Close the modal
       onClose();
     } catch (error) {
@@ -191,7 +186,7 @@ export function PersonalizationModal({ open, onClose }: { open: boolean; onClose
         if (enablePersonalization) {
           setCurrentStep("knowledge");
         } else {
-          setCurrentStep("privacy");
+          setCurrentStep("complete");
         }
         break;
       case "knowledge":
@@ -219,9 +214,6 @@ export function PersonalizationModal({ open, onClose }: { open: boolean; onClose
         setCurrentStep("guidance");
         break;
       case "guidance":
-        setCurrentStep("privacy");
-        break;
-      case "privacy":
         setCurrentStep("complete");
         break;
       case "complete":
@@ -263,11 +255,8 @@ export function PersonalizationModal({ open, onClose }: { open: boolean; onClose
       case "guidance":
         setCurrentStep("goals");
         break;
-      case "privacy":
-        setCurrentStep(enablePersonalization ? "guidance" : "preferences");
-        break;
       case "complete":
-        setCurrentStep("privacy");
+        setCurrentStep("guidance");
         break;
     }
   };
@@ -861,160 +850,6 @@ export function PersonalizationModal({ open, onClose }: { open: boolean; onClose
                 </Button>
               </div>
               <Button onClick={goToNextStep} disabled={guidancePreferences.length === 0 && !skippedFields.includes("guidance")}>
-                Continue
-              </Button>
-            </DialogFooter>
-          </>
-        )}
-
-        {/* Privacy Confirmation Step */}
-        {currentStep === "privacy" && (
-          <>
-            <DialogHeader>
-              <DialogTitle>Privacy Policy</DialogTitle>
-              <DialogDescription>
-                Review how we handle your data
-              </DialogDescription>
-            </DialogHeader>
-            
-            <div className="py-6 space-y-4">
-              <div className="max-h-[400px] overflow-y-auto border rounded-md p-4 text-sm">
-                <h2 className="text-xl font-bold mb-3">SahabAI Privacy Policy</h2>
-                
-                <h3 className="text-lg font-bold mt-4 mb-2">Introduction</h3>
-                <p className="mb-3">
-                  SahabAI is committed to protecting your privacy and ensuring the security of your personal information. 
-                  This Privacy Policy explains how we collect, use, store, and protect your data when you use our application, 
-                  with a particular focus on our personalization system.
-                </p>
-                
-                <h3 className="text-lg font-bold mt-4 mb-2">Our Commitment to Privacy</h3>
-                <p className="mb-3">
-                  We've designed SahabAI with privacy as a foundational principle. Our application implements:
-                </p>
-                <ol className="list-decimal pl-6 mb-3 space-y-1">
-                  <li><strong>End-to-end encryption</strong> for sensitive personal data</li>
-                  <li><strong>Local-only storage options</strong> that keep your data on your device</li>
-                  <li><strong>Granular privacy controls</strong> that give you full control over what is shared</li>
-                  <li><strong>Minimized data collection</strong> to only process what's necessary for the service</li>
-                </ol>
-                
-                <h3 className="text-lg font-bold mt-4 mb-2">Information We Collect</h3>
-                
-                <h4 className="font-bold mt-3 mb-2">Public Profile Information</h4>
-                <p className="mb-2">
-                  The following information may be stored on our servers:
-                </p>
-                <ul className="list-disc pl-6 mb-3 space-y-1">
-                  <li>User ID (randomly generated, not tied to personal identifiers)</li>
-                  <li>General preferences (input method, reflection frequency, language)</li>
-                  <li>Privacy settings</li>
-                  <li>Non-sensitive usage statistics (number of reflections, streak days)</li>
-                  <li>Account creation and update timestamps</li>
-                </ul>
-                <p className="mb-3">This information helps us provide basic functionality and improve our service.</p>
-                
-                <h4 className="font-bold mt-3 mb-2">Private Profile Information</h4>
-                <p className="mb-2">
-                  The following sensitive information is <strong>always encrypted on your device before transmission</strong>:
-                </p>
-                <ul className="list-disc pl-6 mb-3 space-y-1">
-                  <li>Spiritual journey information</li>
-                  <li>Personal goals and interests</li>
-                  <li>Knowledge level and life stage</li>
-                  <li>Cultural and community background</li>
-                  <li>Reflection preferences</li>
-                  <li>Topics of interest</li>
-                  <li>Interaction history</li>
-                </ul>
-                <p className="mb-3">
-                  The encryption key for this data <strong>never leaves your device</strong> unless you explicitly export it for backup or multi-device use.
-                </p>
-                
-                <h3 className="text-lg font-bold mt-4 mb-2">How We Use Your Information</h3>
-                
-                <h4 className="font-bold mt-3 mb-2">Personalization</h4>
-                <p className="mb-2">SahabAI uses your information to:</p>
-                <ul className="list-disc pl-6 mb-3 space-y-1">
-                  <li>Personalize Islamic reflections to your spiritual journey</li>
-                  <li>Adapt content to match your knowledge level and interests</li>
-                  <li>Remember context from previous interactions</li>
-                  <li>Improve suggestions based on your engagement patterns</li>
-                </ul>
-                
-                <h4 className="font-bold mt-3 mb-2">Improvement of Services</h4>
-                <p className="mb-2">We use aggregated, anonymized data to:</p>
-                <ul className="list-disc pl-6 mb-3 space-y-1">
-                  <li>Identify common patterns of usage</li>
-                  <li>Improve our AI responses and features</li>
-                  <li>Fix technical issues</li>
-                  <li>Develop new features</li>
-                </ul>
-                
-                <h3 className="text-lg font-bold mt-4 mb-2">Data Storage and Security</h3>
-                
-                <h4 className="font-bold mt-3 mb-2">End-to-End Encryption</h4>
-                <p className="mb-2">
-                  All sensitive personal information is encrypted using AES-256 encryption before leaving your device. The encryption key is:
-                </p>
-                <ul className="list-disc pl-6 mb-3 space-y-1">
-                  <li>Generated and stored locally on your device</li>
-                  <li>Never transmitted to our servers</li>
-                  <li>Required to decrypt your private information</li>
-                </ul>
-                
-                <h4 className="font-bold mt-3 mb-2">Storage Options</h4>
-                <p className="mb-2">You can choose between:</p>
-                <ul className="list-disc pl-6 mb-3 space-y-1">
-                  <li><strong>Local storage only</strong>: All data stays on your device and is never sent to our servers</li>
-                  <li><strong>Encrypted cloud storage</strong>: Encrypted data is stored on our servers but can only be decrypted with your key</li>
-                  <li><strong>Multi-device sync</strong>: Securely transfer your profile between devices using our key export feature</li>
-                </ul>
-                
-                <h3 className="text-lg font-bold mt-4 mb-2">Your Privacy Controls</h3>
-                <p className="mb-2">SahabAI gives you comprehensive control over your data:</p>
-                
-                <h4 className="font-bold mt-3 mb-2">Privacy Settings</h4>
-                <ul className="list-disc pl-6 mb-3 space-y-1">
-                  <li><strong>Local storage only</strong>: Opt out of server storage completely</li>
-                  <li><strong>Personalization controls</strong>: Choose what aspects of your profile can be used for personalization</li>
-                  <li><strong>Sync settings</strong>: Enable or disable profile synchronization across devices</li>
-                </ul>
-                
-                <h4 className="font-bold mt-3 mb-2">Data Management</h4>
-                <ul className="list-disc pl-6 mb-3 space-y-1">
-                  <li><strong>Export</strong>: Download a copy of all your data</li>
-                  <li><strong>Delete</strong>: Permanently remove your profile and data from our servers</li>
-                  <li><strong>Reset</strong>: Start fresh with a new profile</li>
-                  <li><strong>Key backup</strong>: Securely back up your encryption key for recovery</li>
-                </ul>
-                
-                <h3 className="text-lg font-bold mt-4 mb-2">Contact Us</h3>
-                <p className="mb-2">
-                  If you have any questions about this Privacy Policy, please contact us at:
-                </p>
-                <ul className="list-disc pl-6 mb-3 space-y-1">
-                  <li>Email: privacy@sahabai.com</li>
-                </ul>
-              </div>
-              
-              <div className="flex items-center space-x-2">
-                <Checkbox 
-                  id="privacy-confirm" 
-                  checked={privacyRead}
-                  onCheckedChange={(checked) => setPrivacyRead(!!checked)}
-                />
-                <Label htmlFor="privacy-confirm">
-                  I have read and understood the privacy policy
-                </Label>
-              </div>
-            </div>
-            
-            <DialogFooter className="flex justify-between flex-row">
-              <Button variant="outline" onClick={goToPreviousStep}>
-                Back
-              </Button>
-              <Button onClick={goToNextStep} disabled={!privacyRead}>
                 Continue
               </Button>
             </DialogFooter>

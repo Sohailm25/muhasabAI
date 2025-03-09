@@ -10,6 +10,9 @@ import { PersonalizationModal } from './components/PersonalizationModal';
 import { usePersonalizationModal } from './hooks/usePersonalizationModal';
 import { useEffect } from 'react';
 import { setupAuthStorageMonitor, debugAuthToken } from './utils/auth-debug';
+import { Toaster as HotToaster } from 'react-hot-toast';
+import { usePrivacyPolicy } from './hooks/usePrivacyPolicy';
+import { PrivacyPolicyModal } from './components/PrivacyPolicyModal';
 
 // Import pages
 import LandingPage from "@/pages/landing"; // New landing page
@@ -39,9 +42,11 @@ import IdentityPage from "@/pages/identity";
 import NewIdentityFramework from "@/pages/identity/new";
 import FrameworkEditor from "@/pages/identity/[id]";
 import HabitTrackingPage from "@/pages/identity/tracking";
+import WirdPageNew from "@/pages/wird/WirdPageNew"; // New Wird page with vertical layout
 
 const AppContent = () => {
   const { isOpen, closeModal } = usePersonalizationModal();
+  const { isOpen: privacyPolicyIsOpen, acceptPrivacyPolicy } = usePrivacyPolicy();
   
   return (
     <>
@@ -175,7 +180,7 @@ const AppContent = () => {
         </Route>
         <Route path="/wird">
           <RequireAuth>
-            <WirdPage />
+            <WirdPageNew />
           </RequireAuth>
         </Route>
         
@@ -196,6 +201,14 @@ const AppContent = () => {
       
       {/* Personalization modal for first-time users */}
       <PersonalizationModal open={isOpen} onClose={closeModal} />
+      
+      <PrivacyPolicyModal 
+        open={privacyPolicyIsOpen} 
+        showAcceptButton={true}
+        onAccept={acceptPrivacyPolicy}
+      />
+      
+      <Toaster />
     </>
   );
 };
@@ -213,7 +226,7 @@ function App() {
     // Debug token periodically
     const debugInterval = setInterval(() => {
       debugAuthToken();
-    }, 10000); // Check every 10 seconds
+    }, 300000); // Check every 5 minutes instead of 10 seconds
     
     return () => clearInterval(debugInterval);
   }, []);
@@ -224,7 +237,6 @@ function App() {
         <ProfileIntegration>
           <QueryClientProvider client={queryClient}>
             <AppContent />
-            <Toaster />
           </QueryClientProvider>
         </ProfileIntegration>
       </AuthProvider>

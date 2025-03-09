@@ -11,18 +11,17 @@ export const api = {
     const token = localStorage.getItem('auth_token');
     
     // For validation endpoint, return early with error if no token exists
-    // This prevents unnecessary network requests and error popups
     if (endpoint === '/auth/validate' && !token) {
-      console.log('No token found for validation request, skipping');
+      console.log('[API Debug] No token found for validation request, skipping');
       throw new Error('No authentication token');
     }
     
     // Check if this is an endpoint requiring auth
     const requiresAuth = endpoint.startsWith('/api/') || 
-                         (endpoint.includes('/auth/') && !endpoint.includes('/auth/validate'));
-                         
+                       (endpoint.includes('/auth/') && !endpoint.includes('/auth/validate'));
+                       
     if (requiresAuth && !token) {
-      console.error(`Authentication required for ${endpoint} but no token found`);
+      console.error(`[API Debug] Authentication required for ${endpoint} but no token found`);
       throw new Error('Authentication required');
     }
     
@@ -39,18 +38,33 @@ export const api = {
       if (!response.ok) {
         const status = response.status;
         if (status === 401) {
+          console.log('[API Debug] Received 401, clearing invalid token');
           // For 401 errors, clear the token as it's invalid
-          if (token) localStorage.removeItem('auth_token');
+          if (token) {
+            localStorage.removeItem('auth_token');
+            // Attempt to logout to clean up server-side
+            try {
+              await fetch(`${BASE_URL}/auth/logout`, {
+                method: 'POST',
+                headers: {
+                  'Authorization': `Bearer ${token}`
+                }
+              });
+            } catch (logoutError) {
+              console.error('[API Debug] Error during logout cleanup:', logoutError);
+            }
+          }
           throw new Error('Authentication required');
         }
         throw new Error(`API error: ${status}`);
       }
 
-      return await response.json();
+      const data = await response.json();
+      return data;
     } catch (error) {
       // Rethrow with better context
       const errorMessage = error instanceof Error ? error.message : String(error);
-      console.error(`API error for ${endpoint}: ${errorMessage}`);
+      console.error(`[API Debug] API error for ${endpoint}: ${errorMessage}`);
       throw error;
     }
   },

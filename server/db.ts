@@ -106,6 +106,7 @@ export const users = pgTable('users', {
   password: varchar('password', { length: 255 }),
   google_id: varchar('google_id', { length: 255 }),
   is_first_login: boolean('is_first_login').notNull().default(true),
+  has_accepted_privacy_policy: boolean('has_accepted_privacy_policy').notNull().default(false),
   created_at: timestamp('created_at').notNull().defaultNow(),
   updated_at: timestamp('updated_at').notNull().defaultNow(),
 }, (table) => {
