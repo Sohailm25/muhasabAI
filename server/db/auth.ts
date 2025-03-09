@@ -48,11 +48,30 @@ export async function getUserByEmail(email: string): Promise<User | null> {
  */
 export async function getUserById(id: string): Promise<User | null> {
   try {
-    log(`Looking up user by ID: ${id}`, 'debug');
+    console.log(`[DB DEBUG] Looking up user by ID: ${id}`);
+    
+    // Check if usersStore is initialized
+    if (!usersStore) {
+      console.error('[DB DEBUG] usersStore is not initialized');
+      return null;
+    }
+    
+    console.log(`[DB DEBUG] usersStore size: ${usersStore.size} entries`);
+    
+    // Log a few user IDs from the store for debugging
+    const userIds = Array.from(usersStore.keys()).slice(0, 5);
+    console.log(`[DB DEBUG] Sample user IDs in store: ${userIds.join(', ') || 'none'}`);
+    
     const user = usersStore.get(id);
+    console.log(`[DB DEBUG] User lookup result: ${user ? 'Found' : 'Not found'}`);
+    
+    if (user) {
+      console.log(`[DB DEBUG] User details: ID=${user.id}, Email=${user.email}, Name=${user.name}`);
+    }
+    
     return user || null;
   } catch (error) {
-    console.error('Error getting user by ID:', error);
+    console.error('[DB DEBUG] Error getting user by ID:', error);
     return null;
   }
 }

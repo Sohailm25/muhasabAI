@@ -28,21 +28,30 @@ router.use('/profile', (req, res, next) => {
 router.get('/profile', async (req, res) => {
   try {
     console.log('[PROFILE ROUTES] GET /profile - Starting profile retrieval');
+    console.log('[PROFILE ROUTES] Request path:', req.path);
+    console.log('[PROFILE ROUTES] Request method:', req.method);
+    console.log('[PROFILE ROUTES] Request headers:', JSON.stringify(req.headers));
     
     // Get token from authorization header
     const authHeader = req.headers.authorization;
+    console.log('[PROFILE ROUTES] Auth header present:', !!authHeader);
+    console.log('[PROFILE ROUTES] Auth header:', authHeader ? `${authHeader.substring(0, 15)}...` : 'None');
+    
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
       console.log('[PROFILE ROUTES] Authentication required - no valid auth header');
       return res.status(401).json({ error: 'Authentication required' });
     }
     
     const token = authHeader.split(' ')[1];
-    console.log('[PROFILE ROUTES] Token extracted from header');
+    console.log('[PROFILE ROUTES] Token extracted from header:', token ? `${token.substring(0, 10)}...` : 'None');
     
     try {
       // Verify token and extract userId
+      console.log('[PROFILE ROUTES] Verifying JWT token with secret:', JWT_SECRET ? `${JWT_SECRET.substring(0, 5)}...` : 'None');
       const decoded = jwt.verify(token, JWT_SECRET) as { userId: string };
       const userId = decoded.userId;
+      console.log('[PROFILE ROUTES] JWT verification successful, userId:', userId);
+      console.log('[PROFILE ROUTES] Full decoded payload:', JSON.stringify(decoded));
       
       if (!userId) {
         console.log('[PROFILE ROUTES] Invalid token - no userId in payload');
@@ -52,8 +61,13 @@ router.get('/profile', async (req, res) => {
       console.log(`[PROFILE ROUTES] Profile requested for authenticated user: ${userId}`);
       
       // Get user profile from database
+      console.log(`[PROFILE ROUTES] Looking up profile in database for userId: ${userId}`);
       const profile = await getUserProfile(userId);
       console.log(`[PROFILE ROUTES] Profile lookup result:`, profile ? 'Found' : 'Not found');
+      
+      if (profile) {
+        console.log(`[PROFILE ROUTES] Profile details: userId=${profile.userId}, preferences=${JSON.stringify(profile.preferences)}`);
+      }
       
       if (!profile) {
         // If profile doesn't exist yet, return a 404 so client can create one
@@ -83,7 +97,7 @@ router.get('/profile', async (req, res) => {
         }
       };
       
-      console.log('[PROFILE ROUTES] Returning profile to client');
+      console.log('[PROFILE ROUTES] Returning profile to client:', JSON.stringify(clientProfile));
       res.json(clientProfile);
     } catch (tokenError) {
       console.error('[PROFILE ROUTES] Token validation error:', tokenError);

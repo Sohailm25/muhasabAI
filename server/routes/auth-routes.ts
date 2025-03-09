@@ -135,9 +135,13 @@ router.post('/login', async (req, res) => {
 router.get('/validate', async (req, res) => {
   try {
     console.log('[Validate Debug] Starting token validation');
+    console.log('[Validate Debug] Request path:', req.path);
+    console.log('[Validate Debug] Request method:', req.method);
+    
     // Get token from header
     const authHeader = req.headers.authorization;
     console.log('[Validate Debug] Auth header present:', !!authHeader);
+    console.log('[Validate Debug] Auth header:', authHeader ? `${authHeader.substring(0, 15)}...` : 'None');
     
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
       console.log('[Validate Debug] Invalid auth header format');
@@ -148,17 +152,19 @@ router.get('/validate', async (req, res) => {
     }
     
     const token = authHeader.split(' ')[1];
-    console.log('[Validate Debug] Token extracted from header');
+    console.log('[Validate Debug] Token extracted from header:', token ? `${token.substring(0, 10)}...` : 'None');
     
     // Verify token
     try {
-      console.log('[Validate Debug] Verifying JWT token');
+      console.log('[Validate Debug] Verifying JWT token with secret:', JWT_SECRET ? `${JWT_SECRET.substring(0, 5)}...` : 'None');
       const decoded = jwt.verify(token, JWT_SECRET) as { userId: string };
       console.log('[Validate Debug] JWT verification successful, user id:', decoded.userId);
+      console.log('[Validate Debug] Full decoded payload:', JSON.stringify(decoded));
       
       // Get user data
-      console.log('[Validate Debug] Fetching user data from database');
+      console.log('[Validate Debug] Fetching user data from database for userId:', decoded.userId);
       const user = await getUserById(decoded.userId);
+      console.log('[Validate Debug] Database lookup result:', user ? 'User found' : 'User not found');
       
       if (!user) {
         console.log('[Validate Debug] User not found in database');
@@ -168,7 +174,12 @@ router.get('/validate', async (req, res) => {
         });
       }
       
-      console.log('[Validate Debug] User found, returning data');
+      console.log('[Validate Debug] User found, returning data:', JSON.stringify({
+        id: user.id,
+        email: user.email,
+        name: user.name
+      }));
+      
       // Return user info
       return res.json({
         id: user.id,

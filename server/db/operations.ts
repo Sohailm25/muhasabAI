@@ -50,30 +50,54 @@ export function validateUserId(userId: unknown): string {
  */
 export async function getUserProfile(userId: unknown): Promise<UserProfile | null> {
   try {
+    console.log(`[DB OPS] Getting user profile for userId: ${userId}`);
+    
     const validUserId = validateUserId(userId);
+    console.log(`[DB OPS] Validated userId: ${validUserId}`);
     
     if (!db) {
+      console.error('[DB OPS] Database connection not available');
       throw new Error('Database connection not available');
     }
 
+    console.log(`[DB OPS] Executing query to fetch profile for userId: ${validUserId}`);
     const results = await db
       .select()
       .from(user_profiles)
       .where(eq(user_profiles.user_id, validUserId))
       .limit(1);
 
+    console.log(`[DB OPS] Query results count: ${results.length}`);
+    
     if (results.length === 0) {
+      console.log(`[DB OPS] No profile found for userId: ${validUserId}`);
       return null;
     }
 
     const profile = results[0];
-    return {
-      userId: profile.user_id,
-      preferences: JSON.parse(profile.general_preferences),
-      sharingPreferences: JSON.parse(profile.privacy_settings),
-      version: 1, // Add version tracking for future use
-    };
+    console.log(`[DB OPS] Profile found for userId: ${validUserId}`);
+    
+    try {
+      const parsedPreferences = JSON.parse(profile.general_preferences);
+      const parsedPrivacySettings = JSON.parse(profile.privacy_settings);
+      
+      console.log(`[DB OPS] Successfully parsed profile data for userId: ${validUserId}`);
+      
+      const userProfile = {
+        userId: profile.user_id,
+        preferences: parsedPreferences,
+        sharingPreferences: parsedPrivacySettings,
+        version: 1, // Add version tracking for future use
+      };
+      
+      console.log(`[DB OPS] Returning profile for userId: ${validUserId}`);
+      return userProfile;
+    } catch (parseError) {
+      console.error(`[DB OPS] Error parsing profile data: ${parseError}`);
+      throw new Error(`Failed to parse profile data: ${parseError}`);
+    }
   } catch (error) {
+    console.error(`[DB OPS] Error fetching user profile: ${error}`);
     log(`Error fetching user profile: ${error}`, 'database');
     throw new Error(`Failed to retrieve user profile: ${error}`);
   }
