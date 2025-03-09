@@ -1,4 +1,4 @@
-import { WirdEntry } from '../components/WirdEntryPopup';
+import { WirdEntry, CLEARFrameworkData } from '../../shared/schema';
 
 export const wirdService = {
   async getWirdsByDateRange(userId: string, startDate: Date, endDate: Date): Promise<WirdEntry[]> {
@@ -49,5 +49,38 @@ export const wirdService = {
       throw new Error('Failed to update practice');
     }
     return response.json();
+  },
+
+  async updateCLEARFramework(wirdId: string | number, clearFramework: CLEARFrameworkData): Promise<WirdEntry> {
+    const response = await fetch(`/api/wirds/${wirdId}/clear-framework`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ clearFramework }),
+    });
+    
+    if (!response.ok) {
+      throw new Error('Failed to update CLEAR framework');
+    }
+    
+    return response.json();
+  },
+
+  async generateCLEARSummary(choices: CLEARFrameworkData): Promise<string> {
+    const response = await fetch('/api/wirds/generate-clear-summary', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ choices }),
+    });
+    
+    if (!response.ok) {
+      throw new Error('Failed to generate CLEAR summary');
+    }
+    
+    const data = await response.json();
+    return data.summary;
   },
 }; 

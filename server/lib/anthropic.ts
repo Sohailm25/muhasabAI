@@ -1878,3 +1878,22 @@ function getDefaultCLEARSuggestions(): {
     ]
   };
 }
+
+export async function generateWirdSummary(prompt: string): Promise<string> {
+  try {
+    const completion = await anthropic.messages.create({
+      model: 'claude-3-sonnet-20240229',
+      max_tokens: 100,
+      temperature: 0.7,
+      messages: [{
+        role: 'user',
+        content: prompt,
+      }],
+    });
+
+    return completion.content[0].text;
+  } catch (error) {
+    console.error('Error generating wird summary:', error);
+    throw new Error('Failed to generate wird summary');
+  }
+}

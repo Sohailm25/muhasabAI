@@ -8,96 +8,20 @@ import { Button } from '../../components/ui/button';
 import { Calendar } from '../../components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '../../components/ui/popover';
 import { Progress } from '../../components/ui/progress';
-import { CLEARFramework } from '../../components/CLEARFramework';
+import { CLEARFrameworkDialog } from '../../components/CLEARFrameworkDialog';
+import { CLEARSummary } from '../../components/CLEARSummary';
+import { CLEARVisualization } from '../../components/CLEARVisualization';
 import { WirdEntryPopup, WirdEntry as WirdPopupEntry } from '../../components/WirdEntryPopup';
 import { format, isToday, isSameDay, addDays, subWeeks } from 'date-fns';
-import { Plus, CalendarIcon, ChevronLeft, ChevronRight, Star, ArrowRight } from 'lucide-react';
+import { Plus, CalendarIcon, ChevronLeft, ChevronRight, Star, ArrowRight, Settings, BarChart2 } from 'lucide-react';
 import { cn } from '../../lib/utils';
-
-type WirdSuggestion = {
-  id: string;
-  name: string;
-  title?: string;
-  type?: string;
-  category?: string;
-  target?: number;
-  unit?: string;
-};
-
-interface WirdPractice {
-  id: string;
-  name: string;
-  type: 'general' | 'rakat' | 'dhikr';
-  status: 'completed' | 'incomplete';
-  count?: number;
-  notes?: string;
-}
-
-interface WirdEntry {
-  id: string;
-  title: string;
-  date: Date;
-  practices: WirdPractice[];
-  notes?: string;
-}
+import { wirdService } from '../../services/wird-service';
+import type { CLEARFrameworkData, WirdEntry, WirdPractice, WirdSuggestion } from '@shared/schema';
 
 // Type guard to check if an object is a WirdPractice
 function isWirdPractice(wird: WirdEntry | WirdPractice): wird is WirdPractice {
   return 'name' in wird && 'type' in wird && 'status' in wird;
 }
-
-// API service
-const wirdService = {
-  async getWirdsByDateRange(userId: string, startDate: Date, endDate: Date): Promise<WirdEntry[]> {
-    const response = await fetch(`/api/wirds?userId=${userId}&startDate=${startDate.toISOString()}&endDate=${endDate.toISOString()}`);
-    if (!response.ok) {
-      throw new Error('Failed to fetch wird entries');
-    }
-    return response.json();
-  },
-
-  async createWird(data: Partial<WirdEntry>): Promise<WirdEntry> {
-    const response = await fetch('/api/wirds', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(data),
-    });
-    if (!response.ok) {
-      throw new Error('Failed to create wird entry');
-    }
-    return response.json();
-  },
-
-  async updateWird(id: string | number, data: Partial<WirdEntry>): Promise<WirdEntry> {
-    const response = await fetch(`/api/wirds/${id}`, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(data),
-    });
-    if (!response.ok) {
-      throw new Error('Failed to update wird entry');
-    }
-    return response.json();
-  },
-
-  async updatePractice(wirdId: string | number, practiceId: string, data: Partial<WirdPractice>): Promise<WirdEntry> {
-    const response = await fetch(`/api/wirds/${wirdId}/practices/${practiceId}`, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(data),
-    });
-    if (!response.ok) {
-      throw new Error('Failed to update practice');
-    }
-    return response.json();
-  },
-};
 
 export default function WirdPage() {
   const [, navigate] = useLocation();
@@ -113,6 +37,8 @@ export default function WirdPage() {
   const [processingWird, setProcessingWird] = useState<string | null>(null);
   const [selectedWirdForPopup, setSelectedWirdForPopup] = useState<WirdPopupEntry | null>(null);
   const [isWirdPopupOpen, setIsWirdPopupOpen] = useState(false);
+  const [isCLEARDialogOpen, setIsCLEARDialogOpen] = useState(false);
+  const [isVisualizationOpen, setIsVisualizationOpen] = useState(false);
 
   // Load saved wirds from localStorage
   useEffect(() => {
@@ -248,76 +174,63 @@ export default function WirdPage() {
       });
       return;
     }
-    
+
     setProcessingWird(suggestion.id);
-    
+
     try {
       const today = new Date();
-      let todayWird = wirds.find(wird => isSameDay(new Date(wird.date), today));
-      
-      const newPractice: WirdPractice = {
-        id: crypto.randomUUID(),
-        name: suggestion.name,
-        type: (suggestion.type as 'general' | 'rakat' | 'dhikr') || 'general',
-        status: 'incomplete',
-        count: suggestion.target || 1,
-      };
-      
-      if (todayWird) {
-        const practiceExists = todayWird.practices.some(
-          practice => practice.name.toLowerCase() === suggestion.name.toLowerCase()
-        );
-        
-        if (practiceExists) {
-          toast({
-            title: "Practice Already Added",
-            description: `"${suggestion.name}" is already in today's wird.`,
-            duration: 3000,
-          });
-          return;
-        }
-        
-        const updatedWird = await wirdService.updateWird(todayWird.id, {
-          ...todayWird,
-          practices: [...todayWird.practices, newPractice],
-        });
-        
-        setWirds(prevWirds => 
-          prevWirds.map(wird => wird.id === updatedWird.id ? updatedWird : wird)
-        );
-        
-        if (isSameDay(selectedDate, today)) {
-          setSelectedWird(updatedWird);
-        }
-        
-        toast({
-          title: "Practice Added",
-          description: `"${suggestion.name}" has been added to today's wird.`,
-          duration: 3000,
-        });
-      } else {
-        const newWird: WirdEntry = {
-          id: crypto.randomUUID(),
-          title: `Wird for ${format(today, "MMMM d, yyyy")}`,
-          date: today,
-          practices: [newPractice],
-          notes: "",
+      const wirdForToday = wirds.find(wird => isSameDay(new Date(wird.date), today));
+
+      if (wirdForToday) {
+        // Add practice to existing wird
+        const practice: WirdPractice = {
+          id: suggestion.id,
+          name: suggestion.name,
+          type: (suggestion.type as 'general' | 'rakat' | 'dhikr') || 'general',
+          status: 'incomplete',
+          count: suggestion.target,
         };
-        
-        const createdWird = await wirdService.createWird(newWird);
-        
-        setWirds(prevWirds => [...prevWirds, createdWird]);
-        
-        if (isSameDay(selectedDate, today)) {
-          setSelectedWird(createdWird);
-        }
-        
-        toast({
-          title: "New Wird Created",
-          description: `Created a new wird for today with "${suggestion.name}".`,
-          duration: 3000,
+
+        const updatedPractices = [...wirdForToday.practices, practice];
+        const updated = await wirdService.updateWird(wirdForToday.id, {
+          practices: updatedPractices,
         });
+
+        setWirds(prevWirds =>
+          prevWirds.map(wird =>
+            wird.id === updated.id ? updated : wird
+          )
+        );
+
+        if (isSameDay(selectedDate, today)) {
+          setSelectedWird(updated);
+        }
+      } else {
+        // Create new wird for today
+        const newWird: Partial<WirdEntry> = {
+          title: `Wird for ${format(today, 'MMM d, yyyy')}`,
+          date: today,
+          practices: [{
+            id: suggestion.id,
+            name: suggestion.name,
+            type: (suggestion.type as 'general' | 'rakat' | 'dhikr') || 'general',
+            status: 'incomplete',
+            count: suggestion.target,
+          }],
+        };
+
+        const created = await wirdService.createWird(newWird);
+        setWirds(prevWirds => [...prevWirds, created]);
+
+        if (isSameDay(selectedDate, today)) {
+          setSelectedWird(created);
+        }
       }
+
+      toast({
+        title: "Wird Added",
+        description: `${suggestion.name} has been added to today's wird.`,
+      });
     } catch (error) {
       console.error("Error logging wird:", error);
       toast({
@@ -327,6 +240,48 @@ export default function WirdPage() {
       });
     } finally {
       setProcessingWird(null);
+    }
+  };
+
+  const handleOpenCLEARDialog = () => {
+    if (!selectedWird) {
+      toast({
+        title: "No Wird Selected",
+        description: "Please select a wird to analyze with the CLEAR framework.",
+        variant: "destructive",
+      });
+      return;
+    }
+    setIsCLEARDialogOpen(true);
+  };
+
+  const handleSaveCLEARFramework = async (framework: CLEARFrameworkData) => {
+    try {
+      if (!selectedWird) return;
+
+      const updated = await wirdService.updateCLEARFramework(selectedWird.id, framework);
+      
+      setWirds(prevWirds => 
+        prevWirds.map(wird => 
+          wird.id === updated.id ? updated : wird
+        )
+      );
+      
+      if (selectedWird.id === updated.id) {
+        setSelectedWird(updated);
+      }
+      
+      toast({
+        title: "CLEAR Framework Updated",
+        description: "Your CLEAR framework analysis has been saved successfully.",
+      });
+    } catch (error) {
+      console.error("Error updating CLEAR framework:", error);
+      toast({
+        title: "Error",
+        description: "Failed to update CLEAR framework. Please try again.",
+        variant: "destructive",
+      });
     }
   };
 
@@ -346,14 +301,31 @@ export default function WirdPage() {
         {/* Header */}
         <div className="flex justify-between items-center">
           <h1 className="text-2xl font-bold">WirdhAI</h1>
-          <Button onClick={() => navigate("/wird/new")}>
-            <Plus className="mr-2 h-4 w-4" />
-            New Wird Entry
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              className="flex items-center gap-2"
+              onClick={() => setIsVisualizationOpen(true)}
+            >
+              <BarChart2 className="h-4 w-4" />
+              Analytics
+            </Button>
+            <Button onClick={() => navigate("/wird/new")}>
+              <Plus className="mr-2 h-4 w-4" />
+              New Wird Entry
+            </Button>
+          </div>
         </div>
 
         {/* CLEAR Framework */}
-        <CLEARFramework />
+        <CLEARFrameworkDialog
+          open={isCLEARDialogOpen}
+          onClose={() => setIsCLEARDialogOpen(false)}
+          onSave={handleSaveCLEARFramework}
+          initialFramework={selectedWird?.clearFramework}
+          wirdTitle={selectedWird?.title || ''}
+        />
 
         {/* Date Selection */}
         <Card>
@@ -471,35 +443,22 @@ export default function WirdPage() {
           <CardContent>
             {selectedWird ? (
               <div className="space-y-4">
-                {selectedWird.practices.map((practice) => (
+                {selectedWird.practices.map((practice: WirdPractice) => (
                   <div
                     key={practice.id}
-                    className={cn(
-                      "p-4 rounded-lg border cursor-pointer transition-all",
-                      "hover:border-primary/50 hover:shadow-sm"
-                    )}
-                    onClick={() => handleWirdClick(practice, selectedDate)}
+                    className="flex items-center justify-between p-4 rounded-lg border"
+                    onClick={() => handleWirdClick(practice)}
                   >
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <h3 className="font-medium">{practice.name}</h3>
-                        <p className="text-sm text-muted-foreground">
-                          {practice.type === 'rakat' 
-                            ? `${practice.count || 0} rakat`
-                            : practice.type === 'dhikr'
-                            ? `${practice.count || 0} times`
-                            : practice.status}
-                        </p>
-                      </div>
-                      <div className={cn(
-                        "px-2 py-1 rounded text-sm",
-                        practice.status === 'completed' 
-                          ? "bg-green-100 text-green-800"
-                          : "bg-yellow-100 text-yellow-800"
-                      )}>
-                        {practice.status}
-                      </div>
+                    <div>
+                      <h3 className="font-medium">{practice.name}</h3>
+                      <p className="text-sm text-muted-foreground">
+                        {practice.type} • {practice.status}
+                      </p>
                     </div>
+                    <Progress
+                      value={practice.status === 'completed' ? 100 : 0}
+                      className="w-[100px]"
+                    />
                   </div>
                 ))}
               </div>
@@ -534,6 +493,13 @@ export default function WirdPage() {
             wird={selectedWirdForPopup}
           />
         )}
+
+        {/* Add Visualization Dialog */}
+        <CLEARVisualization
+          open={isVisualizationOpen}
+          onClose={() => setIsVisualizationOpen(false)}
+          wirds={wirds}
+        />
       </div>
     </Layout>
   );

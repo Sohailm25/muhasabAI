@@ -9,6 +9,7 @@ A spiritual reflection application designed to help Muslims document and deepen 
 - **Conversation Flow**: Continue the conversation by responding to follow-up questions
 - **Action Items**: Generate practical, personalized action items based on your reflections
 - **Persistent Sessions**: Your conversations are saved for you to continue your reflective journey
+- **Audio Transcription**: Record and transcribe audio directly from your browser
 
 ## Prerequisites
 
@@ -408,4 +409,6 @@ The system is designed with these privacy principles:
 
 ## License
 
-MIT License - See [LICENSE](LICENSE) file for details. 
+MIT License - See [LICENSE](LICENSE) file for details.
+
+For detailed documentation about the transcription feature, see [docs/transcription-feature.md](docs/transcription-feature.md). 

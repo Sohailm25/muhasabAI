@@ -3,10 +3,14 @@ import { api } from '../lib/api';
 import { useProfile } from './useProfile';
 
 // Types for authentication
-interface AuthUser {
+export interface AuthUser {
   id: string;
   email: string;
   name: string;
+  isFirstLogin: boolean;
+  hasAcceptedPrivacyPolicy: boolean;
+  createdAt: Date;
+  updatedAt: Date;
 }
 
 interface AuthContextType {
@@ -38,66 +42,82 @@ export function AuthProvider({ children }: AuthProviderProps) {
   useEffect(() => {
     const checkAuthStatus = async () => {
       try {
+        console.log('[Auth Debug] Starting auth status check');
         setIsLoading(true);
         const token = localStorage.getItem('auth_token');
         
+        console.log('[Auth Debug] Token found in storage:', !!token);
+        
         // If no token exists, just set user to null and exit early - no need to make API calls
         if (!token) {
-          console.log('No auth token found, user is not logged in');
+          console.log('[Auth Debug] No auth token found, clearing auth state');
           setUser(null);
           setIsLoading(false);
           return;
         }
         
-        try {
-          // Validate token on server
-          const userData = await api.get('/auth/validate');
-          setUser(userData);
-          
-          // Only try to get or create profile if we have valid user data
-          if (userData && userData.id) {
-            try {
-              console.log('Checking for user profile on app load...');
-              await api.get('/api/profile');
-              console.log('Profile exists');
-            } catch (error) {
-              const profileError = error as { status?: number };
-              // If profile doesn't exist (404), create a new one
-              if (profileError.status === 404) {
-                console.log('Profile not found on app load, creating new profile');
-                try {
-                  await api.post('/api/profile', {
-                    userId: userData.id,
-                    generalPreferences: {
-                      inputMethod: 'text',
-                      reflectionFrequency: 'daily',
-                      languagePreferences: 'english'
-                    },
-                    privacySettings: {
-                      localStorageOnly: false,
-                      allowPersonalization: true,
-                      enableSync: true
-                    }
-                  });
-                  console.log('Profile created successfully on app load');
-                } catch (createError) {
-                  console.error('Error creating profile on app load:', createError);
-                  // Don't show an error to the user - this is a background task
+        let validationAttempts = 0;
+        const maxAttempts = 3;
+        
+        const validateToken = async (): Promise<void> => {
+          try {
+            console.log('[Auth Debug] Validating token with server... Attempt:', validationAttempts + 1);
+            const userData = await api.get('/auth/validate');
+            console.log('[Auth Debug] Token validation successful, user data:', userData);
+            setUser(userData);
+            
+            // Only try to get or create profile if we have valid user data
+            if (userData && userData.id) {
+              try {
+                console.log('Checking for user profile on app load...');
+                await api.get('/api/profile');
+                console.log('Profile exists');
+              } catch (error) {
+                const profileError = error as { status?: number };
+                if (profileError.status === 404) {
+                  console.log('Profile not found on app load, creating new profile');
+                  try {
+                    await api.post('/api/profile', {
+                      userId: userData.id,
+                      generalPreferences: {
+                        inputMethod: 'text',
+                        reflectionFrequency: 'daily',
+                        languagePreferences: 'english'
+                      },
+                      privacySettings: {
+                        localStorageOnly: false,
+                        allowPersonalization: true,
+                        enableSync: true
+                      }
+                    });
+                    console.log('Profile created successfully on app load');
+                  } catch (createError) {
+                    console.error('Error creating profile on app load:', createError);
+                  }
+                } else {
+                  console.error('Error checking for profile:', profileError);
                 }
-              } else {
-                // Only log other errors, don't interrupt the user experience
-                console.error('Error checking for profile:', profileError);
               }
             }
+          } catch (validationError) {
+            console.error('Token validation failed:', validationError);
+            validationAttempts++;
+            
+            if (validationAttempts < maxAttempts) {
+              console.log(`Retrying validation... Attempt ${validationAttempts + 1} of ${maxAttempts}`);
+              await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second between attempts
+              return validateToken();
+            }
+            
+            // If all attempts fail, clear token and user state
+            console.error(`Token validation failed after ${maxAttempts} attempts`);
+            localStorage.removeItem('auth_token');
+            setUser(null);
           }
-        } catch (validationError) {
-          // Token is invalid, clear it
-          console.error('Token validation failed:', validationError);
-          localStorage.removeItem('auth_token');
-          setUser(null);
-        }
+        };
+        
+        await validateToken();
       } catch (err) {
-        // Catch-all for unexpected errors
         console.error('Unexpected error in auth check:', err);
         localStorage.removeItem('auth_token');
         setUser(null);

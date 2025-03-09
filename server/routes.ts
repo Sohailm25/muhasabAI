@@ -23,6 +23,9 @@ import jwt from "jsonwebtoken";
 // Import debug middleware
 import { authDebugMiddleware } from "./middleware/auth-debug";
 
+// Import the new TranscriptionService
+import { TranscriptionService } from './lib/transcription';
+
 // Get current directory for ES modules (replacement for __dirname)
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -505,6 +508,9 @@ const identityFrameworkRoutes = (app: Express) => {
 // Simple in-memory cache for suggestions
 const suggestionCache = new Map<string, any>();
 
+// Initialize the transcription service
+const transcriptionService = new TranscriptionService();
+
 export async function registerRoutes(app: Express): Promise<Server> {
   const httpServer = createServer(app);
   
@@ -945,135 +951,47 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Add audio-specific endpoint
-  app.post("/api/reflection/audio", authRequired, upload.single("audio"), async (req: Request, res: Response) => {
+  // Update the audio transcription route
+  app.post('/api/reflection/audio', upload.single('audio'), async (req, res) => {
+    console.log('Received audio transcription request');
+    
+    if (!req.file) {
+      console.error('No audio file provided in request');
+      return res.status(400).json({ error: 'No audio file provided' });
+    }
+
+    console.log('Audio file details:', {
+      originalname: req.file.originalname,
+      mimetype: req.file.mimetype,
+      size: req.file.size,
+      fieldname: req.file.fieldname
+    });
+
     try {
-      console.log("Audio reflection request received");
-      
-      // Use type assertion for multer file
-      const file = (req as any).file;
-      
-      if (!file) {
-        return res.status(400).json({ error: "No audio file was uploaded" });
-      }
-      
-      console.log(`Received audio file of size ${file.size} bytes`);
-      
-      // Make sure the file size is reasonable
-      if (file.size > 25 * 1024 * 1024) { // 25 MB limit
-        return res.status(400).json({ 
-          error: "Audio file is too large. Please keep recordings under 25 MB or reduce the recording quality." 
-        });
-      }
-      
-      if (file.size === 0) {
-        return res.status(400).json({ error: "Audio file is empty. Please try recording again." });
-      }
-      
-      // Convert the audio buffer to base64
-      const audioBase64 = `data:audio/wav;base64,${file.buffer.toString('base64')}`;
-      
-      try {
-        // Add a timeout promise for the transcription process to prevent hanging requests
-        const timeoutPromise = new Promise<never>((_, reject) => {
-          setTimeout(() => reject(new Error("Transcription timed out after 90 seconds")), 90000);
-        });
-        
-        // Transcribe the audio with timeout protection
-        const transcriptionPromise = transcribeAudio(audioBase64);
-        const transcription = await Promise.race([transcriptionPromise, timeoutPromise]);
-        
-        if (!transcription || transcription.trim().length === 0) {
-          return res.status(400).json({
-            error: "No speech detected in the audio. Please try again and speak clearly."
-          });
-        }
-        
-        console.log("Audio transcription successful:", transcription);
-        
-        // Create a reflection entry with the transcribed content as the primary content
-        const reflection = await storage.createReflection({
-          content: transcription, // Store the transcribed text, not the audio data
-          type: "audio",
-          transcription, // Also keep the transcription in the transcription field
-          audioData: audioBase64 // Store the audio data in a separate field
-        });
-        
-        // Default questions in case API fails
-        let questions: string[] = ["How would you like to expand on your reflection?"];
-        let understanding = "Thank you for sharing your reflection.";
-        
-        try {
-          const generatedResponse = await generateFollowUpQuestions(transcription);
-          if (generatedResponse && generatedResponse.questions && generatedResponse.questions.length > 0) {
-            questions = generatedResponse.questions;
-            understanding = generatedResponse.understanding;
-            console.log("Generated questions for audio reflection:", questions);
-          } else {
-            console.warn("Empty questions array returned, using default");
-          }
-        } catch (error) {
-          console.error("Error generating questions for audio:", error);
-          // Don't fail the whole request if question generation fails
-        }
-        
-        // Create conversation with initial messages
-        const conversation = await storage.createConversation({
-          reflectionId: reflection.id,
-          messages: [
-            { role: "user", content: transcription },
-            { 
-              role: "assistant", 
-              content: JSON.stringify({
-                understanding: understanding,
-                questions: questions
-              })
-            },
-          ],
-          actionItems: [],
-        });
-        console.log(`Created conversation for audio with ID: ${conversation.id}`);
-        
-        res.json({ 
-          reflection, 
-          conversation, 
-          transcription, 
-          understanding,
-          questions 
-        });
-      } catch (error) {
-        console.error("Error in audio transcription:", error);
-        
-        // Provide more specific error messages based on error type
-        let errorMessage = "Failed to process audio reflection";
-        let statusCode = 500;
-        
-        if (error instanceof Error) {
-          if (error.message.includes("timed out")) {
-            errorMessage = "The transcription process took too long. Please try a shorter audio clip or try again later.";
-            statusCode = 408; // Request Timeout
-          } else if (error.message.includes("ECONNRESET") || error.message.includes("Connection error")) {
-            errorMessage = "Connection to the transcription service was interrupted. Please try again later.";
-            statusCode = 503; // Service Unavailable
-          } else if (error.message.includes("Invalid API key")) {
-            errorMessage = "Server configuration error with the transcription service. Please contact support.";
-            statusCode = 500;
-          } else if (error.message.includes("Rate limit")) {
-            errorMessage = "The transcription service is currently experiencing high demand. Please try again in a few minutes.";
-            statusCode = 429; // Too Many Requests
-          }
-        }
-        
-        res.status(statusCode).json({ 
-          error: errorMessage,
-          details: process.env.NODE_ENV === "development" ? (error instanceof Error ? error.message : String(error)) : undefined
-        });
-      }
-    } catch (error) {
-      console.error("Error in /reflection/audio endpoint:", error);
-      res.status(500).json({ 
-        error: "Failed to process audio reflection",
-        details: process.env.NODE_ENV === "development" ? (error instanceof Error ? error.message : String(error)) : undefined
+      // Extract format from mimetype instead of filename
+      const fileExtension = req.file.mimetype.split('/')[1];
+      console.log('Processing audio file with extension:', fileExtension);
+
+      const transcriptionService = new TranscriptionService();
+      console.log('Starting transcription service...');
+
+      const transcription = await transcriptionService.transcribeAudio(
+        req.file.buffer,
+        fileExtension
+      );
+
+      console.log('Transcription completed successfully:', {
+        length: transcription.length,
+        preview: transcription.substring(0, 100) + '...'
+      });
+
+      return res.json({ transcription });
+    } catch (error: any) {
+      console.error('Error in audio transcription:', error);
+      console.error('Stack trace:', error.stack);
+      return res.status(500).json({ 
+        error: `Transcription failed: ${error.message}`,
+        details: error.stack
       });
     }
   });

@@ -1,197 +1,229 @@
-import { exec, ExecException } from 'child_process';
+import { 
+  StartTranscriptionJobCommand,
+  GetTranscriptionJobCommand,
+  DeleteTranscriptionJobCommand,
+  MediaFormat
+} from '@aws-sdk/client-transcribe';
+import { transcribeClient, isAudioFormatSupported, uploadToS3 } from './aws-config';
+import { v4 as uuidv4 } from 'uuid';
 import fs from 'fs';
-import { promisify } from 'util';
 import path from 'path';
 import os from 'os';
-import { randomUUID } from 'crypto';
-import { OpenAI } from 'openai';
-import dotenv from 'dotenv';
-
-// Load environment variables
-dotenv.config();
-
-const execAsync = promisify(exec);
-
-// Initialize OpenAI client with increased timeout
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-  timeout: 60000, // 60 seconds timeout
-  maxRetries: 3,  // Allow up to 3 retries
-});
-
-interface WhisperResult {
-  text: string;
-}
 
 // Helper function to add delay
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
-// Function for retrying API calls
-async function retryWithBackoff<T>(
-  fn: () => Promise<T>,
-  maxRetries: number = 3,
-  initialDelay: number = 1000
-): Promise<T> {
-  let retries = 0;
-  let currentDelay = initialDelay;
-
-  while (true) {
-    try {
-      return await fn();
-    } catch (error) {
-      retries++;
-      console.log(`API call failed, attempt ${retries}/${maxRetries}`);
-      
-      if (retries >= maxRetries) {
-        console.error('Maximum retries reached, failing', error);
-        throw error;
-      }
-      
-      // Log the error for debugging
-      console.log(`Retrying after ${currentDelay}ms due to error:`, error);
-      
-      // Wait before retrying
-      await delay(currentDelay);
-      
-      // Exponential backoff
-      currentDelay *= 2;
-    }
+// Convert file extension to AWS MediaFormat
+function getMediaFormat(fileExtension: string): MediaFormat {
+  const format = fileExtension.toLowerCase();
+  switch (format) {
+    case 'mp3':
+      return MediaFormat.MP3;
+    case 'mp4':
+      return MediaFormat.MP4;
+    case 'wav':
+    case 'x-wav':
+    case 'wave':
+      return MediaFormat.WAV;
+    case 'flac':
+      return MediaFormat.FLAC;
+    case 'ogg':
+    case 'x-ogg':
+    case 'opus':
+    case 'vorbis':
+      return MediaFormat.OGG;
+    case 'webm':
+      return MediaFormat.WEBM;
+    default:
+      throw new Error(`Unsupported audio format: ${format}`);
   }
 }
 
-// Function to transcribe audio using OpenAI's Whisper API
-export async function transcribeAudio(audioBase64: string): Promise<string> {
-  let tempDir = '';
-  
-  try {
-    // Create a temporary directory for processing
-    tempDir = path.join(os.tmpdir(), randomUUID());
-    fs.mkdirSync(tempDir, { recursive: true });
-    
-    console.log(`Created temporary directory: ${tempDir}`);
-    
-    // Get the project root directory
-    const projectRoot = path.resolve(__dirname, '..', '..');
-    console.log(`Project root: ${projectRoot}`);
-    
-    // Extract base64 data from data URL if needed
-    let base64Data = audioBase64;
-    let audioFormat = 'webm';
-    
-    if (audioBase64.startsWith('data:')) {
-      // Get the MIME type and base64 data
-      const matches = audioBase64.match(/^data:([^;]+);base64,(.+)$/);
-      if (matches && matches.length > 2) {
-        const mimeType = matches[1];
-        base64Data = matches[2];
-        console.log(`Detected MIME type: ${mimeType}`);
-        
-        // Determine the audio format from MIME type
-        if (mimeType.includes('webm')) {
-          audioFormat = 'webm';
-        } else if (mimeType.includes('wav')) {
-          audioFormat = 'wav';
-        } else if (mimeType.includes('mp3')) {
-          audioFormat = 'mp3';
-        } else if (mimeType.includes('ogg')) {
-          audioFormat = 'ogg';
-        } else {
-          console.log(`Unknown audio format from MIME type: ${mimeType}, defaulting to webm`);
-        }
-      } else {
-        console.error('Invalid base64 data URL format');
-        audioFormat = 'webm'; // Default to webm
-      }
-    }
-    
-    console.log(`Audio format detected: ${audioFormat}`);
-    
-    // Save the original audio file with proper extension
-    const audioFilePath = path.join(tempDir, `audio.${audioFormat}`);
-    const buffer = Buffer.from(base64Data, 'base64');
-    fs.writeFileSync(audioFilePath, buffer);
-    
-    console.log(`Saved audio to: ${audioFilePath}`);
-    console.log(`Audio file size: ${buffer.length} bytes`);
-    
-    // Check if the audio file exists and has content
-    if (fs.existsSync(audioFilePath)) {
-      const stats = fs.statSync(audioFilePath);
-      console.log(`Audio file exists, size: ${stats.size} bytes`);
-      
-      if (stats.size === 0) {
-        throw new Error('Audio file is empty (0 bytes)');
-      }
-    } else {
-      console.error('Audio file does not exist after writing');
-      throw new Error('Failed to save audio file');
-    }
-    
-    // Transcribe using OpenAI's Whisper API
-    console.log('Starting transcription with OpenAI Whisper API...');
-    
-    // Call the OpenAI API for transcription with retry mechanism
+export class TranscriptionService {
+  private readonly TEMP_DIR: string;
+
+  constructor() {
+    this.TEMP_DIR = path.join(os.tmpdir(), uuidv4());
+    fs.mkdirSync(this.TEMP_DIR, { recursive: true });
+  }
+
+  private async cleanupTempDir(): Promise<void> {
     try {
-      // Wrap the API call in our retry function
-      const transcription = await retryWithBackoff(
-        async () => {
-          // Create a fresh readable stream each time
-          const audioFile = fs.createReadStream(audioFilePath);
-          
-          return await openai.audio.transcriptions.create({
-            model: "whisper-1",  // This is the Whisper V2 large model
-            file: audioFile,
-            language: "en",      // Specify English language
-          });
-        }, 
-        3,   // Max retries
-        2000 // Initial delay of 2 seconds
+      await fs.promises.rm(this.TEMP_DIR, { recursive: true, force: true });
+      console.log('Cleaned up temporary directory:', this.TEMP_DIR);
+    } catch (error) {
+      console.error('Error cleaning up temp directory:', error);
+    }
+  }
+
+  public async transcribeAudio(audioBuffer: Buffer, fileExtension: string): Promise<string> {
+    console.log('Starting transcription process...');
+    console.log(`Input audio format: ${fileExtension}`);
+    console.log(`Audio buffer size: ${audioBuffer.length} bytes`);
+
+    // Add audio buffer analysis
+    let hasAudioContent = false;
+    let maxValue = 0;
+    for (let i = 0; i < audioBuffer.length; i++) {
+      const value = Math.abs(audioBuffer[i]);
+      maxValue = Math.max(maxValue, value);
+      if (value > 10) { // Check if there's any significant audio data
+        hasAudioContent = true;
+      }
+    }
+    
+    console.log('Audio analysis:', {
+      maxAmplitude: maxValue,
+      hasAudioContent,
+      bufferLength: audioBuffer.length,
+      averageValue: audioBuffer.reduce((sum, val) => sum + Math.abs(val), 0) / audioBuffer.length
+    });
+
+    if (!hasAudioContent) {
+      throw new Error(
+        'No audio signal detected. Please check:\n' +
+        '1. Your microphone is properly connected and selected\n' +
+        '2. Your microphone permissions are enabled\n' +
+        '3. Your microphone is not muted in your system settings'
       );
-      
-      console.log('Transcription completed successfully');
-      console.log(`Transcription result: ${transcription.text}`);
-      
-      // Clean up temporary files
-      try {
-        fs.rmSync(tempDir, { recursive: true, force: true });
-        console.log(`Cleaned up temporary directory: ${tempDir}`);
-      } catch (cleanupError) {
-        console.error(`Error cleaning up: ${(cleanupError as Error).message}`);
-        // Continue despite cleanup error
-      }
-      
-      return transcription.text;
-    } catch (apiError) {
-      // Check for specific API errors
-      const error = apiError as any;
-      
-      if (error.code === 'ECONNRESET') {
-        console.error('Connection reset by OpenAI API. This might be due to network issues or server timeout.');
-      } else if (error.status === 401) {
-        console.error('Authentication error: Invalid API key or unauthorized access.');
-      } else if (error.status === 429) {
-        console.error('Rate limit exceeded: Your account has hit rate limits with the OpenAI API.');
-      } else if (error.status >= 500) {
-        console.error('OpenAI server error: The API is experiencing issues on the server side.');
-      }
-      
-      console.error('Error during OpenAI API call:', apiError);
-      throw new Error(`OpenAI API transcription failed: ${(apiError as Error).message}`);
     }
-    
-  } catch (error) {
-    console.error('Error during transcription:', error);
-    
-    // Attempt to clean up on error if tempDir was created
-    if (tempDir && fs.existsSync(tempDir)) {
-      try {
-        fs.rmSync(tempDir, { recursive: true, force: true });
-        console.log(`Cleaned up temporary directory on error: ${tempDir}`);
-      } catch (cleanupError) {
-        console.error(`Error cleaning up on failure: ${(cleanupError as Error).message}`);
-      }
+
+    if (audioBuffer.length < 1024) { // Less than 1KB
+      throw new Error(
+        'Audio file is too short. Please ensure:\n' +
+        '1. You are recording for at least 1-2 seconds\n' +
+        '2. Your microphone is capturing audio properly'
+      );
     }
-    
-    throw new Error(`Transcription failed: ${(error as Error).message}`);
+
+    if (!isAudioFormatSupported(fileExtension)) {
+      throw new Error(`Unsupported audio format: ${fileExtension}`);
+    }
+
+    const jobName = `transcription-${uuidv4()}`;
+    const s3Key = `audio-uploads/${jobName}.${fileExtension}`;
+
+    try {
+      // Upload audio file to S3
+      console.log('Uploading audio file to S3...');
+      const s3Uri = await uploadToS3(
+        audioBuffer,
+        s3Key,
+        `audio/${fileExtension}`
+      );
+      console.log('Audio file uploaded to S3:', s3Uri);
+
+      // Start transcription job
+      const startCommand = new StartTranscriptionJobCommand({
+        TranscriptionJobName: jobName,
+        LanguageCode: 'en-US',
+        MediaFormat: getMediaFormat(fileExtension),
+        Media: {
+          MediaFileUri: s3Uri
+        },
+        Settings: {
+          ShowAlternatives: false
+        }
+      });
+
+      console.log('Starting transcription job with config:', {
+        jobName,
+        format: getMediaFormat(fileExtension),
+        uri: s3Uri,
+        size: audioBuffer.length,
+        hasAudioContent,
+        maxAmplitude: maxValue
+      });
+      
+      try {
+        await transcribeClient.send(startCommand);
+      } catch (error: any) {
+        console.error('Error starting transcription job:', error);
+        throw new Error(`Failed to start transcription: ${error.message}`);
+      }
+
+      // Poll for job completion
+      let transcription = '';
+      let attempts = 0;
+      const maxAttempts = 30; // 5 minutes with 10-second intervals
+
+      while (attempts < maxAttempts) {
+        const getCommand = new GetTranscriptionJobCommand({
+          TranscriptionJobName: jobName
+        });
+
+        console.log(`Checking transcription status (attempt ${attempts + 1}/${maxAttempts})...`);
+        const response = await transcribeClient.send(getCommand);
+        const status = response.TranscriptionJob?.TranscriptionJobStatus;
+        console.log('Transcription job status:', status);
+
+        if (status === 'COMPLETED' && response.TranscriptionJob?.Transcript?.TranscriptFileUri) {
+          console.log('Transcription completed. Fetching results from:', response.TranscriptionJob.Transcript.TranscriptFileUri);
+          try {
+            // Fetch the transcript from the provided URI
+            const transcriptResponse = await fetch(response.TranscriptionJob.Transcript.TranscriptFileUri);
+            const transcriptData = await transcriptResponse.json();
+            
+            console.log('Full transcript data:', JSON.stringify(transcriptData, null, 2));
+            console.log('Transcript results structure:', {
+              hasResults: !!transcriptData.results,
+              hasTranscripts: !!transcriptData.results?.transcripts,
+              transcriptsLength: transcriptData.results?.transcripts?.length,
+              firstTranscript: transcriptData.results?.transcripts?.[0]
+            });
+
+            if (!transcriptData.results?.transcripts?.[0]) {
+              console.error('Invalid transcript data structure - missing transcripts array');
+              throw new Error('Invalid transcript format received - missing transcripts');
+            }
+
+            const transcript = transcriptData.results.transcripts[0];
+            console.log('Individual transcript object:', transcript);
+
+            if (typeof transcript.transcript !== 'string') {
+              console.error('Invalid transcript format - transcript is not a string:', transcript);
+              throw new Error('Invalid transcript format received - transcript is not a string');
+            }
+
+            transcription = transcript.transcript;
+            if (!transcription || transcription.trim().length === 0) {
+              console.error('Empty transcript received');
+              throw new Error(
+                'No speech detected in the audio. Please ensure:\n' +
+                '1. You are speaking clearly into the microphone\n' +
+                '2. Your microphone volume is not muted\n' +
+                '3. The recording is at least 1-2 seconds long'
+              );
+            }
+
+            console.log('Transcription result received:', {
+              length: transcription.length,
+              preview: transcription.substring(0, 100) + '...',
+              hasContent: transcription.trim().length > 0
+            });
+            return transcription;
+          } catch (error: any) {
+            console.error('Error fetching transcript:', error);
+            throw new Error(`Failed to fetch transcript: ${error.message}`);
+          }
+        } else if (status === 'FAILED') {
+          const error = response.TranscriptionJob?.FailureReason || 'Unknown error';
+          console.error('Transcription job failed:', error);
+          throw new Error(`Transcription job failed: ${error}`);
+        }
+
+        attempts++;
+        if (attempts < maxAttempts) {
+          console.log(`Waiting ${10} seconds before next check...`);
+          await delay(10000); // Wait 10 seconds before next poll
+        }
+      }
+
+      console.error('Transcription timed out after', attempts, 'attempts');
+      throw new Error('Transcription timed out');
+    } catch (error) {
+      console.error('Error during transcription:', error);
+      throw error;
+    }
   }
 }

@@ -561,4 +561,76 @@ router.post("/remove-practice", async (req, res) => {
   }
 });
 
+// PUT /api/wirds/:id/clear-framework - Update CLEAR framework for a wird
+router.put("/:id/clear-framework", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { clearFramework } = req.body;
+    
+    if (!clearFramework) {
+      return res.status(400).json({ error: "CLEAR framework data is required" });
+    }
+    
+    const wird = await storage.getWird(id);
+    
+    if (!wird) {
+      return res.status(404).json({ error: "Wird entry not found" });
+    }
+    
+    const updatedWird = await storage.updateWird(id, {
+      ...wird,
+      clearFramework,
+    });
+    
+    res.json(updatedWird);
+  } catch (error) {
+    console.error("Error updating CLEAR framework:", error);
+    res.status(500).json({ error: "Failed to update CLEAR framework" });
+  }
+});
+
+// POST /api/wirds/generate-clear-summary - Generate summary using Anthropic
+router.post("/generate-clear-summary", async (req, res) => {
+  try {
+    const { choices } = req.body;
+    
+    if (!choices) {
+      return res.status(400).json({ error: "CLEAR framework choices are required" });
+    }
+    
+    // Get selected choices for each category
+    const selectedChoices = {
+      cue: choices.cueChoices.filter(c => c.selected).map(c => c.text),
+      lowFriction: choices.lowFrictionChoices.filter(c => c.selected).map(c => c.text),
+      expandable: choices.expandableChoices.filter(c => c.selected).map(c => c.text),
+      adaptable: choices.adaptableChoices.filter(c => c.selected).map(c => c.text),
+      reward: choices.rewardChoices.filter(c => c.selected).map(c => c.text),
+    };
+    
+    // Generate prompt for Anthropic
+    const prompt = `
+      Generate a concise one-sentence summary of a spiritual practice based on the following CLEAR framework choices:
+      
+      Cue (triggers): ${selectedChoices.cue.join(', ')}
+      Low Friction (ease): ${selectedChoices.lowFriction.join(', ')}
+      Expandable (growth): ${selectedChoices.expandable.join(', ')}
+      Adaptable (flexibility): ${selectedChoices.adaptable.join(', ')}
+      Reward (benefits): ${selectedChoices.reward.join(', ')}
+      
+      The summary should follow this template, but feel natural and vary the words based on the actual choices:
+      "This wird is [triggered by X], [takes minimal effort], [can be expanded through Y], [adapts to Z], and [provides rewards A]."
+      
+      Make it sound natural and flowing, while keeping the same basic structure.
+    `;
+    
+    // Call Anthropic API (implementation needed)
+    const summary = await generateWirdSummary(prompt);
+    
+    res.json({ summary });
+  } catch (error) {
+    console.error("Error generating CLEAR summary:", error);
+    res.status(500).json({ error: "Failed to generate summary" });
+  }
+});
+
 export default router; 

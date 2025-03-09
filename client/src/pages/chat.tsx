@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { Layout } from "@/components/Layout";
 import { ConversationView, Message } from "@/components/ConversationView";
 import { ActionItems } from "@/components/ActionItems";
@@ -12,8 +12,10 @@ import { Button } from "@/components/ui/button";
 import { CalendarCheck } from "lucide-react";
 import { WirdhSuggestions } from "@/components/WirdhSuggestions";
 import { WirdSuggestion } from "@/services/wirdService";
+import { cn } from "@/lib/utils";
 
 export default function Chat() {
+  // Simplify loading states to a single source of truth
   const [loading, setLoading] = useState(true);
   const { id } = useParams();
   const reflectionId = id ? parseInt(id) : null;
@@ -41,27 +43,22 @@ export default function Chat() {
   // Load reflection data from localStorage
   useEffect(() => {
     if (reflectionId) {
+      console.log(`[Chat Debug] Loading reflection data for ID: ${reflectionId}`);
+      setLoading(true);
+      
       try {
-        console.log(`Loading reflection data for ID: ${reflectionId}`);
         const savedSession = localStorage.getItem(`ramadanReflection_${reflectionId}`);
         
         if (savedSession) {
           const parsedSession = JSON.parse(savedSession);
-          console.log("Loaded session data:", parsedSession);
+          console.log("[Chat Debug] Loaded session data:", parsedSession);
           
           // Define empty arrays for missing data to avoid undefined errors
           const emptyArray: any[] = [];
           
-          // Check if we have direct API response data
-          if (parsedSession.understanding || parsedSession.questions?.length > 0) {
-            console.log("Found direct API response data:");
-            console.log("- Understanding:", parsedSession.understanding ? "Yes" : "No");
-            console.log("- Questions:", parsedSession.questions?.length || 0);
-          }
-          
           // Set messages
           if (parsedSession.messages) {
-            console.log(`Setting ${parsedSession.messages.length} messages from localStorage`);
+            console.log(`[Chat Debug] Setting ${parsedSession.messages.length} messages from localStorage`);
             setMessages(parsedSession.messages);
           } else {
             // Convert original and understanding to message format
@@ -73,7 +70,7 @@ export default function Chat() {
               initialMessages.push({ role: "assistant", content: parsedSession.understanding });
             }
             
-            console.log(`Converted to ${initialMessages.length} messages`);
+            console.log(`[Chat Debug] Converted to ${initialMessages.length} messages`);
             setMessages(initialMessages);
           }
           
@@ -82,20 +79,11 @@ export default function Chat() {
           setActionItems(parsedSession.actionItems || emptyArray);
           setInsights(parsedSession.insights || emptyArray);
           
-          // Count existing follow-up questions
+          // Count existing follow-ups
           countFollowUps();
-          
-          // Add safety timeout to hide loading indicator after 5 seconds
-          // This ensures it doesn't stay visible forever if animation doesn't start
-          setTimeout(() => {
-            if (loading) {
-              console.log("Safety timeout: forcing loading state to false after 5 seconds");
-              setLoading(false);
-            }
-          }, 5000);
         } else {
           // If not in localStorage, try to fetch from server
-          console.log("No data in localStorage, trying server fetch");
+          console.log("[Chat Debug] No data in localStorage, trying server fetch");
           fetchReflectionFromServer(reflectionId);
         }
       } catch (error) {
@@ -105,10 +93,11 @@ export default function Chat() {
           description: "Could not load the saved session.",
           variant: "destructive",
         });
-        setLoading(false); // Ensure loading is set to false on error
+      } finally {
+        setLoading(false);
       }
     }
-  }, [reflectionId]); // Only run when reflectionId changes
+  }, [reflectionId]);
 
   // Fetch reflection data from server (fallback if not in localStorage)
   const fetchReflectionFromServer = async (id: number) => {
@@ -597,64 +586,69 @@ export default function Chat() {
   const chatTitle = firstUserMessage?.content || "Reflection";
   const displayTitle = chatTitle.length > 30 ? chatTitle.substring(0, 30) + "..." : chatTitle;
 
-  // Add a handler for when animation starts
-  const handleAnimationStart = () => {
-    console.log("Animation started in ConversationView, hiding loading spinner");
-    setLoading(false);
-  };
+  // Handle animation events
+  const handleAnimationStart = useCallback(() => {
+    console.log('[Chat Debug] Animation starting');
+  }, []);
+
+  const handleAnimationComplete = useCallback(() => {
+    console.log('[Chat Debug] Animation completed');
+  }, []);
 
   return (
     <Layout title={displayTitle}>
-      {loading && <LoadingAnimation message="Loading conversation..." fullScreen={true} />}
-      
-      <div className="container max-w-[95%] mx-auto py-4 md:py-8 h-full px-3 md:px-4">
-        {/* On mobile, stack wirdhSuggestions below conversation (reverse order) for better UX */}
-        <div className="grid grid-cols-1 md:grid-cols-[1.2fr,2.5fr] gap-6 md:gap-8 animate-slide-in">
-          {/* Suggestions and Insights Column (Left on desktop, Bottom on mobile) */}
-          <div className="w-full order-2 md:order-1 space-y-6 md:space-y-8">
-            {/* Wirdh Suggestions Card */}
-            <div className="bg-card rounded-lg shadow-sm p-4">
-              <h2 className="text-lg font-semibold mb-4">Spiritual Practices</h2>
-              <WirdhSuggestions 
-                suggestions={wirdSuggestions} 
-                onChange={handleWirdSuggestionsChange}
-                onGenerate={handleGenerateWirdSuggestions}
-                isGenerating={isGeneratingItems}
-                conversationId={reflectionId?.toString() || ""}
-                conversationTitle={displayTitle}
-              />
+      {loading ? (
+        <LoadingAnimation message="Loading conversation..." fullScreen={true} />
+      ) : (
+        <div className="container max-w-[95%] mx-auto py-4 md:py-8 h-full px-3 md:px-4">
+          <div className="grid grid-cols-1 md:grid-cols-[1.2fr,2.5fr] gap-6 md:gap-8 animate-slide-in">
+            {/* Left column */}
+            <div className="w-full order-2 md:order-1 space-y-6 md:space-y-8">
+              {/* Wirdh Suggestions Card */}
+              <div className="bg-card rounded-lg shadow-sm p-4">
+                <h2 className="text-lg font-semibold mb-4">Spiritual Practices</h2>
+                <WirdhSuggestions 
+                  suggestions={wirdSuggestions} 
+                  onChange={handleWirdSuggestionsChange}
+                  onGenerate={handleGenerateWirdSuggestions}
+                  isGenerating={isGeneratingItems}
+                  conversationId={reflectionId?.toString() || ""}
+                  conversationTitle={displayTitle}
+                />
+              </div>
+              
+              {/* Spiritual Insights Card */}
+              <div className="bg-card rounded-lg shadow-sm p-4">
+                <h2 className="text-lg font-semibold mb-4">Spiritual Insights</h2>
+                <Insights 
+                  insights={insights} 
+                  onChange={handleInsightsChange}
+                  onGenerate={handleGenerateInsights}
+                  isGenerating={isGeneratingInsights}
+                  canGenerate={canGenerateInsights}
+                />
+              </div>
             </div>
             
-            {/* Spiritual Insights Card */}
-            <div className="bg-card rounded-lg shadow-sm p-4">
-              <h2 className="text-lg font-semibold mb-4">Spiritual Insights</h2>
-              <Insights 
-                insights={insights} 
-                onChange={handleInsightsChange}
-                onGenerate={handleGenerateInsights}
-                isGenerating={isGeneratingInsights}
-                canGenerate={canGenerateInsights}
-              />
-            </div>
-          </div>
-          
-          {/* Conversation View (Right on desktop, Top on mobile) */}
-          <div className="w-full order-1 md:order-2 mb-6 md:mb-0">
-            <div className="bg-card rounded-lg shadow-sm p-4">
-              <ConversationView 
-                conversationId={reflectionId || undefined}
-                messages={messages} 
-                onNewMessage={handleNewMessage}
-                questions={questions}
-                onSelectedQuestion={handleSelectedQuestion}
-                isFirstSubmission={messages.length <= 2}
-                selectedQuestion={selectedQuestion}
-                onAnimationStart={handleAnimationStart}
-              />
+            {/* Right column - Conversation */}
+            <div className="w-full order-1 md:order-2 mb-6 md:mb-0">
+              <div className="bg-card rounded-lg shadow-sm p-4">
+                <ConversationView 
+                  conversationId={reflectionId || undefined}
+                  messages={messages} 
+                  onNewMessage={handleNewMessage}
+                  questions={questions}
+                  onSelectedQuestion={handleSelectedQuestion}
+                  isFirstSubmission={messages.length <= 2}
+                  selectedQuestion={selectedQuestion}
+                  onAnimationStart={handleAnimationStart}
+                  onAnimationComplete={handleAnimationComplete}
+                />
+              </div>
             </div>
           </div>
         </div>
-      </div>
+      )}
     </Layout>
   );
 } 

@@ -137,23 +137,33 @@ export function ReflectionInput({
       const data = await response.json();
       console.log("Audio API response:", data);
       
-      // Handle both possible response formats
-      let reflectionData;
-      let reflectionId;
-      
-      if (data && data.reflection) {
-        reflectionData = data.reflection;
-        reflectionId = reflectionData.id;
-      } else if (data && data.id) {
-        reflectionData = data;
-        reflectionId = data.id;
-      } else {
-        console.error("Invalid response format:", data);
-        throw new Error("Invalid response format from server");
+      // Create reflection with transcribed text
+      if (!data.transcription) {
+        throw new Error("No transcription received from server");
       }
+
+      // Create the reflection with the transcribed text
+      const reflectionResponse = await fetch("/api/reflection", {
+        method: "POST",
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': token ? `Bearer ${token}` : ''
+        },
+        body: JSON.stringify({
+          content: data.transcription,
+          type: "text", // We store it as text since it's already transcribed
+        })
+      });
+
+      if (!reflectionResponse.ok) {
+        const errorData = await reflectionResponse.json();
+        throw new Error(errorData.error || "Failed to save reflection");
+      }
+
+      const reflectionData = await reflectionResponse.json();
       
-      // Pass the complete response to the parent, not just reflectionData
-      onReflectionComplete(data);
+      // Pass the complete reflection data to the parent
+      onReflectionComplete(reflectionData);
       
       toast({
         title: "Audio reflection submitted",
@@ -161,11 +171,11 @@ export function ReflectionInput({
       });
       
       // Handle redirection to chat page if enabled
-      if (redirectToChat && reflectionId) {
-        console.log(`Redirecting to /chat/${reflectionId} in 1 second`);
+      if (redirectToChat && reflectionData.id) {
+        console.log(`Redirecting to /chat/${reflectionData.id} in 1 second`);
         // Short delay to allow toast to be visible
         setTimeout(() => {
-          setLocation(`/chat/${reflectionId}`);
+          setLocation(`/chat/${reflectionData.id}`);
         }, 1000);
       }
     } catch (error) {
