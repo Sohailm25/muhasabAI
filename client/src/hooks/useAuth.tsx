@@ -129,65 +129,74 @@ export function AuthProvider({ children }: AuthProviderProps) {
     checkAuthStatus();
   }, []);
   
-  // Login with email and password
+  // Add this function to the AuthProvider component
+  const createUserProfile = async (userId: string) => {
+    try {
+      console.log('Creating user profile for:', userId);
+      
+      // Try to get existing profile first
+      try {
+        const profile = await api.getUserProfile();
+        console.log('Profile already exists:', profile);
+        return profile;
+      } catch (error) {
+        console.log('Profile not found, creating new one');
+        // Continue to create profile if not found
+      }
+      
+      // Create new profile with default settings
+      const newProfile = await api.createUserProfile({
+        userId,
+        generalPreferences: {
+          inputMethod: 'text',
+          reflectionFrequency: 'daily',
+          languagePreferences: 'english'
+        },
+        privacySettings: {
+          localStorageOnly: false,
+          allowPersonalization: true,
+          enableSync: true
+        }
+      });
+      
+      console.log('Profile created successfully:', newProfile);
+      return newProfile;
+    } catch (error) {
+      console.error('Error creating profile:', error);
+      // Don't throw error here, just log it and continue
+      // This prevents profile creation issues from blocking authentication
+      return null;
+    }
+  };
+  
+  // Modify the login function to create a profile after successful login
   const login = useCallback(async (email: string, password: string, rememberMe = false) => {
     try {
       setIsLoading(true);
       setError(null);
       
-      // Call login API
       const response = await api.post('/auth/login', { email, password });
       
-      // Save token
-      const { token, user } = response;
-      localStorage.setItem('auth_token', token);
-      
-      // Handle remember me
-      if (rememberMe) {
-        localStorage.setItem('remember_auth', 'true');
-      } else {
-        localStorage.removeItem('remember_auth');
-      }
-      
-      setUser(user);
-      
-      // Check if profile exists and create one if needed
-      try {
-        console.log('Checking for user profile after login...');
-        // First try to fetch existing profile
-        const profileResponse = await api.get('/api/profile');
-        console.log('Profile exists, no need to create one');
-      } catch (error) {
-        // If profile doesn't exist (404), create a new one
-        const profileError = error as { status?: number };
-        if (profileError.status === 404) {
-          console.log('Profile not found, creating new profile after login');
-          try {
-            const createResponse = await api.post('/api/profile', {
-              userId: user.id,
-              generalPreferences: {
-                inputMethod: 'text',
-                reflectionFrequency: 'daily',
-                languagePreferences: 'english'
-              },
-              privacySettings: {
-                localStorageOnly: false,
-                allowPersonalization: true,
-                enableSync: true
-              }
-            });
-            console.log('Profile created successfully:', createResponse);
-          } catch (createError) {
-            console.error('Error creating profile after login:', createError);
-            // Don't fail the login if profile creation fails
-          }
-        } else {
-          console.error('Error checking for profile:', profileError);
+      if (response.token) {
+        localStorage.setItem('auth_token', response.token);
+        setUser(response.user);
+        
+        // Create profile after successful login
+        try {
+          await createUserProfile(response.user.id);
+        } catch (profileError) {
+          console.error('Profile creation failed but login succeeded:', profileError);
+          // Continue with login even if profile creation fails
         }
+        
+        return;
       }
-    } catch (err) {
-      setError((err as Error).message || 'Login failed. Please check your credentials.');
-      throw err;
+      
+      throw new Error('Login failed: No token received');
+    } catch (error) {
+      console.error('Login error:', error);
+      setError(error instanceof Error ? error.message : 'Login failed');
+      throw error;
     } finally {
       setIsLoading(false);
     }

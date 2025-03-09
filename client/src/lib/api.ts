@@ -1,7 +1,23 @@
 import { PublicProfile, EncryptedProfileData } from './types';
 
-// API base URL - adjust as needed for your environment
-const BASE_URL = import.meta.env.VITE_API_URL || '';
+// API base URL - with improved environment detection
+const getBaseUrl = () => {
+  // Use environment variable if available
+  if (import.meta.env.VITE_API_URL) {
+    return import.meta.env.VITE_API_URL;
+  }
+  
+  // In production, default to the Railway URL
+  if (window.location.hostname === 'www.sahabai.dev' || window.location.hostname === 'sahabai.dev') {
+    return 'https://sahabai-production.up.railway.app';
+  }
+  
+  // In development, default to localhost
+  return 'http://localhost:3000';
+};
+
+const BASE_URL = getBaseUrl();
+console.log('API Base URL configured as:', BASE_URL);
 
 export const api = {
   baseUrl: BASE_URL,
