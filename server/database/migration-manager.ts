@@ -1,6 +1,11 @@
 import fs from 'fs';
 import path from 'path';
 import { Pool } from 'pg';
+import { fileURLToPath } from 'url';
+
+// Create __dirname equivalent for ES modules
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 /**
  * Migration manager for handling database schema migrations
@@ -49,7 +54,8 @@ export async function runMigrations(db: Pool) {
           // Import migration
           const migrationPath = path.join(migrationsDir, file);
           console.log(`[MIGRATION] Importing migration from: ${migrationPath}`);
-          const migration = require(migrationPath);
+          const migrationUrl = new URL(`file://${path.resolve(migrationPath)}`);
+          const migration = await import(migrationUrl.href);
           
           // Run migration
           console.log(`[MIGRATION] Executing up() function for: ${file}`);
