@@ -10,103 +10,248 @@ import {
   updateEncryptedProfileData,
   deleteEncryptedProfileData
 } from '../db/index'; // Import specific functions from db/index
+import { ProfileRepository } from '../database/profile-repository';
+import { AuthenticationError, NotFoundError } from '../utils/errors';
+import { Pool } from 'pg';
 
 const router = express.Router();
 const JWT_SECRET = process.env.JWT_SECRET || 'sahabai-secret-key';
 
-// Add middleware to log all requests to profile routes
-router.use('/profile', (req, res, next) => {
-  console.log(`[PROFILE ROUTES] ${req.method} ${req.path} request received`);
-  console.log('[PROFILE ROUTES] Headers:', JSON.stringify(req.headers));
-  next();
-});
+// Initialize profile repository
+let profileRepository: ProfileRepository;
+
+export function initProfileRoutes(db: Pool) {
+  console.log('[PROFILE_ROUTES] Initializing profile routes with database connection');
+  profileRepository = new ProfileRepository(db);
+  return router;
+}
 
 /**
- * Get current user profile
- * This endpoint is used when no userId is provided
+ * Middleware to verify JWT token
  */
-router.get('/profile', async (req, res) => {
+const verifyToken = (req: express.Request, res: express.Response, next: express.NextFunction) => {
+  console.log('[PROFILE_ROUTES] Verifying token for request:', req.path);
+  
   try {
-    console.log('[PROFILE ROUTES] GET /profile - Starting profile retrieval');
-    console.log('[PROFILE ROUTES] Request path:', req.path);
-    console.log('[PROFILE ROUTES] Request method:', req.method);
-    console.log('[PROFILE ROUTES] Request headers:', JSON.stringify(req.headers));
-    
-    // Get token from authorization header
     const authHeader = req.headers.authorization;
-    console.log('[PROFILE ROUTES] Auth header present:', !!authHeader);
-    console.log('[PROFILE ROUTES] Auth header:', authHeader ? `${authHeader.substring(0, 15)}...` : 'None');
+    console.log('[PROFILE_ROUTES] Auth header present:', !!authHeader);
     
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      console.log('[PROFILE ROUTES] Authentication required - no valid auth header');
-      return res.status(401).json({ error: 'Authentication required' });
+      console.log('[PROFILE_ROUTES] Invalid auth header format');
+      throw new AuthenticationError('No token provided');
     }
     
     const token = authHeader.split(' ')[1];
-    console.log('[PROFILE ROUTES] Token extracted from header:', token ? `${token.substring(0, 10)}...` : 'None');
+    console.log('[PROFILE_ROUTES] Token extracted from header:', token ? `${token.substring(0, 10)}...` : 'None');
     
     try {
-      // Verify token and extract userId
-      console.log('[PROFILE ROUTES] Verifying JWT token with secret:', JWT_SECRET ? `${JWT_SECRET.substring(0, 5)}...` : 'None');
-      const decoded = jwt.verify(token, JWT_SECRET) as { userId: string };
-      const userId = decoded.userId;
-      console.log('[PROFILE ROUTES] JWT verification successful, userId:', userId);
-      console.log('[PROFILE ROUTES] Full decoded payload:', JSON.stringify(decoded));
+      console.log('[PROFILE_ROUTES] Verifying JWT token with secret:', JWT_SECRET ? `${JWT_SECRET.substring(0, 5)}...` : 'None');
+      const decoded = jwt.verify(token, JWT_SECRET) as any;
       
-      if (!userId) {
-        console.log('[PROFILE ROUTES] Invalid token - no userId in payload');
-        return res.status(401).json({ error: 'Invalid authentication token' });
+      // Ensure we have a userId
+      if (!decoded || typeof decoded !== 'object' || !decoded.userId) {
+        console.log('[PROFILE_ROUTES] Invalid token payload - no userId:', decoded);
+        throw new AuthenticationError('Invalid token format');
       }
       
-      console.log(`[PROFILE ROUTES] Profile requested for authenticated user: ${userId}`);
+      console.log('[PROFILE_ROUTES] JWT verification successful, userId:', decoded.userId);
+      console.log('[PROFILE_ROUTES] Full decoded payload:', JSON.stringify(decoded));
       
-      // Get user profile from database
-      console.log(`[PROFILE ROUTES] Looking up profile in database for userId: ${userId}`);
-      const profile = await getUserProfile(userId);
-      console.log(`[PROFILE ROUTES] Profile lookup result:`, profile ? 'Found' : 'Not found');
-      
-      if (profile) {
-        console.log(`[PROFILE ROUTES] Profile details: userId=${profile.userId}, preferences=${JSON.stringify(profile.preferences)}`);
-      }
-      
-      if (!profile) {
-        // If profile doesn't exist yet, return a 404 so client can create one
-        console.log('[PROFILE ROUTES] Profile not found, returning 404');
-        return res.status(404).json({ error: 'Profile not found' });
-      }
-      
-      // Transform from DB format to client expected format
-      const clientProfile = {
-        userId: profile.userId,
-        createdAt: profile.createdAt || new Date(),
-        updatedAt: profile.updatedAt || new Date(),
-        generalPreferences: profile.preferences || {
-          inputMethod: 'text',
-          reflectionFrequency: 'daily',
-          languagePreferences: 'english'
-        },
-        privacySettings: profile.sharingPreferences || {
-          localStorageOnly: false,
-          allowPersonalization: true,
-          enableSync: false
-        },
-        usageStats: {
-          reflectionCount: 0,
-          lastActiveDate: new Date(),
-          streakDays: 0
-        }
-      };
-      
-      console.log('[PROFILE ROUTES] Returning profile to client:', JSON.stringify(clientProfile));
-      res.json(clientProfile);
-    } catch (tokenError) {
-      console.error('[PROFILE ROUTES] Token validation error:', tokenError);
-      return res.status(401).json({ error: 'Invalid authentication token' });
+      // Attach user ID to request
+      (req as any).userId = decoded.userId;
+      next();
+    } catch (error) {
+      console.log('[PROFILE_ROUTES] JWT verification failed:', error);
+      throw new AuthenticationError('Invalid or expired token');
     }
   } catch (error) {
-    console.error(`[PROFILE ROUTES] Error fetching profile:`, error);
-    log(`Error fetching profile: ${error instanceof Error ? error.message : String(error)}`, 'error');
-    res.status(500).json({ error: 'Failed to fetch profile' });
+    next(error);
+  }
+};
+
+/**
+ * GET /profile - Get user profile
+ */
+router.get('/', verifyToken, async (req: express.Request, res: express.Response, next: express.NextFunction) => {
+  try {
+    console.log('[PROFILE_ROUTES] GET / request received');
+    console.log('[PROFILE_ROUTES] Headers:', req.headers);
+    
+    const userId = (req as any).userId;
+    console.log('[PROFILE_ROUTES] Profile requested for authenticated user:', userId);
+    
+    try {
+      const profile = await profileRepository.getUserProfileById(userId);
+      
+      // Format response
+      const response = {
+        id: profile.id,
+        userId: profile.user_id,
+        preferences: typeof profile.preferences === 'string' 
+          ? JSON.parse(profile.preferences) 
+          : profile.preferences,
+        sharingPreferences: typeof profile.sharing_preferences === 'string'
+          ? JSON.parse(profile.sharing_preferences)
+          : profile.sharing_preferences,
+        version: profile.version || 1,
+        createdAt: profile.created_at,
+        updatedAt: profile.updated_at
+      };
+      
+      console.log('[PROFILE_ROUTES] Profile found, returning data');
+      res.json(response);
+    } catch (error) {
+      console.log('[PROFILE_ROUTES] Error getting profile:', error);
+      
+      if (error instanceof NotFoundError) {
+        console.log('[PROFILE_ROUTES] Profile not found, returning 404');
+        res.status(404).json({ error: 'Profile not found' });
+      } else {
+        next(error);
+      }
+    }
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * POST /profile - Create or update user profile
+ */
+router.post('/', verifyToken, async (req: express.Request, res: express.Response, next: express.NextFunction) => {
+  try {
+    console.log('[PROFILE_ROUTES] POST / request received');
+    console.log('[PROFILE_ROUTES] Headers:', req.headers);
+    console.log('[PROFILE_ROUTES] Body:', req.body);
+    
+    const userId = (req as any).userId;
+    console.log('[PROFILE_ROUTES] Creating/updating profile for authenticated user:', userId);
+    
+    // Validate request body
+    if (!req.body) {
+      throw new Error('Request body is required');
+    }
+    
+    // Ensure userId in token matches userId in request body (if provided)
+    if (req.body.userId && req.body.userId !== userId) {
+      console.log('[PROFILE_ROUTES] User ID mismatch:', { tokenUserId: userId, bodyUserId: req.body.userId });
+      throw new AuthenticationError('User ID mismatch between token and request body');
+    }
+    
+    // Prepare profile data
+    const profileData = {
+      userId,
+      preferences: req.body.generalPreferences || req.body.preferences || {},
+      sharingPreferences: req.body.privacySettings || req.body.sharingPreferences || {}
+    };
+    
+    console.log('[PROFILE_ROUTES] Processed profile data:', profileData);
+    
+    // Create or update profile
+    const profile = await profileRepository.createOrUpdateUserProfile(profileData);
+    
+    // Format response
+    const response = {
+      id: profile.id,
+      userId: profile.user_id,
+      preferences: typeof profile.preferences === 'string' 
+        ? JSON.parse(profile.preferences) 
+        : profile.preferences,
+      sharingPreferences: typeof profile.sharing_preferences === 'string'
+        ? JSON.parse(profile.sharing_preferences)
+        : profile.sharing_preferences,
+      version: profile.version || 1,
+      createdAt: profile.created_at,
+      updatedAt: profile.updated_at
+    };
+    
+    console.log('[PROFILE_ROUTES] Profile created/updated successfully');
+    res.status(200).json(response);
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * POST /profile/create - Direct profile creation endpoint
+ * This endpoint is specifically designed to handle the version column issue
+ */
+router.post('/create', verifyToken, async (req: express.Request, res: express.Response, next: express.NextFunction) => {
+  try {
+    console.log('[PROFILE_ROUTES] POST /create request received');
+    console.log('[PROFILE_ROUTES] Headers:', req.headers);
+    console.log('[PROFILE_ROUTES] Body:', req.body);
+    
+    const userId = (req as any).userId;
+    console.log('[PROFILE_ROUTES] Creating profile for authenticated user:', userId);
+    
+    // Validate request body
+    if (!req.body) {
+      throw new Error('Request body is required');
+    }
+    
+    // Ensure userId in token matches userId in request body (if provided)
+    if (req.body.userId && req.body.userId !== userId) {
+      console.log('[PROFILE_ROUTES] User ID mismatch:', { tokenUserId: userId, bodyUserId: req.body.userId });
+      throw new AuthenticationError('User ID mismatch between token and request body');
+    }
+    
+    // Prepare profile data
+    const profileData = {
+      userId,
+      preferences: req.body.generalPreferences || req.body.preferences || {},
+      sharingPreferences: req.body.privacySettings || req.body.sharingPreferences || {}
+    };
+    
+    console.log('[PROFILE_ROUTES] Processed profile data:', profileData);
+    
+    // Create profile directly
+    const profile = await profileRepository.createUserProfile(profileData);
+    
+    // Format response
+    const response = {
+      id: profile.id,
+      userId: profile.user_id,
+      preferences: typeof profile.preferences === 'string' 
+        ? JSON.parse(profile.preferences) 
+        : profile.preferences,
+      sharingPreferences: typeof profile.sharing_preferences === 'string'
+        ? JSON.parse(profile.sharing_preferences)
+        : profile.sharing_preferences,
+      version: profile.version || 1,
+      createdAt: profile.created_at,
+      updatedAt: profile.updated_at
+    };
+    
+    console.log('[PROFILE_ROUTES] Profile created successfully');
+    res.status(201).json(response);
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * DELETE /profile - Delete user profile
+ */
+router.delete('/', verifyToken, async (req: express.Request, res: express.Response, next: express.NextFunction) => {
+  try {
+    console.log('[PROFILE_ROUTES] DELETE / request received');
+    
+    const userId = (req as any).userId;
+    console.log('[PROFILE_ROUTES] Deleting profile for authenticated user:', userId);
+    
+    await profileRepository.deleteUserProfile(userId);
+    
+    console.log('[PROFILE_ROUTES] Profile deleted successfully');
+    res.status(200).json({ success: true, message: 'Profile deleted successfully' });
+  } catch (error) {
+    console.log('[PROFILE_ROUTES] Error deleting profile:', error);
+    
+    if (error instanceof NotFoundError) {
+      res.status(404).json({ error: 'Profile not found' });
+    } else {
+      next(error);
+    }
   }
 });
 
@@ -157,213 +302,6 @@ router.get('/profile/:userId', async (req, res) => {
   } catch (error) {
     log(`Error fetching profile: ${error instanceof Error ? error.message : String(error)}`, 'error');
     res.status(500).json({ error: 'Failed to fetch profile' });
-  }
-});
-
-/**
- * Create a new user profile
- */
-router.post('/profile', async (req, res) => {
-  try {
-    console.log('[PROFILE ROUTES] POST /profile - Starting profile creation');
-    console.log('[PROFILE ROUTES] Request body:', JSON.stringify(req.body));
-    console.log('[PROFILE ROUTES] Request headers:', JSON.stringify(req.headers));
-    
-    // Get token from authorization header
-    const authHeader = req.headers.authorization;
-    console.log('[PROFILE ROUTES] Auth header present:', !!authHeader);
-    console.log('[PROFILE ROUTES] Auth header:', authHeader ? `${authHeader.substring(0, 15)}...` : 'None');
-    
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      console.log('[PROFILE ROUTES] Authentication required - no valid auth header');
-      return res.status(401).json({ error: 'Authentication required' });
-    }
-    
-    const token = authHeader.split(' ')[1];
-    console.log('[PROFILE ROUTES] Token extracted from header:', token ? `${token.substring(0, 10)}...` : 'None');
-    
-    try {
-      // Verify token and extract userId
-      console.log('[PROFILE ROUTES] Verifying JWT token with secret:', JWT_SECRET ? `${JWT_SECRET.substring(0, 5)}...` : 'None');
-      const decoded = jwt.verify(token, JWT_SECRET) as { userId: string };
-      const userId = decoded.userId;
-      console.log('[PROFILE ROUTES] JWT verification successful, userId:', userId);
-      console.log('[PROFILE ROUTES] Full decoded payload:', JSON.stringify(decoded));
-      
-      if (!userId) {
-        console.log('[PROFILE ROUTES] Invalid token - no userId in payload');
-        return res.status(401).json({ error: 'Invalid authentication token' });
-      }
-      
-      console.log(`[PROFILE ROUTES] Creating profile for user: ${userId}`);
-      
-      // Check if profile already exists
-      console.log(`[PROFILE ROUTES] Checking if profile already exists for userId: ${userId}`);
-      const existingProfile = await getUserProfile(userId);
-      console.log(`[PROFILE ROUTES] Profile exists check result: ${existingProfile ? 'Found' : 'Not found'}`);
-      
-      if (existingProfile) {
-        console.log('[PROFILE ROUTES] Profile already exists, returning 409');
-        return res.status(409).json({ error: 'Profile already exists' });
-      }
-      
-      // Extract profile data from request body
-      const { generalPreferences, privacySettings } = req.body;
-      console.log('[PROFILE ROUTES] Extracted preferences from request body:', {
-        generalPreferences: generalPreferences ? 'Present' : 'Not present',
-        privacySettings: privacySettings ? 'Present' : 'Not present'
-      });
-      
-      // Create profile object
-      const profileData = {
-        userId,
-        preferences: generalPreferences || {
-          inputMethod: 'text',
-          reflectionFrequency: 'daily',
-          languagePreferences: 'english'
-        },
-        sharingPreferences: privacySettings || {
-          localStorageOnly: false,
-          allowPersonalization: true,
-          enableSync: true
-        },
-        createdAt: new Date(),
-        updatedAt: new Date()
-      };
-      
-      console.log('[PROFILE ROUTES] Creating profile with data:', JSON.stringify(profileData));
-      
-      // Create profile in database
-      console.log('[PROFILE ROUTES] Calling createUserProfile function');
-      const newProfile = await createUserProfile(profileData);
-      
-      console.log('[PROFILE ROUTES] Profile created successfully:', JSON.stringify(newProfile));
-      
-      // Transform to client format
-      const clientProfile = {
-        userId: newProfile.userId,
-        createdAt: newProfile.createdAt || new Date(),
-        updatedAt: newProfile.updatedAt || new Date(),
-        generalPreferences: newProfile.preferences || {
-          inputMethod: 'text',
-          reflectionFrequency: 'daily',
-          languagePreferences: 'english'
-        },
-        privacySettings: newProfile.sharingPreferences || {
-          localStorageOnly: false,
-          allowPersonalization: true,
-          enableSync: true
-        },
-        usageStats: {
-          reflectionCount: 0,
-          lastActiveDate: new Date(),
-          streakDays: 0
-        }
-      };
-      
-      console.log('[PROFILE ROUTES] Returning client profile:', JSON.stringify(clientProfile));
-      res.status(201).json(clientProfile);
-    } catch (tokenError) {
-      console.error('[PROFILE ROUTES] Token validation error:', tokenError);
-      return res.status(401).json({ error: 'Invalid authentication token' });
-    }
-  } catch (error) {
-    console.error('[PROFILE ROUTES] Error creating profile:', error);
-    log(`Error creating profile: ${error instanceof Error ? error.message : String(error)}`, 'error');
-    res.status(500).json({ error: 'Failed to create profile' });
-  }
-});
-
-/**
- * Update user profile
- * This is the main endpoint for updating without specifying userId in the URL
- */
-router.put('/profile', async (req, res) => {
-  try {
-    const { userId, generalPreferences, privacySettings, usageStats } = req.body;
-    
-    if (!userId) {
-      return res.status(400).json({ error: 'userId is required' });
-    }
-
-    // Check authorization (implement based on your auth system)
-    // if (userId !== req.user?.id) {
-    //   return res.status(403).json({ error: 'Unauthorized to update profile' });
-    // }
-
-    // Check if profile exists
-    const existingProfile = await getUserProfile(userId);
-    if (!existingProfile) {
-      return res.status(404).json({ error: 'Profile not found' });
-    }
-    
-    // Update profile
-    const updatedProfile = await updateUserProfile(userId, {
-      preferences: generalPreferences,
-      sharingPreferences: privacySettings
-    });
-
-    // Transform to client format
-    const clientProfile = {
-      userId: updatedProfile.userId,
-      createdAt: existingProfile.createdAt || new Date(),
-      updatedAt: updatedProfile.updatedAt || new Date(),
-      generalPreferences: updatedProfile.preferences,
-      privacySettings: updatedProfile.sharingPreferences,
-      usageStats: usageStats || existingProfile.preferences?.usageStats || {
-        reflectionCount: 0,
-        lastActiveDate: new Date(),
-        streakDays: 0
-      }
-    };
-
-    res.json(clientProfile);
-  } catch (error) {
-    log(`Error updating profile: ${error instanceof Error ? error.message : String(error)}`, 'error');
-    res.status(500).json({ error: 'Failed to update profile' });
-  }
-});
-
-/**
- * Delete user profile
- */
-router.delete('/profile', async (req, res) => {
-  try {
-    // Get authenticated user ID (implement based on your auth system)
-    // For now, we'll use the userId from the query for testing
-    const userId = req.query.userId as string;
-    
-    if (!userId) {
-      return res.status(400).json({ error: 'userId is required' });
-    }
-
-    // Check authorization (implement based on your auth system)
-    // if (userId !== req.user?.id) {
-    //   return res.status(403).json({ error: 'Unauthorized to delete profile' });
-    // }
-
-    // Check if profile exists
-    const existingProfile = await getUserProfile(userId);
-    if (!existingProfile) {
-      return res.status(404).json({ error: 'Profile not found' });
-    }
-
-    // Delete profile
-    const deleted = await deleteUserProfile(userId);
-    
-    if (!deleted) {
-      return res.status(500).json({ error: 'Failed to delete profile' });
-    }
-
-    // Also delete any encrypted data for this user
-    await deleteEncryptedProfileData(userId).catch((err: Error) => {
-      log(`Non-critical error when deleting encrypted data: ${err.message}`, 'warn');
-    });
-
-    res.status(204).send();
-  } catch (error) {
-    log(`Error deleting profile: ${error instanceof Error ? error.message : String(error)}`, 'error');
-    res.status(500).json({ error: 'Failed to delete profile' });
   }
 });
 
@@ -472,134 +410,6 @@ router.delete('/profile/:userId/encrypted', async (req, res) => {
   } catch (error) {
     log(`Error deleting encrypted data: ${error instanceof Error ? error.message : String(error)}`, 'error');
     res.status(500).json({ error: 'Failed to delete encrypted data' });
-  }
-});
-
-/**
- * Create or update user profile - direct endpoint for client use
- * This endpoint allows creating a profile without checking if it exists first
- */
-router.post('/profile/create', async (req, res) => {
-  try {
-    console.log('[PROFILE ROUTES] POST /profile/create - Starting direct profile creation');
-    console.log('[PROFILE ROUTES] Request body:', JSON.stringify(req.body));
-    console.log('[PROFILE ROUTES] Request headers:', JSON.stringify(req.headers));
-    
-    // Get token from authorization header
-    const authHeader = req.headers.authorization;
-    console.log('[PROFILE ROUTES] Auth header present:', !!authHeader);
-    console.log('[PROFILE ROUTES] Auth header:', authHeader ? `${authHeader.substring(0, 15)}...` : 'None');
-    
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      console.log('[PROFILE ROUTES] Authentication required - no valid auth header');
-      return res.status(401).json({ error: 'Authentication required' });
-    }
-    
-    const token = authHeader.split(' ')[1];
-    console.log('[PROFILE ROUTES] Token extracted from header:', token ? `${token.substring(0, 10)}...` : 'None');
-    
-    try {
-      // Verify token and extract userId
-      console.log('[PROFILE ROUTES] Verifying JWT token with secret:', JWT_SECRET ? `${JWT_SECRET.substring(0, 5)}...` : 'None');
-      const decoded = jwt.verify(token, JWT_SECRET) as { userId: string };
-      const userId = decoded.userId;
-      console.log('[PROFILE ROUTES] JWT verification successful, userId:', userId);
-      console.log('[PROFILE ROUTES] Full decoded payload:', JSON.stringify(decoded));
-      
-      if (!userId) {
-        console.log('[PROFILE ROUTES] Invalid token - no userId in payload');
-        return res.status(401).json({ error: 'Invalid authentication token' });
-      }
-      
-      console.log(`[PROFILE ROUTES] Creating/updating profile for user: ${userId}`);
-      
-      // Extract profile data from request body
-      const { userId: bodyUserId, generalPreferences, privacySettings } = req.body;
-      
-      // Ensure the userId in the token matches the one in the request body, if provided
-      if (bodyUserId && bodyUserId !== userId) {
-        console.log(`[PROFILE ROUTES] UserId mismatch: token=${userId}, body=${bodyUserId}`);
-        return res.status(403).json({ error: 'Unauthorized - userId mismatch' });
-      }
-      
-      console.log('[PROFILE ROUTES] Extracted preferences from request body:', {
-        generalPreferences: generalPreferences ? 'Present' : 'Not present',
-        privacySettings: privacySettings ? 'Present' : 'Not present'
-      });
-      
-      // Create profile object
-      const profileData = {
-        userId,
-        preferences: generalPreferences || {
-          inputMethod: 'text',
-          reflectionFrequency: 'daily',
-          languagePreferences: 'english'
-        },
-        sharingPreferences: privacySettings || {
-          localStorageOnly: false,
-          allowPersonalization: true,
-          enableSync: true
-        },
-        createdAt: new Date(),
-        updatedAt: new Date()
-      };
-      
-      console.log('[PROFILE ROUTES] Creating/updating profile with data:', JSON.stringify(profileData));
-      
-      // Check if profile already exists
-      console.log(`[PROFILE ROUTES] Checking if profile already exists for userId: ${userId}`);
-      const existingProfile = await getUserProfile(userId);
-      console.log(`[PROFILE ROUTES] Profile exists check result: ${existingProfile ? 'Found' : 'Not found'}`);
-      
-      let profile;
-      
-      if (existingProfile) {
-        // Update existing profile
-        console.log(`[PROFILE ROUTES] Updating existing profile for userId: ${userId}`);
-        profile = await updateUserProfile(userId, {
-          preferences: profileData.preferences,
-          sharingPreferences: profileData.sharingPreferences
-        });
-        console.log('[PROFILE ROUTES] Profile updated successfully');
-      } else {
-        // Create new profile
-        console.log(`[PROFILE ROUTES] Creating new profile for userId: ${userId}`);
-        profile = await createUserProfile(profileData);
-        console.log('[PROFILE ROUTES] Profile created successfully');
-      }
-      
-      // Transform to client format
-      const clientProfile = {
-        userId: profile.userId,
-        createdAt: profile.createdAt || new Date(),
-        updatedAt: profile.updatedAt || new Date(),
-        generalPreferences: profile.preferences || {
-          inputMethod: 'text',
-          reflectionFrequency: 'daily',
-          languagePreferences: 'english'
-        },
-        privacySettings: profile.sharingPreferences || {
-          localStorageOnly: false,
-          allowPersonalization: true,
-          enableSync: true
-        },
-        usageStats: {
-          reflectionCount: 0,
-          lastActiveDate: new Date(),
-          streakDays: 0
-        }
-      };
-      
-      console.log('[PROFILE ROUTES] Returning client profile:', JSON.stringify(clientProfile));
-      res.status(200).json(clientProfile);
-    } catch (tokenError) {
-      console.error('[PROFILE ROUTES] Token validation error:', tokenError);
-      return res.status(401).json({ error: 'Invalid authentication token' });
-    }
-  } catch (error) {
-    console.error('[PROFILE ROUTES] Error creating/updating profile:', error);
-    log(`Error creating/updating profile: ${error instanceof Error ? error.message : String(error)}`, 'error');
-    res.status(500).json({ error: 'Failed to create/update profile' });
   }
 });
 
