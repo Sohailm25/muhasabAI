@@ -10,7 +10,7 @@ import {
   exportKey,
   importKey
 } from './encryption';
-import { api } from './api';
+import { API } from './api';
 import { ProfileType } from '@/types/profile';
 
 /**
@@ -112,7 +112,7 @@ async function syncPublicProfile(
     }
     
     // Get remote profile
-    const remoteProfile = await api.getUserProfile(userId);
+    const remoteProfile = await API.getUserProfile(userId);
     
     // If local doesn't exist, use remote
     if (!localProfile) {
@@ -137,7 +137,7 @@ async function syncPublicProfile(
       return localProfile;
     } else if (syncDirection === 'push') {
       // Only push to remote
-      await api.updateUserProfile({ 
+      await API.updateUserProfile({ 
         ...localProfile,
         lastModified: Date.now(),
         version: (localProfile.version || 0) + 1
@@ -170,7 +170,7 @@ async function syncPublicProfile(
           version: (localProfile.version || 0) + 1
         };
         
-        await api.updateUserProfile(updatedLocalProfile);
+        await API.updateUserProfile(updatedLocalProfile);
         
         // Update metadata
         metadata.publicVersion = updatedLocalProfile.version || 0;
@@ -218,7 +218,7 @@ async function syncPrivateProfile(
     }
     
     // Get remote encrypted data
-    const remoteEncrypted = await api.getEncryptedProfileData(userId);
+    const remoteEncrypted = await API.getEncryptedProfileData(userId);
     
     // If no local private profile, try to decrypt remote
     if (!localPrivateProfile) {
@@ -289,7 +289,7 @@ async function syncPrivateProfile(
       );
       
       // Update remote encrypted data
-      await api.updateEncryptedProfileData(userId, {
+      await API.updateEncryptedProfileData(userId, {
         userId,
         encryptedData,
         iv,
@@ -348,7 +348,7 @@ async function syncPrivateProfile(
       );
       
       // Update remote encrypted data
-      await api.updateEncryptedProfileData(userId, {
+      await API.updateEncryptedProfileData(userId, {
         userId,
         encryptedData,
         iv,
@@ -591,7 +591,7 @@ export const fetchProfileFromServer = async (
   try {
     // For now, this is just a placeholder
     // In a real app, this would be an actual API call
-    // const response = await api.get(`/api/profile/${userId}`);
+    // const response = await API.get(`/api/profile/${userId}`);
     // return response.data;
     
     // For now, just return the local profile

@@ -262,4 +262,13 @@ export const API = {
 
     return true;
   },
+
+  /**
+   * Delete user profile
+   */
+  async deleteUserProfile(): Promise<boolean> {
+    console.log('[API] Deleting user profile');
+    await this.delete(this.endpoints.profile.get);
+    return true;
+  },
 }; 

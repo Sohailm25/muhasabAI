@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useProfile } from '../hooks/useProfile';
 import { syncProfileAcrossDevices } from '../lib/profileSync';
 import { useAuth } from '../hooks/useAuth';
-import { api } from '../lib/api';
+import { API } from '../lib/api';
 
 interface ProfileIntegrationProps {
   children: React.ReactNode;
@@ -61,7 +61,7 @@ export function ProfileIntegration({ children }: ProfileIntegrationProps) {
         // First, try to fetch an existing profile
         try {
           console.log('Checking for existing profile...');
-          const profile = await api.getUserProfile();
+          const profile = await API.getUserProfile();
           
           if (profile && isMounted) {
             console.log('Found existing profile, no need to create one');

@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/componen
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { ArrowLeft, CalendarDays, CheckCircle } from 'lucide-react';
-import { api } from '@/lib/api';
+import { API } from '@/lib/api';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { formatDistanceToNow } from 'date-fns';
 
@@ -36,7 +36,7 @@ export default function HabitTrackingPage() {
     queryKey: ['identity-frameworks'],
     queryFn: async () => {
       try {
-        const response = await api.get('/api/identity-frameworks');
+        const response = await API.get('/api/identity-frameworks');
         return response.frameworks || [];
       } catch (error) {
         console.error('Error fetching frameworks:', error);
@@ -50,7 +50,7 @@ export default function HabitTrackingPage() {
   const completeHabit = useMutation({
     mutationFn: async (habitId: string) => {
       try {
-        const response = await api.post(`/api/habit-tracking/${habitId}/complete`);
+        const response = await API.post(`/api/habit-tracking/${habitId}/complete`);
         return response;
       } catch (error) {
         console.error('Error completing habit:', error);
