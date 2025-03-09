@@ -2,9 +2,10 @@
 import 'dotenv/config';
 
 import express, { type Request, Response, NextFunction } from "express";
-import { registerRoutes } from "./routes";
+import { registerRoutes as registerAppRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { initializeDatabase } from "./db";
+import * as db from './db/index';
 import cors from 'cors';
 import bodyParser from 'body-parser';
 
@@ -218,7 +219,7 @@ async function initializeDatabaseWithMigrations() {
   
   try {
     // Initialize database connection
-    await db.initialize();
+    await initializeDatabase();
     
     // Validate database schema
     console.log('🔍 [SERVER INIT] Validating database schema...');
@@ -320,6 +321,9 @@ function registerRoutes() {
   
   console.log('✅ [SERVER INIT] Routes registered successfully');
 }
+
+// Define PORT
+const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 8080;
 
 // Start server
 async function startServer() {

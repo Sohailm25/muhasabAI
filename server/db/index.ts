@@ -231,4 +231,14 @@ export async function deleteEncryptedProfileData(userId: unknown): Promise<boole
     log(`Error deleting encrypted profile data: ${error instanceof Error ? error.message : String(error)}`, 'error');
     return false;
   }
+}
+
+/**
+ * Get the PostgreSQL connection pool
+ */
+export function getPool(): any {
+  if (!pg.pool) {
+    throw new Error('PostgreSQL pool not initialized');
+  }
+  return pg.pool;
 } 
