@@ -253,10 +253,28 @@ export function ConversationView({
         firstQuestion: newQuestions[0]?.substring(0, 50)
       });
       
-      // Create assistant message
+      // Create assistant message with parsed content
+      let parsedUnderstanding = "";
+      if (data.conversation?.messages) {
+        // Get the last assistant message from the conversation
+        const lastAssistantMessage = data.conversation.messages
+          .filter((msg: Message) => msg.role === "assistant")
+          .pop();
+        
+        if (lastAssistantMessage) {
+          try {
+            const parsedContent = JSON.parse(lastAssistantMessage.content);
+            parsedUnderstanding = parsedContent.understanding || "";
+          } catch (e) {
+            console.error("[ConversationView Debug] Error parsing assistant message content:", e);
+            parsedUnderstanding = lastAssistantMessage.content;
+          }
+        }
+      }
+      
       const assistantMessage: Message = {
         role: "assistant" as const,
-        content: data.understanding || data.conversation?.understanding || ""
+        content: parsedUnderstanding || understanding || ""
       };
       
       // Update messages and questions

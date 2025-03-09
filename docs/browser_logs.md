@@ -1,213 +1,127 @@
-RequireAuth Debug] Render decision: Object
-RequireAuth.tsx:33 [RequireAuth Debug] Render decision: Object
-RequireAuth.tsx:33 [RequireAuth Debug] Render decision: Object
-RequireAuth.tsx:33 [RequireAuth Debug] Render decision: Object
-RequireAuth.tsx:33 [RequireAuth Debug] Render decision: Object
-RequireAuth.tsx:33 [RequireAuth Debug] Render decision: Object
-RequireAuth.tsx:22 [RequireAuth Debug] Auth state: Object
-api/profile/b3eb6963-fb63-4e0a-a301-ecb099b007ad/encrypted:1 
-            
-            
-           Failed to load resource: the server responded with a status of 404 (Not Found)Understand this errorAI
-useProfile.ts:129 No encrypted profile data found
-api/profile/b3eb6963-fb63-4e0a-a301-ecb099b007ad/encrypted:1 
-            
-            
-           Failed to load resource: the server responded with a status of 404 (Not Found)Understand this errorAI
-useProfile.ts:129 No encrypted profile data found
-ProfileIntegration.tsx:59 Starting profile initialization...
-ProfileIntegration.tsx:63 Checking for existing profile...
-ProfileIntegration.tsx:67 Found existing profile, no need to create one
-Grammarly.js:2 grm ERROR [iterable] ░░ Not supported: in app messages from Iterable
-write @ Grammarly.js:2Understand this errorAI
-ReflectionInput.tsx:58 Submitting standard text reflection
-reflectionService.ts:169 useReflectionService.submitReflection called with content: testing this out...
-reflectionService.ts:237 About to call reflectionService.submitReflection with personalization: false
-reflectionService.ts:48 Submitting reflection with personalization: false
-reflectionService.ts:67 🔴🔴🔴 Using API URL without query parameters: http://localhost:3000/api/reflection
-reflectionService.ts:114 SENDING REQUEST BODY: {
-  "content": "testing this out",
-  "type": "text"
-}
-reflectionService.ts:115 SENDING REQUEST URL: http://localhost:3000/api/reflection
-reflectionService.ts:116 SENDING REQUEST HEADERS: {Content-Type: 'application/json', Authorization: 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2…QzNH0._mbcco5IBN40xVqCRt3E359em5h8XLpLX7hdys21yeg'}
-reflectionService.ts:119 
+Sending insights generation request with auth token
+chat.tsx:403 Trying new /api/insights endpoint...
+chat.tsx:422 Successfully used new /api/insights endpoint
+chat.tsx:443 Response from /api/insights - status: 200 OK
+chat.tsx:450 Response headers: {access-control-allow-credentials: 'true', access-control-allow-origin: 'http://localhost:3000', connection: 'keep-alive', content-length: '2632', content-type: 'text/html; charset=utf-8', …}
+chat.tsx:523 Error parsing JSON response: SyntaxError: Unexpected token '<', "<!DOCTYPE "... is not valid JSON
+handleGenerateInsights @ chat.tsx:523
+await in handleGenerateInsights
+(anonymous) @ chat.tsx:230
+setTimeout
+handleNewMessage @ chat.tsx:229
+handleSubmitResponse @ ConversationView.tsx:219
+callCallback2 @ chunk-276SZO74.js?v=2ff988cd:3674
+invokeGuardedCallbackDev @ chunk-276SZO74.js?v=2ff988cd:3699
+invokeGuardedCallback @ chunk-276SZO74.js?v=2ff988cd:3733
+invokeGuardedCallbackAndCatchFirstError @ chunk-276SZO74.js?v=2ff988cd:3736
+executeDispatch @ chunk-276SZO74.js?v=2ff988cd:7014
+processDispatchQueueItemsInOrder @ chunk-276SZO74.js?v=2ff988cd:7034
+processDispatchQueue @ chunk-276SZO74.js?v=2ff988cd:7043
+dispatchEventsForPlugins @ chunk-276SZO74.js?v=2ff988cd:7051
+(anonymous) @ chunk-276SZO74.js?v=2ff988cd:7174
+batchedUpdates$1 @ chunk-276SZO74.js?v=2ff988cd:18913
+batchedUpdates @ chunk-276SZO74.js?v=2ff988cd:3579
+dispatchEventForPluginEventSystem @ chunk-276SZO74.js?v=2ff988cd:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ chunk-276SZO74.js?v=2ff988cd:5478
+dispatchEvent @ chunk-276SZO74.js?v=2ff988cd:5472
+dispatchDiscreteEvent @ chunk-276SZO74.js?v=2ff988cd:5449Understand this errorAI
+chat.tsx:526 Raw response text: <!DOCTYPE html>
+<html lang="en">
+  <head>
+    <style data-vite-theme="" data-inject-first="">:root {
+      --background: 0 0% 100%;
+--foreground: 20 14.3% 4.1%;
+--muted: 60 4.8% 95.9%;
+--muted-foreground: 25 5.3% 44.7%;
+--popover: 0 0% 100%;
+--popover-foreground: 20 14.3% 4.1%;
+--card: 0 0% 100%;
+--card-foreground: 20 14.3% 4.1%;
+--border: 20 5.9% 90%;
+--input: 20 5.9% 90%;
+--primary: 142 76% 36%;
+--primary-foreground: 127 38% 98%;
+--secondary: 60 4.8% 95.9%;
+--secondary-foreground: 24 9.8% 10%;
+--accent: 60 4.8% 95.9%;
+--accent-foreground: 24 9.8% 10%;
+--destructive: 0 84.2% 60.2%;
+--destructive-foreground: 60 9.1% 97.8%;
+--ring: 20 14.3% 4.1%;
+--radius: 0.5rem;
+  }
+  .dark {
+      --background: 240 10% 3.9%;
+--foreground: 0 0% 98%;
+--muted: 240 3.7% 15.9%;
+--muted-foreground: 240 5% 64.9%;
+--popover: 240 10% 3.9%;
+--popover-foreground: 0 0% 98%;
+--card: 240 10% 3.9%;
+--card-foreground: 0 0% 98%;
+--border: 240 3.7% 15.9%;
+--input: 240 3.7% 15.9%;
+--primary: 142 76% 36%;
+--primary-foreground: 127 38% 98%;
+--secondary: 240 3.7% 15.9%;
+--secondary-foreground: 0 0% 98%;
+--accent: 240 3.7% 15.9%;
+--accent-foreground: 0 0% 98%;
+--destructive: 0 62.8% 30.6%;
+--destructive-foreground: 0 0% 98%;
+--ring: 240 4.9% 83.9%;
+--radius: 0.5rem;
+  }</style>
 
+    <script type="module">
+import RefreshRuntime from "/@react-refresh"
+RefreshRuntime.injectIntoGlobalHook(window)
+window.$RefreshReg$ = () => {}
+window.$RefreshSig$ = () => (type) => type
+window.__vite_plugin_react_preamble_installed__ = true
+</script>
 
-reflectionService.ts:120 🔴🔴🔴 CLIENT SENDING REQUEST TO URL 🔴🔴🔴
-reflectionService.ts:121 🔴🔴🔴 FULL API URL: http://localhost:3000/api/reflection
-reflectionService.ts:122 🔴🔴🔴 REQUEST CONTAINS NO QUERY PARAMETERS
-reflectionService.ts:123 
+    <script type="module" src="/@vite/client"></script>
 
-
-reflectionService.ts:246 reflectionService.submitReflection returned result: success
-ReflectionInput.tsx:62 API response: {reflection: {…}, conversation: {…}, understanding: "I appreciate you taking a moment to try out this I…ey, or any aspects of faith you're contemplating.", questions: Array(3)}
-new.tsx:17 Reflection complete: {reflection: {…}, conversation: {…}, understanding: "I appreciate you taking a moment to try out this I…ey, or any aspects of faith you're contemplating.", questions: Array(3)}
-new.tsx:20 API response top-level keys: (4) ['reflection', 'conversation', 'understanding', 'questions']
-new.tsx:23 Understanding is present at top level: true
-new.tsx:24 Questions are present at top level: true
-new.tsx:27 Top-level understanding preview: I appreciate you taking a moment to try out this I...
-new.tsx:31 Top-level questions count: 3
-new.tsx:33 First question: What particular aspects of your faith or spiritual journey would you be interested in reflecting on more deeply?
-new.tsx:70 Direct from API response - understanding: I appreciate you taking a moment to try out this I...
-new.tsx:71 Direct from API response - questions: (3) ['What particular aspects of your faith or spiritual…d you be interested in reflecting on more deeply?', "Are there any specific challenges or blessings in …h Allah that you've been thinking about recently?", 'How might regular spiritual reflection help you st…amic teachings and principles in your daily life?']
-new.tsx:85 Saving reflection data to localStorage: {id: 2, reflectionId: 2, original: 'testing this out', understanding: "I appreciate you taking a moment to try out this I…ey, or any aspects of faith you're contemplating.", questions: Array(3), …}
-new.tsx:87 Understanding: I appreciate you taking a moment to try out this I...
-new.tsx:88 Questions: (3) ['What particular aspects of your faith or spiritual…d you be interested in reflecting on more deeply?', "Are there any specific challenges or blessings in …h Allah that you've been thinking about recently?", 'How might regular spiritual reflection help you st…amic teachings and principles in your daily life?']
-new.tsx:93 Navigating to chat page: /chat/2
-RequireAuth.tsx:33 [RequireAuth Debug] Render decision: {isAuthenticated: true}
-RequireAuth.tsx:33 [RequireAuth Debug] Render decision: {isAuthenticated: true}
-chat.tsx:46 [Chat Debug] Loading reflection data for ID: 2
-chat.tsx:54 [Chat Debug] Loaded session data: {id: 2, reflectionId: 2, original: 'testing this out', understanding: "I appreciate you taking a moment to try out this I…ey, or any aspects of faith you're contemplating.", questions: Array(3), …}
-chat.tsx:73 [Chat Debug] Converted to 2 messages
-RequireAuth.tsx:22 [RequireAuth Debug] Auth state: {isAuthenticated: true, isLoading: false}
-chat.tsx:46 [Chat Debug] Loading reflection data for ID: 2
-chat.tsx:54 [Chat Debug] Loaded session data: {id: 2, reflectionId: 2, original: 'testing this out', understanding: "I appreciate you taking a moment to try out this I…ey, or any aspects of faith you're contemplating.", questions: Array(3), …}
-chat.tsx:73 [Chat Debug] Converted to 2 messages
-ConversationView.tsx:683 [ConversationView Debug] Animating message: {index: 0, isNew: true, notSeen: true, contentChanged: true}
-ConversationView.tsx:683 [ConversationView Debug] Animating message: {index: 1, isNew: true, notSeen: true, contentChanged: true}
-ConversationView.tsx:683 [ConversationView Debug] Animating message: {index: 0, isNew: true, notSeen: true, contentChanged: true}
-ConversationView.tsx:683 [ConversationView Debug] Animating message: {index: 1, isNew: true, notSeen: true, contentChanged: true}
-ConversationView.tsx:416 [ConversationView Debug] State update: {messagesLength: 2, questionsLength: 3, showQuestions: false, isSubmitting: false}
-ConversationView.tsx:478 [ConversationView Debug] Conversation changed: 2
-chat.tsx:591 [Chat Debug] Animation starting
-ConversationView.tsx:416 [ConversationView Debug] State update: {messagesLength: 2, questionsLength: 3, showQuestions: false, isSubmitting: false}
-ConversationView.tsx:478 [ConversationView Debug] Conversation changed: 2
-chat.tsx:591 [Chat Debug] Animation starting
-ConversationView.tsx:443 [ConversationView Debug] Message animation completed: 2-0
-ConversationView.tsx:443 [ConversationView Debug] Message animation completed: 2-1
-ConversationView.tsx:464 [ConversationView Debug] All messages animated, showing questions
-chat.tsx:595 [Chat Debug] Animation completed
-ConversationView.tsx:105 [DEBUG] FollowUpQuestions component received props: {questionsCount: 3, isVisible: true, firstQuestionPreview: 'What particular aspects of you...'}
-ConversationView.tsx:117 [DEBUG] FollowUpQuestions is visible, rendering buttons
-ConversationView.tsx:105 [DEBUG] FollowUpQuestions component received props: {questionsCount: 3, isVisible: true, firstQuestionPreview: 'What particular aspects of you...'}
-ConversationView.tsx:117 [DEBUG] FollowUpQuestions is visible, rendering buttons
-ConversationView.tsx:443 [ConversationView Debug] Message animation completed: 2-0
-ConversationView.tsx:464 [ConversationView Debug] All messages animated, showing questions
-ConversationView.tsx:443 [ConversationView Debug] Message animation completed: 2-1
-ConversationView.tsx:464 [ConversationView Debug] All messages animated, showing questions
-ConversationView.tsx:416 [ConversationView Debug] State update: {messagesLength: 2, questionsLength: 3, showQuestions: true, isSubmitting: false}
-2chat.tsx:595 [Chat Debug] Animation completed
-ConversationView.tsx:149 [DEBUG] FollowUpQuestions memoization - shouldUpdate: false
-ConversationView.tsx:149 [DEBUG] FollowUpQuestions memoization - shouldUpdate: false
-Grammarly.js:2 grm ERROR [iterable] ░░ Not supported: in app messages from Iterable
-write @ Grammarly.js:2
-handleEvent @ Grammarly.js:2
-_logMessage @ Grammarly.js:2
-error @ Grammarly.js:2
-error @ Grammarly.js:2
-onTrigger @ Grammarly.js:2
-(anonymous) @ Grammarly.js:2
-t.__tryOrUnsub @ Grammarly.js:2
-t.next @ Grammarly.js:2
-t._next @ Grammarly.js:2
-t.next @ Grammarly.js:2
-l @ Grammarly.js:2
-t._execute @ Grammarly.js:2
-t.execute @ Grammarly.js:2
-t.flush @ Grammarly.js:2
-setInterval
-t.requestAsyncId @ Grammarly.js:2
-t.schedule @ Grammarly.js:2
-e.schedule @ Grammarly.js:2
-t.schedule @ Grammarly.js:2
-(anonymous) @ Grammarly.js:2
-e._trySubscribe @ Grammarly.js:2
-e.subscribe @ Grammarly.js:2
-(anonymous) @ Grammarly.js:2
-t.__tryOrUnsub @ Grammarly.js:2
-t.next @ Grammarly.js:2
-t._next @ Grammarly.js:2
-t.next @ Grammarly.js:2
-t.next @ Grammarly.js:2
-t.next @ Grammarly.js:2
-set @ Grammarly.js:2
-(anonymous) @ Grammarly.js:2
-t.__tryOrUnsub @ Grammarly.js:2
-t.next @ Grammarly.js:2
-t._next @ Grammarly.js:2
-t.next @ Grammarly.js:2
-t._next @ Grammarly.js:2
-t.next @ Grammarly.js:2
-t.next @ Grammarly.js:2
-(anonymous) @ Grammarly.js:2
-t.__tryOrUnsub @ Grammarly.js:2
-t.next @ Grammarly.js:2
-t._next @ Grammarly.js:2
-t.next @ Grammarly.js:2
-t.notifyNext @ Grammarly.js:2
-t._next @ Grammarly.js:2
-t.next @ Grammarly.js:2
-_processObservableMessage @ Grammarly.js:2
-(anonymous) @ Grammarly.js:2
-t.__tryOrUnsub @ Grammarly.js:2
-t.next @ Grammarly.js:2
-t._next @ Grammarly.js:2
-t.next @ Grammarly.js:2
-t._next @ Grammarly.js:2
-t.next @ Grammarly.js:2
-t @ Grammarly.js:2
-(anonymous) @ Grammarly.js:2
-(anonymous) @ Grammarly.js:2
-Ii.fire @ Grammarly.js:2
-Ti._onBgPortMessage @ Grammarly.js:2Understand this errorAI
-12ConversationView.tsx:149 [DEBUG] FollowUpQuestions memoization - shouldUpdate: false
-ConversationView.tsx:149 [DEBUG] FollowUpQuestions memoization - shouldUpdate: false
-3ConversationView.tsx:149 [DEBUG] FollowUpQuestions memoization - shouldUpdate: false
-chat.tsx:209 Updating messages: (3) [{…}, {…}, {…}]
-chat.tsx:201 Saved session to localStorage
-ConversationView.tsx:549 [ConversationView Debug] Submitting response for conversation 2
-ConversationView.tsx:683 [ConversationView Debug] Animating message: {index: 2, isNew: true, notSeen: true, contentChanged: true}
-ConversationView.tsx:683 [ConversationView Debug] Animating message: {index: 2, isNew: true, notSeen: true, contentChanged: true}
-ConversationView.tsx:416 [ConversationView Debug] State update: {messagesLength: 3, questionsLength: 3, showQuestions: false, isSubmitting: true}
-ConversationView.tsx:478 [ConversationView Debug] Conversation changed: 2
-chat.tsx:591 [Chat Debug] Animation starting
-ConversationView.tsx:683 [ConversationView Debug] Animating message: {index: 0, isNew: true, notSeen: true, contentChanged: true}
-ConversationView.tsx:683 [ConversationView Debug] Animating message: {index: 1, isNew: true, notSeen: true, contentChanged: true}
-ConversationView.tsx:683 [ConversationView Debug] Animating message: {index: 2, isNew: true, notSeen: true, contentChanged: true}
-ConversationView.tsx:683 [ConversationView Debug] Animating message: {index: 0, isNew: true, notSeen: true, contentChanged: true}
-ConversationView.tsx:683 [ConversationView Debug] Animating message: {index: 1, isNew: true, notSeen: true, contentChanged: true}
-ConversationView.tsx:683 [ConversationView Debug] Animating message: {index: 2, isNew: true, notSeen: true, contentChanged: true}
-ConversationView.tsx:443 [ConversationView Debug] Message animation completed: 2-2
-ConversationView.tsx:572 [ConversationView Debug] Response data: {conversation: {…}, questions: Array(3)}
-ConversationView.tsx:624 [ConversationView Debug] Adding new assistant message: {role: 'assistant', content: 'Thank you for sharing your interest in reflecting … a thoughtful approach to your spiritual journey.'}
-chat.tsx:209 Updating messages: (4) [{…}, {…}, {…}, {…}]
-chat.tsx:201 Saved session to localStorage
-ConversationView.tsx:683 [ConversationView Debug] Animating message: {index: 0, isNew: true, notSeen: true, contentChanged: true}
-ConversationView.tsx:683 [ConversationView Debug] Animating message: {index: 1, isNew: true, notSeen: true, contentChanged: true}
-ConversationView.tsx:683 [ConversationView Debug] Animating message: {index: 2, isNew: true, notSeen: false, contentChanged: false}
-ConversationView.tsx:683 [ConversationView Debug] Animating message: {index: 3, isNew: true, notSeen: true, contentChanged: true}
-ConversationView.tsx:683 [ConversationView Debug] Animating message: {index: 0, isNew: true, notSeen: true, contentChanged: true}
-ConversationView.tsx:683 [ConversationView Debug] Animating message: {index: 1, isNew: true, notSeen: true, contentChanged: true}
-ConversationView.tsx:683 [ConversationView Debug] Animating message: {index: 2, isNew: true, notSeen: false, contentChanged: false}
-ConversationView.tsx:683 [ConversationView Debug] Animating message: {index: 3, isNew: true, notSeen: true, contentChanged: true}
-ConversationView.tsx:416 [ConversationView Debug] State update: {messagesLength: 4, questionsLength: 3, showQuestions: false, isSubmitting: false}
-ConversationView.tsx:478 [ConversationView Debug] Conversation changed: 2
-chat.tsx:591 [Chat Debug] Animation starting
-ConversationView.tsx:683 [ConversationView Debug] Animating message: {index: 0, isNew: true, notSeen: true, contentChanged: true}
-ConversationView.tsx:683 [ConversationView Debug] Animating message: {index: 1, isNew: true, notSeen: true, contentChanged: true}
-ConversationView.tsx:683 [ConversationView Debug] Animating message: {index: 2, isNew: true, notSeen: true, contentChanged: true}
-ConversationView.tsx:683 [ConversationView Debug] Animating message: {index: 3, isNew: true, notSeen: true, contentChanged: true}
-ConversationView.tsx:683 [ConversationView Debug] Animating message: {index: 0, isNew: true, notSeen: true, contentChanged: true}
-ConversationView.tsx:683 [ConversationView Debug] Animating message: {index: 1, isNew: true, notSeen: true, contentChanged: true}
-ConversationView.tsx:683 [ConversationView Debug] Animating message: {index: 2, isNew: true, notSeen: true, contentChanged: true}
-ConversationView.tsx:683 [ConversationView Debug] Animating message: {index: 3, isNew: true, notSeen: true, contentChanged: true}
-ConversationView.tsx:443 [ConversationView Debug] Message animation completed: 2-0
-ConversationView.tsx:443 [ConversationView Debug] Message animation completed: 2-1
-ConversationView.tsx:443 [ConversationView Debug] Message animation completed: 2-3
-ConversationView.tsx:683 [ConversationView Debug] Animating message: {index: 0, isNew: true, notSeen: false, contentChanged: false}
-ConversationView.tsx:683 [ConversationView Debug] Animating message: {index: 1, isNew: true, notSeen: false, contentChanged: false}
-ConversationView.tsx:683 [ConversationView Debug] Animating message: {index: 2, isNew: true, notSeen: true, contentChanged: true}
-ConversationView.tsx:683 [ConversationView Debug] Animating message: {index: 3, isNew: true, notSeen: false, contentChanged: false}
-ConversationView.tsx:683 [ConversationView Debug] Animating message: {index: 0, isNew: true, notSeen: false, contentChanged: false}
-ConversationView.tsx:683 [ConversationView Debug] Animating message: {index: 1, isNew: true, notSeen: false, contentChanged: false}
-ConversationView.tsx:683 [ConversationView Debug] Animating message: {index: 2, isNew: true, notSeen: true, contentChanged: true}
-ConversationView.tsx:683 [ConversationView Debug] Animating message: {index: 3, isNew: true, notSeen: false, contentChanged: false}
-ConversationView.tsx:683 [ConversationView Debug] Animating message: {index: 0, isNew: true, notSeen: false, contentChanged: false}
-ConversationView.tsx:683 [ConversationView Debug] Animating message: {index: 1, isNew: true, notSeen: false, contentChanged: false}
-ConversationView.tsx:683 [ConversationView Debug] Animating message: {index: 2, isNew: true, notSeen: true, contentChanged: true}
-ConversationView.tsx:683 [ConversationView Debug] Animating message: {index: 3, isNew: true, notSeen: false, contentChanged: false}
-ConversationView.tsx:683 [ConversationView Debug] Animating message: {index: 0, isNew: true, notSeen: false, contentChanged: false}
-ConversationView.tsx:683 [ConversationView Debug] Animating message: {index: 1, isNew: true, notSeen: false, contentChanged: false}
-ConversationView.tsx:683 [ConversationView Debug] Animating message: {index: 2, isNew: true, notSeen: true, contentChanged: true}
-ConversationView.tsx:683 [ConversationView Debug] Animating message: {index: 3, isNew: true, notSeen: false, contentChanged: false}
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <meta name="theme-color" content="#ffffff" />
+    <title>SahabAI - Islamic Self-Reflection Tool</title>
+    <meta name="description" content="An AI-powered tool for Islamic self-reflection and spiritual growth" />
+    <link rel="manifest" href="/manifest.json" />
+    <link rel="apple-touch-icon" href="/icon-192.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <!-- Arabic fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family=Scheherazade+New:wght@400;700&display=swap" rel="stylesheet">
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx?v=2RqJOAVzZyBGKn1Oi-Buf"></script>
+  </body>
+</html>
+handleGenerateInsights @ chat.tsx:526
+await in handleGenerateInsights
+(anonymous) @ chat.tsx:230
+setTimeout
+handleNewMessage @ chat.tsx:229
+handleSubmitResponse @ ConversationView.tsx:219
+callCallback2 @ chunk-276SZO74.js?v=2ff988cd:3674
+invokeGuardedCallbackDev @ chunk-276SZO74.js?v=2ff988cd:3699
+invokeGuardedCallback @ chunk-276SZO74.js?v=2ff988cd:3733
+invokeGuardedCallbackAndCatchFirstError @ chunk-276SZO74.js?v=2ff988cd:3736
+executeDispatch @ chunk-276SZO74.js?v=2ff988cd:7014
+processDispatchQueueItemsInOrder @ chunk-276SZO74.js?v=2ff988cd:7034
+processDispatchQueue @ chunk-276SZO74.js?v=2ff988cd:7043
+dispatchEventsForPlugins @ chunk-276SZO74.js?v=2ff988cd:7051
+(anonymous) @ chunk-276SZO74.js?v=2ff988cd:7174
+batchedUpdates$1 @ chunk-276SZO74.js?v=2ff988cd:18913
+batchedUpdates @ chunk-276SZO74.js?v=2ff988cd:3579
+dispatchEventForPluginEventSystem @ chunk-276SZO74.js?v=2ff988cd:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ chunk-276SZO74.js?v=2ff988cd:5478
+dispatchEvent @ chunk-276SZO74.js?v=2ff988cd:5472
+dispatchDiscreteEvent @ chunk-276SZO74.js?v=2ff988cd:5449Understand this errorAI
+chat.tsx:530 Error generating insights: Error: Failed to parse response: Unexpected token '<', "<!DOCTYPE "... is not valid JSON
+    at handleGenerateInsights (chat.tsx:527:15)

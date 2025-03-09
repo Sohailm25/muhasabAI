@@ -434,6 +434,7 @@ export class HalaqaService {
       // First, get the halaqa to check if it has enough content for analysis
       const halaqa = await this.getHalaqa(numericId);
       if (!halaqa) {
+        console.error(`[analyzeHalaqaEntry] Halaqa ${numericId} not found`);
         throw new Error(`Halaqa ${numericId} not found`);
       }
       
@@ -451,19 +452,27 @@ export class HalaqaService {
         };
       }
       
-      const url = `${this.apiBase}/analyze`;
+      // Use the /:id/analyze endpoint format instead of /analyze
+      const url = `${this.apiBase}/${numericId}/analyze`;
+      console.log(`[analyzeHalaqaEntry] Making API request to: ${url}`);
+      
       const response = await fetch(url, {
         method: 'POST',
         headers: getAuthHeaders(),
-        body: JSON.stringify({ halaqaId: numericId }),
+        // No need to send halaqaId in the body since it's in the URL
+        body: JSON.stringify({}),
         signal: options?.signal
       });
       
+      console.log(`[analyzeHalaqaEntry] Response status: ${response.status} ${response.statusText}`);
+      
       if (!response.ok) {
+        console.error(`[analyzeHalaqaEntry] API error: ${response.status} ${response.statusText}`);
         throw new Error(`Failed to analyze halaqa: ${response.statusText}`);
       }
       
       const result = await response.json();
+      console.log(`[analyzeHalaqaEntry] Successfully received analysis results for halaqa ${numericId}`);
       
       // Ensure we have the expected fields in the response
       const processedResult = {
@@ -613,7 +622,12 @@ export const halaqaService = new HalaqaService();
  */
 export async function analyzeHalaqaEntry(halaqaId: number): Promise<{ wirdSuggestions: WirdSuggestion[] }> {
   try {
-    const response = await axios.post(`${getApiUrl()}/halaqas/analyze`, { halaqaId });
+    // Use the /:id/analyze endpoint format instead of /analyze
+    const url = `${getApiUrl()}/halaqas/${halaqaId}/analyze`;
+    console.log(`[analyzeHalaqaEntry] Making API request to: ${url}`);
+    
+    const response = await axios.post(url, {});
+    console.log(`[analyzeHalaqaEntry] Response status: ${response.status}`);
     return response.data;
   } catch (error) {
     console.error('Error analyzing halaqa entry:', error);

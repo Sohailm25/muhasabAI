@@ -831,24 +831,42 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   app.post("/api/conversation/:id/insights", async (req: Request, res: Response) => {
+    // Always set JSON content type
+    res.setHeader('Content-Type', 'application/json');
+    
     try {
+      console.log("[EXPRESS INSIGHTS API] Processing request for conversation ID:", req.params.id);
+      
       const conversationId = parseInt(req.params.id);
       if (isNaN(conversationId)) {
-        return res.status(400).json({ error: "Invalid conversation ID" });
+        console.error("[EXPRESS INSIGHTS API] Invalid conversation ID:", req.params.id);
+        return res.status(400).json({ 
+          error: "Invalid conversation ID",
+          success: false
+        });
       }
       
       const conversation = await storage.getConversation(conversationId);
 
       if (!conversation) {
-        return res.status(404).json({ error: "Conversation not found" });
+        console.error("[EXPRESS INSIGHTS API] Conversation not found:", conversationId);
+        return res.status(404).json({ 
+          error: "Conversation not found",
+          success: false
+        });
       }
 
+      console.log("[EXPRESS INSIGHTS API] Conversation found, messages count:", conversation.messages.length);
+      
       const conversationText = conversation.messages
         .map((msg: Message) => `${msg.role}: ${msg.content}`)
         .join("\n");
 
       // Get custom prompt from request body if provided
       const customPrompt = req.body?.prompt;
+      if (customPrompt) {
+        console.log("[EXPRESS INSIGHTS API] Using custom prompt");
+      }
 
       // Default insights in case API fails
       let insights: string[] = [
@@ -857,26 +875,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
         "Each step of your spiritual journey reflects the concept of ihsan mentioned in the famous hadith of Jibril, where the Prophet ﷺ described it as 'worshiping Allah as if you see Him, for though you do not see Him, He surely sees you.' (Bukhari & Muslim)"
       ];
       
+      let usedFallback = false;
+      
       try {
+        console.log("[EXPRESS INSIGHTS API] Calling generateInsights function");
         const generatedInsights = await generateInsights(conversationText, customPrompt);
         if (generatedInsights && generatedInsights.length > 0) {
+          console.log("[EXPRESS INSIGHTS API] Successfully generated insights:", generatedInsights.length);
           insights = generatedInsights;
         } else {
-          console.warn("Empty insights array returned from API, using fallback insights");
+          console.warn("[EXPRESS INSIGHTS API] Empty insights array returned from API, using fallback insights");
+          usedFallback = true;
         }
       } catch (error) {
-        console.error("Error generating insights:", error);
+        console.error("[EXPRESS INSIGHTS API] Error generating insights:", error);
         // Continue with default insights instead of failing the request
-        console.log("Using fallback insights due to API error");
+        console.log("[EXPRESS INSIGHTS API] Using fallback insights due to API error");
+        usedFallback = true;
       }
 
       // For now, we don't save insights to the conversation storage
       // This keeps the implementation simpler and storage schema unchanged
       
-      res.json({ insights });
+      res.json({ 
+        insights,
+        success: true,
+        fallback: usedFallback
+      });
     } catch (error) {
-      console.error("Error in /api/conversation/insights:", error);
-      res.status(500).json({ error: "Failed to generate insights" });
+      console.error("[EXPRESS INSIGHTS API] Unhandled error:", error);
+      res.status(500).json({ 
+        error: "Failed to generate insights",
+        details: error instanceof Error ? error.message : String(error),
+        success: false
+      });
     }
   });
 
