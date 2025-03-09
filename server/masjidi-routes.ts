@@ -5,10 +5,13 @@ import {
   getMasjidPrayerTimes, 
   getMasjidWeeklyPrayerTimes 
 } from "./lib/masjidi-api";
-import { storage } from "./storage";
+import { createStorage } from "./storage";
 
 // Create a router for Masjidi API endpoints
 const masjidiRouter: Router = express.Router();
+
+// Initialize storage
+const storage = createStorage();
 
 // Masjid search endpoint
 masjidiRouter.get("/masjids/search", async (req: Request, res: Response) => {

@@ -2,7 +2,6 @@ import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import { createStorage } from "./storage";
 import { generateFollowUpQuestions, generateActionItems, generateInsights, generateFrameworkSuggestions } from "./lib/anthropic";
-import { transcribeAudio } from "./lib/transcription";
 import { insertReflectionSchema, insertConversationSchema, Message, IdentityFramework, FrameworkComponent, HabitTracking } from "@shared/schema";
 import { ZodError } from "zod";
 import { fromZodError } from "zod-validation-error";
@@ -23,7 +22,7 @@ import jwt from "jsonwebtoken";
 // Import debug middleware
 import { authDebugMiddleware } from "./middleware/auth-debug";
 
-// Import the new TranscriptionService
+// Import the TranscriptionService
 import { TranscriptionService } from './lib/transcription';
 
 // Get current directory for ES modules (replacement for __dirname)
@@ -606,7 +605,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         try {
           console.log("Starting audio transcription...");
-          const transcription = await transcribeAudio(data.content);
+          const transcription = await transcriptionService.transcribeAudio(
+            Buffer.from(data.content.split(',')[1], 'base64'),
+            data.type.split('/')[1]
+          );
           if (!transcription || transcription.trim().length === 0) {
             return res.status(400).json({
               error: "No speech detected in the audio. Please try again and speak clearly."

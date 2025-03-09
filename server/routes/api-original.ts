@@ -1,7 +1,7 @@
 import { Router } from "express";
-import { storage } from "../storage";
+import { createStorage } from "../storage";
 import { generateResponse, generateFollowUpQuestions, generateActionItems } from "../lib/anthropic";
-import { transcribeAudio } from "../lib/transcription";
+import { TranscriptionService } from "../lib/transcription";
 import multer from "multer";
 import { Message } from "@shared/schema";
 import { 
@@ -18,6 +18,10 @@ const upload = multer({
     fileSize: 10 * 1024 * 1024, // 10 MB limit
   },
 });
+
+// Initialize storage and transcription service
+const storage = createStorage();
+const transcriptionService = new TranscriptionService();
 
 const router = Router();
 
@@ -90,7 +94,7 @@ router.post("/reflection/audio", upload.single("audio"), async (req, res) => {
     console.log("Received audio file, size:", req.file.size);
 
     // Process audio
-    const transcription = await transcribeAudio(req.file.buffer);
+    const transcription = await transcriptionService.transcribeAudio(req.file.buffer, "mp3");
     
     if (!transcription) {
       return res.status(400).json({ error: "Failed to transcribe audio" });
