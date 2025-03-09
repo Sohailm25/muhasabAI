@@ -14,19 +14,30 @@ import {
 const router = express.Router();
 const JWT_SECRET = process.env.JWT_SECRET || 'sahabai-secret-key';
 
+// Add middleware to log all requests to profile routes
+router.use('/profile', (req, res, next) => {
+  console.log(`[PROFILE ROUTES] ${req.method} ${req.path} request received`);
+  console.log('[PROFILE ROUTES] Headers:', JSON.stringify(req.headers));
+  next();
+});
+
 /**
  * Get current user profile
  * This endpoint is used when no userId is provided
  */
 router.get('/profile', async (req, res) => {
   try {
+    console.log('[PROFILE ROUTES] GET /profile - Starting profile retrieval');
+    
     // Get token from authorization header
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      console.log('[PROFILE ROUTES] Authentication required - no valid auth header');
       return res.status(401).json({ error: 'Authentication required' });
     }
     
     const token = authHeader.split(' ')[1];
+    console.log('[PROFILE ROUTES] Token extracted from header');
     
     try {
       // Verify token and extract userId
@@ -34,16 +45,19 @@ router.get('/profile', async (req, res) => {
       const userId = decoded.userId;
       
       if (!userId) {
+        console.log('[PROFILE ROUTES] Invalid token - no userId in payload');
         return res.status(401).json({ error: 'Invalid authentication token' });
       }
       
-      console.log(`Profile requested for authenticated user: ${userId}`);
+      console.log(`[PROFILE ROUTES] Profile requested for authenticated user: ${userId}`);
       
       // Get user profile from database
       const profile = await getUserProfile(userId);
+      console.log(`[PROFILE ROUTES] Profile lookup result:`, profile ? 'Found' : 'Not found');
       
       if (!profile) {
         // If profile doesn't exist yet, return a 404 so client can create one
+        console.log('[PROFILE ROUTES] Profile not found, returning 404');
         return res.status(404).json({ error: 'Profile not found' });
       }
       
@@ -69,12 +83,14 @@ router.get('/profile', async (req, res) => {
         }
       };
       
+      console.log('[PROFILE ROUTES] Returning profile to client');
       res.json(clientProfile);
     } catch (tokenError) {
-      console.error('Token validation error:', tokenError);
+      console.error('[PROFILE ROUTES] Token validation error:', tokenError);
       return res.status(401).json({ error: 'Invalid authentication token' });
     }
   } catch (error) {
+    console.error(`[PROFILE ROUTES] Error fetching profile:`, error);
     log(`Error fetching profile: ${error instanceof Error ? error.message : String(error)}`, 'error');
     res.status(500).json({ error: 'Failed to fetch profile' });
   }
@@ -131,59 +147,97 @@ router.get('/profile/:userId', async (req, res) => {
 });
 
 /**
- * Create new user profile
+ * Create a new user profile
  */
 router.post('/profile', async (req, res) => {
   try {
-    const { userId, generalPreferences, privacySettings, usageStats } = req.body;
+    console.log('[PROFILE ROUTES] POST /profile - Starting profile creation');
+    console.log('[PROFILE ROUTES] Request body:', JSON.stringify(req.body));
     
-    if (!userId) {
-      return res.status(400).json({ error: 'userId is required' });
+    // Get token from authorization header
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      console.log('[PROFILE ROUTES] Authentication required - no valid auth header');
+      return res.status(401).json({ error: 'Authentication required' });
     }
-
-    // Check authorization (implement based on your auth system)
-    // if (userId !== req.user?.id) {
-    //   return res.status(403).json({ error: 'Unauthorized to create profile' });
-    // }
-
-    // Check if profile already exists
-    const existingProfile = await getUserProfile(userId);
-    if (existingProfile) {
-      return res.status(409).json({ error: 'Profile already exists' });
-    }
-
-    // Create new profile
-    const newProfile = await createUserProfile({
-      userId,
-      preferences: generalPreferences || {
-        inputMethod: 'text',
-        reflectionFrequency: 'daily',
-        languagePreferences: 'english'
-      },
-      sharingPreferences: privacySettings || {
-        localStorageOnly: false,
-        allowPersonalization: true,
-        enableSync: false
-      },
-      version: 1
-    });
-
-    // Transform to client format
-    const clientProfile = {
-      userId: newProfile.userId,
-      createdAt: newProfile.createdAt || new Date(),
-      updatedAt: newProfile.updatedAt || new Date(),
-      generalPreferences: newProfile.preferences,
-      privacySettings: newProfile.sharingPreferences,
-      usageStats: usageStats || {
-        reflectionCount: 0,
-        lastActiveDate: new Date(),
-        streakDays: 0
+    
+    const token = authHeader.split(' ')[1];
+    
+    try {
+      // Verify token and extract userId
+      const decoded = jwt.verify(token, JWT_SECRET) as { userId: string };
+      const userId = decoded.userId;
+      
+      if (!userId) {
+        console.log('[PROFILE ROUTES] Invalid token - no userId in payload');
+        return res.status(401).json({ error: 'Invalid authentication token' });
       }
-    };
-
-    res.status(201).json(clientProfile);
+      
+      console.log(`[PROFILE ROUTES] Creating profile for user: ${userId}`);
+      
+      // Check if profile already exists
+      const existingProfile = await getUserProfile(userId);
+      if (existingProfile) {
+        console.log('[PROFILE ROUTES] Profile already exists, returning 409');
+        return res.status(409).json({ error: 'Profile already exists' });
+      }
+      
+      // Extract profile data from request body
+      const { generalPreferences, privacySettings } = req.body;
+      
+      // Create profile object
+      const profileData = {
+        userId,
+        preferences: generalPreferences || {
+          inputMethod: 'text',
+          reflectionFrequency: 'daily',
+          languagePreferences: 'english'
+        },
+        sharingPreferences: privacySettings || {
+          localStorageOnly: false,
+          allowPersonalization: true,
+          enableSync: true
+        },
+        createdAt: new Date(),
+        updatedAt: new Date()
+      };
+      
+      console.log('[PROFILE ROUTES] Creating profile with data:', JSON.stringify(profileData));
+      
+      // Create profile in database
+      const newProfile = await createUserProfile(profileData);
+      
+      console.log('[PROFILE ROUTES] Profile created successfully');
+      
+      // Transform to client format
+      const clientProfile = {
+        userId: newProfile.userId,
+        createdAt: newProfile.createdAt || new Date(),
+        updatedAt: newProfile.updatedAt || new Date(),
+        generalPreferences: newProfile.preferences || {
+          inputMethod: 'text',
+          reflectionFrequency: 'daily',
+          languagePreferences: 'english'
+        },
+        privacySettings: newProfile.sharingPreferences || {
+          localStorageOnly: false,
+          allowPersonalization: true,
+          enableSync: true
+        },
+        usageStats: {
+          reflectionCount: 0,
+          lastActiveDate: new Date(),
+          streakDays: 0
+        }
+      };
+      
+      res.status(201).json(clientProfile);
+    } catch (tokenError) {
+      console.error('[PROFILE ROUTES] Token validation error:', tokenError);
+      return res.status(401).json({ error: 'Invalid authentication token' });
+    }
   } catch (error) {
+    console.error('[PROFILE ROUTES] Error creating profile:', error);
     log(`Error creating profile: ${error instanceof Error ? error.message : String(error)}`, 'error');
     res.status(500).json({ error: 'Failed to create profile' });
   }
