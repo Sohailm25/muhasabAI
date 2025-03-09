@@ -343,5 +343,53 @@ export const api = {
     }
 
     return true;
+  },
+
+  /**
+   * Create or update user profile
+   */
+  async createOrUpdateUserProfile(profileData: any): Promise<any> {
+    console.log('[API] Creating or updating user profile with data:', profileData);
+    
+    try {
+      // First try the new endpoint
+      console.log('[API] Trying new /api/profile/create endpoint');
+      const response = await fetch(`${BASE_URL}/api/profile/create`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
+        },
+        body: JSON.stringify(profileData)
+      });
+      
+      if (!response.ok) {
+        console.log(`[API] New endpoint failed with status: ${response.status}`);
+        
+        // If the new endpoint fails, try the old endpoint
+        console.log('[API] Falling back to /api/profile endpoint');
+        const fallbackResponse = await fetch(`${BASE_URL}/api/profile`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
+          },
+          body: JSON.stringify(profileData)
+        });
+        
+        if (!fallbackResponse.ok) {
+          console.error(`[API] Both endpoints failed. Status: ${fallbackResponse.status}`);
+          throw new Error(`Failed to create profile: ${fallbackResponse.status}`);
+        }
+        
+        return await fallbackResponse.json();
+      }
+      
+      console.log('[API] Profile created/updated successfully using new endpoint');
+      return await response.json();
+    } catch (error) {
+      console.error('[API] Error creating/updating profile:', error);
+      throw error;
+    }
   }
 }; 

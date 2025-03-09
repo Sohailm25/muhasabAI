@@ -87,16 +87,44 @@ export async function getUserProfile(userId: unknown): Promise<UserProfile | nul
 }
 
 /**
- * Create a new user profile
+ * Create a user profile
  */
 export async function createUserProfile(profile: UserProfile): Promise<UserProfile> {
+  if (!profile.userId || typeof profile.userId !== 'string') {
+    console.error('[PROFILE CREATION] Invalid userId provided:', profile.userId);
+    throw new Error('Invalid userId provided');
+  }
+  
   try {
+    console.log(`[PROFILE CREATION] Starting profile creation for userId: ${profile.userId}`);
+    console.log(`[PROFILE CREATION] Profile data:`, {
+      userId: profile.userId,
+      preferences: profile.preferences ? JSON.stringify(profile.preferences).substring(0, 100) + '...' : 'None',
+      sharingPreferences: profile.sharingPreferences ? JSON.stringify(profile.sharingPreferences).substring(0, 100) + '...' : 'None'
+    });
+    
+    console.log(`[PROFILE CREATION] Database mode: ${USE_DATABASE ? 'PostgreSQL' : 'In-Memory'}`);
+    
+    let createdProfile: UserProfile;
+    
     if (USE_DATABASE) {
-      return await pg.createUserProfile(profile);
+      console.log(`[PROFILE CREATION] Using database storage for profile creation`);
+      createdProfile = await pg.createUserProfile(profile);
     } else {
-      return await memory.saveUserProfileToMemory(profile);
+      console.log(`[PROFILE CREATION] Using in-memory storage for profile creation`);
+      createdProfile = await memory.saveUserProfileToMemory(profile);
     }
+    
+    console.log(`[PROFILE CREATION] Profile created successfully for userId: ${profile.userId}`);
+    console.log(`[PROFILE CREATION] Created profile:`, {
+      userId: createdProfile.userId,
+      preferences: createdProfile.preferences ? JSON.stringify(createdProfile.preferences).substring(0, 100) + '...' : 'None',
+      sharingPreferences: createdProfile.sharingPreferences ? JSON.stringify(createdProfile.sharingPreferences).substring(0, 100) + '...' : 'None'
+    });
+    
+    return createdProfile;
   } catch (error) {
+    console.error(`[PROFILE CREATION] Error creating user profile: ${error instanceof Error ? error.message : String(error)}`);
     log(`Error creating user profile: ${error instanceof Error ? error.message : String(error)}`, 'error');
     throw error;
   }

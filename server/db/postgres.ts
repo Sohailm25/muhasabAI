@@ -7,99 +7,119 @@ import { UserProfile, EncryptedProfileData } from './operations';
 import { log } from '../vite';
 
 // PostgreSQL connection pool
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : undefined,
-  max: 20,
-  idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 10000,
-});
+let pool: pg.Pool | null = null;
+
+try {
+  console.log('[POSTGRES] Initializing PostgreSQL connection pool');
+  console.log('[POSTGRES] Database URL configured:', process.env.DATABASE_URL ? 'Yes' : 'No');
+  console.log('[POSTGRES] Environment:', process.env.NODE_ENV);
+  
+  pool = new Pool({
+    connectionString: process.env.DATABASE_URL,
+    ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : undefined,
+    max: 20,
+    idleTimeoutMillis: 30000,
+    connectionTimeoutMillis: 10000,
+  });
+  
+  console.log('[POSTGRES] PostgreSQL connection pool initialized successfully');
+} catch (error) {
+  console.error('[POSTGRES] Error initializing PostgreSQL connection pool:', error);
+  pool = null;
+}
 
 // Connection event handlers
-pool.on('connect', () => {
-  log('Connected to PostgreSQL database', 'database');
-});
-
-pool.on('error', (err) => {
-  log(`PostgreSQL pool error: ${err.message}`, 'error');
-});
+if (pool) {
+  pool.on('connect', () => {
+    console.log('[POSTGRES] Connected to PostgreSQL database');
+    log('Connected to PostgreSQL database', 'database');
+  });
+  
+  pool.on('error', (err) => {
+    console.error('[POSTGRES] PostgreSQL connection error:', err);
+    log(`PostgreSQL connection error: ${err.message}`, 'error');
+  });
+}
 
 /**
- * Initialize database tables
+ * Initialize the database
  */
 export async function initializeDatabase(): Promise<void> {
-  const client = await pool.connect();
-  
   try {
-    // Start transaction
-    await client.query('BEGIN');
+    console.log('[POSTGRES] Starting database initialization');
     
-    // Create user_profiles table if it doesn't exist
+    if (!pool) {
+      console.error('[POSTGRES] PostgreSQL connection pool is not initialized');
+      throw new Error('PostgreSQL connection pool is not initialized');
+    }
+    
+    // Test connection
+    console.log('[POSTGRES] Testing database connection');
+    const client = await pool.connect();
+    console.log('[POSTGRES] Database connection test successful');
+    
+    // Create tables if they don't exist
+    console.log('[POSTGRES] Creating tables if they don\'t exist');
+    
+    // Create user_profiles table
+    console.log('[POSTGRES] Creating user_profiles table');
     await client.query(`
       CREATE TABLE IF NOT EXISTS user_profiles (
         user_id TEXT PRIMARY KEY,
-        preferences JSONB NOT NULL DEFAULT '{}',
-        sharing_preferences JSONB NOT NULL DEFAULT '{}',
+        general_preferences JSONB NOT NULL DEFAULT '{}',
+        privacy_settings JSONB NOT NULL DEFAULT '{}',
         version INTEGER NOT NULL DEFAULT 1,
-        created_at TIMESTAMP NOT NULL DEFAULT NOW(),
-        updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+        created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
       )
     `);
+    console.log('[POSTGRES] user_profiles table created or already exists');
     
-    // Create encrypted_profile_data table if it doesn't exist
+    // Create encrypted_profile_data table
+    console.log('[POSTGRES] Creating encrypted_profile_data table');
     await client.query(`
       CREATE TABLE IF NOT EXISTS encrypted_profile_data (
-        user_id TEXT PRIMARY KEY REFERENCES user_profiles(user_id) ON DELETE CASCADE,
+        user_id TEXT PRIMARY KEY,
         data TEXT NOT NULL,
         iv TEXT NOT NULL,
-        created_at TIMESTAMP NOT NULL DEFAULT NOW(),
-        updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+        created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
       )
     `);
+    console.log('[POSTGRES] encrypted_profile_data table created or already exists');
     
-    // Create indexes
-    await client.query('CREATE INDEX IF NOT EXISTS idx_user_profiles_user_id ON user_profiles(user_id)');
-    await client.query('CREATE INDEX IF NOT EXISTS idx_encrypted_profile_data_user_id ON encrypted_profile_data(user_id)');
-    
-    // Add function for automatic updated_at timestamp
+    // Create users table if it doesn't exist
+    console.log('[POSTGRES] Creating users table');
     await client.query(`
-      CREATE OR REPLACE FUNCTION update_updated_at_column()
-      RETURNS TRIGGER AS $$
-      BEGIN
-        NEW.updated_at = NOW();
-        RETURN NEW;
-      END;
-      $$ language 'plpgsql';
+      CREATE TABLE IF NOT EXISTS users (
+        id TEXT PRIMARY KEY,
+        email TEXT UNIQUE NOT NULL,
+        name TEXT NOT NULL,
+        password TEXT,
+        google_id TEXT,
+        is_first_login BOOLEAN NOT NULL DEFAULT TRUE,
+        has_accepted_privacy_policy BOOLEAN NOT NULL DEFAULT FALSE,
+        created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+      )
     `);
+    console.log('[POSTGRES] users table created or already exists');
     
-    // Add triggers for updated_at
-    await client.query(`
-      DROP TRIGGER IF EXISTS update_user_profiles_updated_at ON user_profiles;
-      CREATE TRIGGER update_user_profiles_updated_at
-      BEFORE UPDATE ON user_profiles
-      FOR EACH ROW
-      EXECUTE FUNCTION update_updated_at_column();
+    // Check if tables were created successfully
+    console.log('[POSTGRES] Verifying tables exist');
+    const tables = await client.query(`
+      SELECT table_name 
+      FROM information_schema.tables 
+      WHERE table_schema = 'public'
     `);
+    console.log('[POSTGRES] Tables in database:', tables.rows.map(row => row.table_name).join(', '));
     
-    await client.query(`
-      DROP TRIGGER IF EXISTS update_encrypted_profile_data_updated_at ON encrypted_profile_data;
-      CREATE TRIGGER update_encrypted_profile_data_updated_at
-      BEFORE UPDATE ON encrypted_profile_data
-      FOR EACH ROW
-      EXECUTE FUNCTION update_updated_at_column();
-    `);
-    
-    // Commit transaction
-    await client.query('COMMIT');
-    
-    log('PostgreSQL database tables initialized successfully', 'database');
-  } catch (error) {
-    // Rollback transaction on error
-    await client.query('ROLLBACK');
-    log(`Error initializing database: ${error instanceof Error ? error.message : String(error)}`, 'error');
-    throw error;
-  } finally {
+    // Release client back to pool
     client.release();
+    console.log('[POSTGRES] Database initialization complete');
+  } catch (error) {
+    console.error('[POSTGRES] Database initialization error:', error);
+    throw error;
   }
 }
 
@@ -140,8 +160,8 @@ export async function getUserProfile(userId: string): Promise<UserProfile | null
     // Transform database row to UserProfile
     const profile = {
       userId: row.user_id,
-      preferences: row.preferences,
-      sharingPreferences: row.sharing_preferences,
+      preferences: row.preferences || row.general_preferences,
+      sharingPreferences: row.sharing_preferences || row.privacy_settings,
       version: row.version,
       createdAt: row.created_at,
       updatedAt: row.updated_at,
@@ -158,64 +178,66 @@ export async function getUserProfile(userId: string): Promise<UserProfile | null
 }
 
 /**
- * Create a new user profile in the database
+ * Create a user profile in the database
  */
 export async function createUserProfile(profile: UserProfile): Promise<UserProfile> {
-  if (!profile.userId) {
-    throw new Error('Profile must have a userId');
-  }
-  
-  const client = await pool.connect();
-  
   try {
-    // Start transaction
-    await client.query('BEGIN');
+    console.log(`[POSTGRES DB] Creating profile for userId: ${profile.userId}`);
     
-    // Check if profile already exists
-    const existingProfile = await client.query(
-      'SELECT user_id FROM user_profiles WHERE user_id = $1',
-      [profile.userId]
-    );
-    
-    if (existingProfile.rows.length > 0) {
-      throw new Error(`Profile already exists for userId: ${profile.userId}`);
+    // Check if pool is initialized
+    if (!pool) {
+      console.error('[POSTGRES DB] Database pool is not initialized');
+      throw new Error('Database connection not available');
     }
     
-    // Insert new profile
-    const result = await client.query(
-      `INSERT INTO user_profiles 
-        (user_id, preferences, sharing_preferences, version)
-       VALUES ($1, $2, $3, $4)
-       RETURNING *`,
+    // Insert profile into database
+    console.log('[POSTGRES DB] Executing INSERT query');
+    const result = await pool.query(
+      `INSERT INTO user_profiles(
+        user_id, 
+        general_preferences, 
+        privacy_settings, 
+        version, 
+        created_at, 
+        updated_at
+      ) VALUES($1, $2, $3, $4, $5, $6) RETURNING *`,
       [
         profile.userId,
-        profile.preferences || {},
-        profile.sharingPreferences || {},
+        JSON.stringify(profile.preferences || {}),
+        JSON.stringify(profile.sharingPreferences || {}),
         profile.version || 1,
+        profile.createdAt || new Date(),
+        profile.updatedAt || new Date()
       ]
     );
     
-    // Commit transaction
-    await client.query('COMMIT');
+    console.log(`[POSTGRES DB] Insert result rows: ${result.rows.length}`);
+    
+    if (result.rows.length === 0) {
+      console.error('[POSTGRES DB] Failed to create profile - no rows returned');
+      throw new Error('Failed to create profile');
+    }
     
     const row = result.rows[0];
+    console.log(`[POSTGRES DB] Profile created successfully for userId: ${profile.userId}`);
     
     // Transform database row to UserProfile
-    return {
+    const createdProfile: UserProfile = {
       userId: row.user_id,
-      preferences: row.preferences,
-      sharingPreferences: row.sharing_preferences,
+      preferences: row.general_preferences,
+      sharingPreferences: row.privacy_settings,
       version: row.version,
       createdAt: row.created_at,
-      updatedAt: row.updated_at,
+      updatedAt: row.updated_at
     };
+    
+    console.log(`[POSTGRES DB] Created profile details: userId=${createdProfile.userId}`);
+    
+    return createdProfile;
   } catch (error) {
-    // Rollback transaction on error
-    await client.query('ROLLBACK');
-    log(`Error creating user profile in database: ${error instanceof Error ? error.message : String(error)}`, 'error');
+    console.error(`[POSTGRES DB] Error creating user profile: ${error instanceof Error ? error.message : String(error)}`);
+    log(`Error creating user profile: ${error instanceof Error ? error.message : String(error)}`, 'error');
     throw error;
-  } finally {
-    client.release();
   }
 }
 
@@ -223,59 +245,51 @@ export async function createUserProfile(profile: UserProfile): Promise<UserProfi
  * Update a user profile in the database
  */
 export async function updateUserProfile(userId: string, updates: Partial<UserProfile>): Promise<UserProfile> {
-  if (!userId) {
-    throw new Error('userId is required');
-  }
-  
-  const client = await pool.connect();
-  
   try {
-    // Start transaction
-    await client.query('BEGIN');
+    console.log(`[POSTGRES DB] Updating profile for userId: ${userId}`);
     
-    // Get current profile for version check
-    const currentProfile = await client.query(
-      'SELECT version FROM user_profiles WHERE user_id = $1 FOR UPDATE',
-      [userId]
-    );
-    
-    if (currentProfile.rows.length === 0) {
-      throw new Error(`Profile not found for userId: ${userId}`);
+    // Check if pool is initialized
+    if (!pool) {
+      console.error('[POSTGRES DB] Database pool is not initialized');
+      throw new Error('Database connection not available');
     }
     
-    const currentVersion = currentProfile.rows[0].version;
-    const newVersion = updates.version || currentVersion + 1;
-    
-    // Version conflict check - optional depending on your requirements
-    if (updates.version && updates.version !== currentVersion && updates.version !== currentVersion + 1) {
-      throw new Error(`Version conflict: Current version is ${currentVersion}, but update requested for version ${updates.version}`);
-    }
-    
-    // Build update query dynamically based on provided fields
-    let updateFields = [];
-    let queryParams = [userId];
+    // Build update query
+    let updateFields: string[] = [];
+    let queryParams: any[] = [userId];
     let paramIndex = 2;
     
     if (updates.preferences !== undefined) {
-      updateFields.push(`preferences = $${paramIndex++}`);
+      updateFields.push(`general_preferences = $${paramIndex++}`);
       queryParams.push(JSON.stringify(updates.preferences));
     }
     
     if (updates.sharingPreferences !== undefined) {
-      updateFields.push(`sharing_preferences = $${paramIndex++}`);
+      updateFields.push(`privacy_settings = $${paramIndex++}`);
       queryParams.push(JSON.stringify(updates.sharingPreferences));
     }
     
-    // Always update version
-    updateFields.push(`version = $${paramIndex++}`);
-    queryParams.push(newVersion);
-    
-    if (updateFields.length === 0) {
-      throw new Error('No fields to update');
+    if (updates.version !== undefined) {
+      updateFields.push(`version = $${paramIndex++}`);
+      queryParams.push(updates.version);
     }
     
-    // Execute update
-    const result = await client.query(
+    // Always update the updated_at timestamp
+    updateFields.push(`updated_at = NOW()`);
+    
+    if (updateFields.length === 0) {
+      console.log('[POSTGRES DB] No fields to update');
+      // If no fields to update, just return the current profile
+      const currentProfile = await getUserProfile(userId);
+      if (!currentProfile) {
+        throw new Error('Profile not found');
+      }
+      return currentProfile;
+    }
+    
+    // Execute update query
+    console.log(`[POSTGRES DB] Executing UPDATE query with fields: ${updateFields.join(', ')}`);
+    const result = await pool.query(
       `UPDATE user_profiles 
        SET ${updateFields.join(', ')} 
        WHERE user_id = $1 
@@ -283,27 +297,27 @@ export async function updateUserProfile(userId: string, updates: Partial<UserPro
       queryParams
     );
     
-    // Commit transaction
-    await client.query('COMMIT');
+    if (result.rows.length === 0) {
+      console.error('[POSTGRES DB] Profile not found for update');
+      throw new Error('Profile not found');
+    }
     
     const row = result.rows[0];
+    console.log(`[POSTGRES DB] Profile updated successfully for userId: ${userId}`);
     
     // Transform database row to UserProfile
     return {
       userId: row.user_id,
-      preferences: row.preferences,
-      sharingPreferences: row.sharing_preferences,
+      preferences: row.general_preferences,
+      sharingPreferences: row.privacy_settings,
       version: row.version,
       createdAt: row.created_at,
-      updatedAt: row.updated_at,
+      updatedAt: row.updated_at
     };
   } catch (error) {
-    // Rollback transaction on error
-    await client.query('ROLLBACK');
-    log(`Error updating user profile in database: ${error instanceof Error ? error.message : String(error)}`, 'error');
+    console.error(`[POSTGRES DB] Error updating user profile: ${error instanceof Error ? error.message : String(error)}`);
+    log(`Error updating user profile: ${error instanceof Error ? error.message : String(error)}`, 'error');
     throw error;
-  } finally {
-    client.release();
   }
 }
 
@@ -311,31 +325,30 @@ export async function updateUserProfile(userId: string, updates: Partial<UserPro
  * Delete a user profile from the database
  */
 export async function deleteUserProfile(userId: string): Promise<boolean> {
-  if (!userId) return false;
-  
-  const client = await pool.connect();
-  
   try {
-    // Start transaction
-    await client.query('BEGIN');
+    console.log(`[POSTGRES DB] Deleting profile for userId: ${userId}`);
     
-    // Delete profile (cascade will delete related encrypted data)
-    const result = await client.query(
+    // Check if pool is initialized
+    if (!pool) {
+      console.error('[POSTGRES DB] Database pool is not initialized');
+      throw new Error('Database connection not available');
+    }
+    
+    // Delete profile from database
+    console.log('[POSTGRES DB] Executing DELETE query');
+    const result = await pool.query(
       'DELETE FROM user_profiles WHERE user_id = $1 RETURNING user_id',
       [userId]
     );
     
-    // Commit transaction
-    await client.query('COMMIT');
+    const deleted = result.rows.length > 0;
+    console.log(`[POSTGRES DB] Profile deletion result: ${deleted ? 'Successful' : 'Not found'}`);
     
-    return result.rows.length > 0;
+    return deleted;
   } catch (error) {
-    // Rollback transaction on error
-    await client.query('ROLLBACK');
-    log(`Error deleting user profile from database: ${error instanceof Error ? error.message : String(error)}`, 'error');
+    console.error(`[POSTGRES DB] Error deleting user profile: ${error instanceof Error ? error.message : String(error)}`);
+    log(`Error deleting user profile: ${error instanceof Error ? error.message : String(error)}`, 'error');
     throw error;
-  } finally {
-    client.release();
   }
 }
 
@@ -343,19 +356,29 @@ export async function deleteUserProfile(userId: string): Promise<boolean> {
  * Get encrypted profile data from the database
  */
 export async function getEncryptedProfileData(userId: string): Promise<EncryptedProfileData | null> {
-  if (!userId) return null;
-  
   try {
+    console.log(`[POSTGRES DB] Getting encrypted profile data for userId: ${userId}`);
+    
+    // Check if pool is initialized
+    if (!pool) {
+      console.error('[POSTGRES DB] Database pool is not initialized');
+      return null;
+    }
+    
+    // Get encrypted data from database
+    console.log('[POSTGRES DB] Executing SELECT query for encrypted data');
     const result = await pool.query(
       'SELECT * FROM encrypted_profile_data WHERE user_id = $1',
       [userId]
     );
     
     if (result.rows.length === 0) {
+      console.log(`[POSTGRES DB] No encrypted data found for userId: ${userId}`);
       return null;
     }
     
     const row = result.rows[0];
+    console.log(`[POSTGRES DB] Encrypted data found for userId: ${userId}`);
     
     // Transform database row to EncryptedProfileData
     return {
@@ -363,77 +386,68 @@ export async function getEncryptedProfileData(userId: string): Promise<Encrypted
       data: row.data,
       iv: row.iv,
       createdAt: row.created_at,
-      updatedAt: row.updated_at,
+      updatedAt: row.updated_at
     };
   } catch (error) {
-    log(`Error getting encrypted profile data from database: ${error instanceof Error ? error.message : String(error)}`, 'error');
+    console.error(`[POSTGRES DB] Error getting encrypted profile data: ${error instanceof Error ? error.message : String(error)}`);
+    log(`Error getting encrypted profile data: ${error instanceof Error ? error.message : String(error)}`, 'error');
     throw error;
   }
 }
 
 /**
- * Update or create encrypted profile data in the database
+ * Update encrypted profile data in the database
  */
 export async function updateEncryptedProfileData(
   userId: string, 
   encryptedData: { data: string; iv: string }
 ): Promise<EncryptedProfileData> {
-  if (!userId) {
-    throw new Error('userId is required');
-  }
-  
-  if (!encryptedData || !encryptedData.data || !encryptedData.iv) {
-    throw new Error('Encrypted data and IV are required');
-  }
-  
-  const client = await pool.connect();
-  
   try {
-    // Start transaction
-    await client.query('BEGIN');
+    console.log(`[POSTGRES DB] Updating encrypted profile data for userId: ${userId}`);
     
-    // Check if user profile exists
-    const profileExists = await client.query(
-      'SELECT user_id FROM user_profiles WHERE user_id = $1',
-      [userId]
-    );
-    
-    if (profileExists.rows.length === 0) {
-      throw new Error(`User profile not found for userId: ${userId}`);
+    // Check if pool is initialized
+    if (!pool) {
+      console.error('[POSTGRES DB] Database pool is not initialized');
+      throw new Error('Database connection not available');
     }
     
-    // Check if encrypted data already exists for this user
-    const existingData = await client.query(
-      'SELECT user_id FROM encrypted_profile_data WHERE user_id = $1',
+    // Check if encrypted data already exists
+    console.log('[POSTGRES DB] Checking if encrypted data already exists');
+    const existingData = await pool.query(
+      'SELECT * FROM encrypted_profile_data WHERE user_id = $1',
       [userId]
     );
     
     let result;
     
-    if (existingData.rows.length === 0) {
-      // Insert new encrypted data
-      result = await client.query(
-        `INSERT INTO encrypted_profile_data 
-          (user_id, data, iv) 
-         VALUES ($1, $2, $3) 
+    if (existingData.rows.length > 0) {
+      // Update existing data
+      console.log('[POSTGRES DB] Updating existing encrypted data');
+      result = await pool.query(
+        `UPDATE encrypted_profile_data 
+         SET data = $2, iv = $3, updated_at = NOW() 
+         WHERE user_id = $1 
          RETURNING *`,
         [userId, encryptedData.data, encryptedData.iv]
       );
     } else {
-      // Update existing encrypted data
-      result = await client.query(
-        `UPDATE encrypted_profile_data 
-         SET data = $2, iv = $3 
-         WHERE user_id = $1 
+      // Insert new data
+      console.log('[POSTGRES DB] Inserting new encrypted data');
+      result = await pool.query(
+        `INSERT INTO encrypted_profile_data(user_id, data, iv) 
+         VALUES($1, $2, $3) 
          RETURNING *`,
         [userId, encryptedData.data, encryptedData.iv]
       );
     }
     
-    // Commit transaction
-    await client.query('COMMIT');
+    if (result.rows.length === 0) {
+      console.error('[POSTGRES DB] Failed to update/insert encrypted data');
+      throw new Error('Failed to update encrypted profile data');
+    }
     
     const row = result.rows[0];
+    console.log(`[POSTGRES DB] Encrypted data updated successfully for userId: ${userId}`);
     
     // Transform database row to EncryptedProfileData
     return {
@@ -441,15 +455,12 @@ export async function updateEncryptedProfileData(
       data: row.data,
       iv: row.iv,
       createdAt: row.created_at,
-      updatedAt: row.updated_at,
+      updatedAt: row.updated_at
     };
   } catch (error) {
-    // Rollback transaction on error
-    await client.query('ROLLBACK');
-    log(`Error updating encrypted profile data in database: ${error instanceof Error ? error.message : String(error)}`, 'error');
+    console.error(`[POSTGRES DB] Error updating encrypted profile data: ${error instanceof Error ? error.message : String(error)}`);
+    log(`Error updating encrypted profile data: ${error instanceof Error ? error.message : String(error)}`, 'error');
     throw error;
-  } finally {
-    client.release();
   }
 }
 
@@ -457,17 +468,29 @@ export async function updateEncryptedProfileData(
  * Delete encrypted profile data from the database
  */
 export async function deleteEncryptedProfileData(userId: string): Promise<boolean> {
-  if (!userId) return false;
-  
   try {
+    console.log(`[POSTGRES DB] Deleting encrypted profile data for userId: ${userId}`);
+    
+    // Check if pool is initialized
+    if (!pool) {
+      console.error('[POSTGRES DB] Database pool is not initialized');
+      throw new Error('Database connection not available');
+    }
+    
+    // Delete encrypted data from database
+    console.log('[POSTGRES DB] Executing DELETE query for encrypted data');
     const result = await pool.query(
       'DELETE FROM encrypted_profile_data WHERE user_id = $1 RETURNING user_id',
       [userId]
     );
     
-    return result.rows.length > 0;
+    const deleted = result.rows.length > 0;
+    console.log(`[POSTGRES DB] Encrypted data deletion result: ${deleted ? 'Successful' : 'Not found'}`);
+    
+    return deleted;
   } catch (error) {
-    log(`Error deleting encrypted profile data from database: ${error instanceof Error ? error.message : String(error)}`, 'error');
+    console.error(`[POSTGRES DB] Error deleting encrypted profile data: ${error instanceof Error ? error.message : String(error)}`);
+    log(`Error deleting encrypted profile data: ${error instanceof Error ? error.message : String(error)}`, 'error');
     throw error;
   }
 } 
