@@ -13,6 +13,9 @@ const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID ?? '';
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET ?? '';
 const GOOGLE_CALLBACK_URL = process.env.GOOGLE_CALLBACK_URL || 'http://localhost:3000/auth/google/callback';
 
+// Log the callback URL for debugging
+console.log('Google OAuth Callback URL configured as:', GOOGLE_CALLBACK_URL);
+
 if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET) {
   console.error('Missing required Google OAuth credentials');
 }
@@ -96,7 +99,7 @@ router.post('/login', async (req, res) => {
     
     // Find user
     const user = await getUserByEmail(email);
-    if (!user) {
+    if (!user || !user.password) {
       return res.status(401).json({ error: 'Invalid email or password' });
     }
     
