@@ -3,7 +3,7 @@ import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import { OAuth2Client } from 'google-auth-library';
 import { log } from '../vite';
-import { getUserByEmail, createUser, validateToken, invalidateToken, storeToken } from '../db/auth';
+import { getUserByEmail, getUserById, createUser, validateToken, invalidateToken, storeToken } from '../db/auth';
 
 const router = express.Router();
 const JWT_SECRET = process.env.JWT_SECRET || 'sahabai-secret-key';
@@ -155,7 +155,7 @@ router.get('/validate', async (req, res) => {
       
       // Get user data
       console.log('[Validate Debug] Fetching user data from database');
-      const user = await getUserByEmail(decoded.userId);
+      const user = await getUserById(decoded.userId);
       
       if (!user) {
         console.log('[Validate Debug] User not found in database');
