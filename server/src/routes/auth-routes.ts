@@ -41,7 +41,7 @@ router.post('/login', validateRequest(loginSchema), async (req, res) => {
     
     // Generate JWT token
     const token = jwt.sign(
-      { id: user.id, email: user.email },
+      { userId: user.id, email: user.email },
       process.env.JWT_SECRET || 'default_secret',
       { expiresIn: rememberMe ? '30d' : '24h' }
     );
@@ -96,7 +96,7 @@ router.post('/register', validateRequest(registerSchema), async (req, res) => {
     
     // Generate JWT token
     const token = jwt.sign(
-      { id: newUser.id, email: newUser.email },
+      { userId: newUser.id, email: newUser.email },
       process.env.JWT_SECRET || 'default_secret',
       { expiresIn: '24h' }
     );
@@ -190,12 +190,12 @@ router.get('/validate', async (req, res) => {
       });
     }
     
-    // Verify token
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'default_secret') as { id: string };
+    // Verify token - UPDATED to use userId instead of id
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'default_secret') as { userId: string };
     
-    // Get user data
+    // Get user data - UPDATED to use userId instead of id
     const user = await db.user.findUnique({
-      where: { id: decoded.id }
+      where: { id: decoded.userId }
     });
     
     if (!user) {

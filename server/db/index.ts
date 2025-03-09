@@ -54,16 +54,33 @@ export async function initializeDatabase(): Promise<void> {
  */
 export async function getUserProfile(userId: unknown): Promise<UserProfile | null> {
   if (typeof userId !== 'string' || !userId) {
+    console.log('[DB DEBUG] Invalid userId provided to getUserProfile:', userId);
     return null;
   }
   
   try {
+    console.log(`[DB DEBUG] Getting user profile for userId: ${userId}`);
+    console.log(`[DB DEBUG] Database mode: ${USE_DATABASE ? 'PostgreSQL' : 'In-Memory'}`);
+    
+    let profile = null;
+    
     if (USE_DATABASE) {
-      return await pg.getUserProfile(userId);
+      console.log(`[DB DEBUG] Using database storage`);
+      profile = await pg.getUserProfile(userId);
     } else {
-      return await memory.getUserProfileFromMemory(userId);
+      console.log(`[DB DEBUG] Using in-memory storage`);
+      profile = await memory.getUserProfileFromMemory(userId);
     }
+    
+    console.log(`[DB DEBUG] Profile lookup result: ${profile ? 'Found' : 'Not found'}`);
+    
+    if (profile) {
+      console.log(`[DB DEBUG] Profile details: userId=${profile.userId}, preferences=${JSON.stringify(profile.preferences)}`);
+    }
+    
+    return profile;
   } catch (error) {
+    console.error(`[DB DEBUG] Error getting user profile: ${error instanceof Error ? error.message : String(error)}`);
     log(`Error getting user profile: ${error instanceof Error ? error.message : String(error)}`, 'error');
     return null;
   }

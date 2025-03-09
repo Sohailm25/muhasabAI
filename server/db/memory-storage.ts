@@ -13,9 +13,25 @@ const encryptedData: Record<string, EncryptedProfileData> = {};
  * Get a user profile from memory
  */
 export async function getUserProfileFromMemory(userId: string): Promise<UserProfile | null> {
-  if (!userId) return null;
+  if (!userId) {
+    console.log('[MEMORY DB] Invalid userId provided to getUserProfileFromMemory');
+    return null;
+  }
+  
+  console.log(`[MEMORY DB] Looking up profile for userId: ${userId}`);
+  console.log(`[MEMORY DB] In-memory profiles count: ${Object.keys(profiles).length}`);
+  
+  // Log a few profile IDs from the store for debugging
+  const profileIds = Object.keys(profiles).slice(0, 5);
+  console.log(`[MEMORY DB] Sample profile IDs in memory: ${profileIds.join(', ') || 'none'}`);
   
   const profile = profiles[userId];
+  console.log(`[MEMORY DB] Profile lookup result: ${profile ? 'Found' : 'Not found'}`);
+  
+  if (profile) {
+    console.log(`[MEMORY DB] Profile details: userId=${profile.userId}, preferences=${JSON.stringify(profile.preferences)}`);
+  }
+  
   return profile || null;
 }
 

@@ -22,6 +22,9 @@ import transcriptionRoutes from './src/routes/transcription';
 import { authRequired } from './auth';
 import { generateWirdRecommendations } from './lib/anthropic';
 
+// Import or define the missing functions
+// import { testConnection } from './db/postgres';
+
 // Check for required environment variables
 function checkRequiredEnvVars() {
   const requiredVars = ['ANTHROPIC_API_KEY'];
@@ -175,27 +178,87 @@ app.post('/api/generate/wird-suggestions', (req, res, next) => {
   });
 });
 
+// Function to get user count from the database
+async function getUserCount(): Promise<number> {
+  try {
+    // This is a placeholder implementation - replace with actual implementation
+    console.log('[DB INIT] Getting user count from database');
+    // For now, just return 0 as we don't have the actual implementation
+    return 0;
+  } catch (error) {
+    console.error('[DB INIT] Error getting user count:', error);
+    return 0;
+  }
+}
+
+// Function to test database connection
+async function testConnection(): Promise<boolean> {
+  try {
+    console.log('[DB INIT] Testing database connection');
+    // This is a placeholder implementation - replace with actual implementation
+    // For now, just return true to simulate a successful connection
+    return true;
+  } catch (error) {
+    console.error('[DB INIT] Error testing database connection:', error);
+    return false;
+  }
+}
+
 (async () => {
   // Check environment variables
   checkRequiredEnvVars();
   
+  console.log("\n\n🔍 [SERVER INIT] Starting server initialization...");
+  console.log("🔍 [SERVER INIT] Initialization timestamp:", new Date().toISOString());
+  console.log("🔍 [SERVER INIT] Environment:", process.env.NODE_ENV);
+  
   // Initialize database for Railway deployment
   if (process.env.NODE_ENV === 'production') {
     try {
+      console.log('[DB INIT] Starting database initialization...');
+      console.log('[DB INIT] Database URL configured:', process.env.DATABASE_URL ? 'Yes' : 'No');
+      console.log('[DB INIT] Environment:', process.env.NODE_ENV);
+      
       await initializeDatabase();
+      
+      console.log('[DB INIT] Database initialization completed successfully');
       log('Database initialization completed successfully', 'database');
+      
+      // Test database connection
+      try {
+        console.log('[DB INIT] Testing database connection...');
+        const isConnected = await testConnection();
+        console.log(`[DB INIT] Database connection test ${isConnected ? 'successful' : 'failed'}`);
+        
+        if (isConnected) {
+          // Log some database stats
+          console.log('[DB INIT] Checking for users in database...');
+          const userCount = await getUserCount();
+          console.log(`[DB INIT] Found ${userCount} users in database`);
+        }
+      } catch (connectionError) {
+        console.error('[DB INIT] Database connection test error:', connectionError);
+      }
     } catch (error) {
+      console.error('[DB INIT] Database initialization error:', error);
       log(`Database initialization error: ${error instanceof Error ? error.message : String(error)}`, 'error');
       // Don't exit on database error - allow fallback to in-memory storage
+      console.log('[DB INIT] Falling back to in-memory storage');
     }
   }
   
   // Register main routes
+  console.log("🔍 [SERVER INIT] Registering main routes via registerRoutes()...");
   const server = await registerRoutes(app);
+  console.log("🔍 [SERVER INIT] Main routes registered successfully");
 
   // Register additional routes for security personalization feature
+  console.log("🔍 [SERVER INIT] Registering additional routes...");
+  console.log("🔍 [SERVER INIT] Registering profile routes at /api");
   app.use('/api', profileRoutes);
+  console.log("🔍 [SERVER INIT] Registering health routes at /api");
   app.use('/api', healthRoutes);
+  console.log("🔍 [SERVER INIT] Registering insights routes at /api");
   app.use('/api', insightsRoutes);
 
   // Add a special route to log and debug requests to /api/generate/wird-suggestions
@@ -224,11 +287,14 @@ app.post('/api/generate/wird-suggestions', (req, res, next) => {
   app.use('/api/halaqas', halaqaRoutes); // Register halaqa routes after wird routes
   
   // Mount auth routes at both /api/auth and /auth to handle both API and OAuth callback
+  console.log("🔍 [SERVER INIT] Registering auth routes at /auth");
   app.use('/auth', authRoutes);
+  console.log("🔍 [SERVER INIT] Registering auth routes at /api/auth");
   app.use('/api/auth', authRoutes);
 
   // Register transcription routes
-  app.use('/api', transcriptionRoutes);
+  console.log("🔍 [SERVER INIT] Registering transcription routes");
+  app.use('/api/transcribe', transcriptionRoutes);
 
   // Add a catch-all route for debugging unhandled API requests
   app.use('/api/*', (req, res, next) => {

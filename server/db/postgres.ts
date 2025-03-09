@@ -107,22 +107,38 @@ export async function initializeDatabase(): Promise<void> {
  * Get a user profile from the database
  */
 export async function getUserProfile(userId: string): Promise<UserProfile | null> {
-  if (!userId) return null;
+  if (!userId) {
+    console.log('[POSTGRES DB] Invalid userId provided to getUserProfile');
+    return null;
+  }
   
   try {
+    console.log(`[POSTGRES DB] Looking up profile for userId: ${userId}`);
+    
+    // Check if pool is initialized
+    if (!pool) {
+      console.error('[POSTGRES DB] Database pool is not initialized');
+      return null;
+    }
+    
+    console.log('[POSTGRES DB] Executing query: SELECT * FROM user_profiles WHERE user_id = $1');
     const result = await pool.query(
       'SELECT * FROM user_profiles WHERE user_id = $1',
       [userId]
     );
     
+    console.log(`[POSTGRES DB] Query result rows: ${result.rows.length}`);
+    
     if (result.rows.length === 0) {
+      console.log(`[POSTGRES DB] No profile found for userId: ${userId}`);
       return null;
     }
     
     const row = result.rows[0];
+    console.log(`[POSTGRES DB] Profile found for userId: ${userId}`);
     
     // Transform database row to UserProfile
-    return {
+    const profile = {
       userId: row.user_id,
       preferences: row.preferences,
       sharingPreferences: row.sharing_preferences,
@@ -130,7 +146,12 @@ export async function getUserProfile(userId: string): Promise<UserProfile | null
       createdAt: row.created_at,
       updatedAt: row.updated_at,
     };
+    
+    console.log(`[POSTGRES DB] Profile details: userId=${profile.userId}, preferences=${JSON.stringify(profile.preferences)}`);
+    
+    return profile;
   } catch (error) {
+    console.error(`[POSTGRES DB] Error getting user profile from database: ${error instanceof Error ? error.message : String(error)}`);
     log(`Error getting user profile from database: ${error instanceof Error ? error.message : String(error)}`, 'error');
     throw error;
   }

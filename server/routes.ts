@@ -513,6 +513,9 @@ const transcriptionService = new TranscriptionService();
 export async function registerRoutes(app: Express): Promise<Server> {
   const httpServer = createServer(app);
   
+  console.log("\n\n🔍 [ROUTE DEBUG] Starting route registration...");
+  console.log("🔍 [ROUTE DEBUG] Registration timestamp:", new Date().toISOString());
+  
   // CRITICAL: Register identity framework routes FIRST, before anything else
   console.log("[IDENTITY DEBUG] Registering identity framework routes as first priority");
   identityFrameworkRoutes(app);
@@ -524,9 +527,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   }
   
   // Apply auth debug middleware to all requests
+  console.log("🔍 [ROUTE DEBUG] Registering auth debug middleware");
   app.use(authDebugMiddleware);
 
   // Health check endpoint for Railway
+  console.log("🔍 [ROUTE DEBUG] Registering health check endpoint");
   app.get("/health", async (req: Request, res: Response) => {
     const healthCheck = {
       uptime: process.uptime(),
@@ -549,12 +554,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Mount the Masjidi API routes
+  console.log("🔍 [ROUTE DEBUG] Registering Masjidi API routes at /api");
   app.use("/api", masjidiRouter);
   
   // Mount the Profile API routes
+  console.log("🔍 [ROUTE DEBUG] Registering Profile API routes at /api");
   app.use("/api", profileRouter);
   
   // Mount the Auth routes
+  console.log("🔍 [ROUTE DEBUG] Registering Auth routes at /auth");
   app.use("/auth", authRouter);
 
   // CRITICAL FIX: We need to create a middleware to prevent halaqaRouter from handling identity-frameworks routes
