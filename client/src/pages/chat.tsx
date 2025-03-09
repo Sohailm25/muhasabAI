@@ -543,6 +543,8 @@ export default function Chat() {
     
     setIsGeneratingItems(true); // Reuse the loading state
     console.log("Starting wirdh suggestion generation with messages:", messages.length);
+    console.log("Reflection ID:", reflectionId);
+    console.log("User ID:", user.id);
     
     try {
       // Get personalization context if available
@@ -606,22 +608,55 @@ export default function Chat() {
       };
       
       try {
+        // Get the authentication token
+        const token = localStorage.getItem('auth_token');
+        if (!token) {
+          console.error("No authentication token found");
+          throw new Error("Authentication required");
+        }
+        
+        console.log("Auth token found:", token ? "Yes (token exists)" : "No");
+        
+        // Use a different URL that won't conflict with halaqa routes
+        // Instead of /api/generate/wird-suggestions, use /api/wirds/generate-suggestions
+        const requestUrl = "/api/wirds/generate-suggestions";
+        const requestHeaders = {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        };
+        const requestBody = {
+          conversation: conversationText,
+          messages: messages, // Send full messages array for better context
+          personalizationContext
+        };
+        
+        console.log("🔍 REQUEST DETAILS:");
+        console.log("🔍 URL:", requestUrl);
+        console.log("🔍 Method: POST");
+        console.log("🔍 Headers:", JSON.stringify(requestHeaders));
+        console.log("🔍 Body:", JSON.stringify(requestBody, null, 2).substring(0, 500) + "...");
+        
         // Try to call the API to generate wird suggestions
         console.log("Calling API to generate wird suggestions");
-        const response = await fetch("/api/generate/wird-suggestions", {
+        const response = await fetch(requestUrl, {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            conversation: conversationText,
-            messages: messages, // Send full messages array for better context
-            personalizationContext
-          }),
+          headers: requestHeaders,
+          body: JSON.stringify(requestBody),
         });
+        
+        console.log("API response status:", response.status, response.statusText);
         
         if (!response.ok) {
           console.error(`API error: ${response.status} - ${response.statusText}`);
+          
+          // Try to get more details from the response
+          try {
+            const errorData = await response.text();
+            console.error("Error response body:", errorData);
+          } catch (e) {
+            console.error("Could not read error response body");
+          }
+          
           throw new Error("Failed to generate wird suggestions");
         }
         

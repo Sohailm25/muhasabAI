@@ -18,6 +18,14 @@ interface AuthenticatedRequest extends Request {
 const router = express.Router();
 const logger = createLogger("halaqaRoutes");
 
+// Add a middleware to log all requests to this router
+router.use((req, res, next) => {
+  console.log(`🟢 [HALAQA ROUTES] Request received: ${req.method} ${req.baseUrl}${req.path}`);
+  console.log(`🟢 [HALAQA ROUTES] Request params:`, req.params);
+  console.log(`🟢 [HALAQA ROUTES] Request query:`, req.query);
+  next();
+});
+
 // GET /api/halaqas - Get all halaqas
 router.get("/", async (req, res) => {
   try {
@@ -402,8 +410,11 @@ router.post("/:id/analyze", authRequired, async (req: AuthenticatedRequest, res:
     const userId = req.user?.id;
     const halaqaId = parseInt(req.params.id);
     
+    logger.info(`[halaqaRoutes] /:id/analyze endpoint called with ID: ${req.params.id}`);
+    logger.info(`[halaqaRoutes] Request body: ${JSON.stringify(req.body)}`);
+    
     if (isNaN(halaqaId)) {
-      logger.error(`Invalid halaqa ID format: ${req.params.id}`);
+      logger.error(`[halaqaRoutes] Invalid halaqa ID format: ${req.params.id}`);
       return res.status(400).json({ error: "Invalid halaqa ID format" });
     }
     
@@ -653,23 +664,41 @@ router.post("/:id/application-suggestions", authRequired, async (req: Authentica
 });
 
 // POST /api/halaqas/:id/wird-suggestions - Generate wird (devotional practice) suggestions
-router.post("/:id/wird-suggestions", authRequired, async (req: AuthenticatedRequest, res: Response) => {
+router.post("/:id/wird-suggestions", (req, res, next) => {
+  console.log(`🟢 [HALAQA ROUTES] Matched route: POST /:id/wird-suggestions`);
+  console.log(`🟢 [HALAQA ROUTES] ID param:`, req.params.id);
+  console.log(`🟢 [HALAQA ROUTES] Full URL:`, req.originalUrl);
+  console.log(`🟢 [HALAQA ROUTES] Base URL:`, req.baseUrl);
+  console.log(`🟢 [HALAQA ROUTES] Path:`, req.path);
+  authRequired(req, res, next);
+}, async (req: AuthenticatedRequest, res: Response) => {
+  console.log(`🟢 [HALAQA ROUTES] Inside wird-suggestions handler after auth`);
   try {
     const id = req.params.id;
+    console.log(`🟢 [HALAQA ROUTES] Processing wird-suggestions for halaqa ID: ${id}`);
     
     // Validate ID is a number
     const halaqaId = parseInt(id);
     if (isNaN(halaqaId)) {
+      console.log(`🟢 [HALAQA ROUTES] Invalid halaqa ID format: ${id} is not a number`);
       return res.status(400).json({ error: "Invalid halaqa ID format" });
+    }
+    
+    // Ensure this route only handles numeric IDs to avoid catching unrelated paths
+    if (!/^\d+$/.test(id)) {
+      console.log(`🟢 [HALAQA ROUTES] Rejecting non-numeric ID: ${id}`);
+      return res.status(400).json({ error: "Invalid halaqa ID format: must be numeric" });
     }
     
     const halaqa = await storage.getHalaqa(halaqaId);
     
     if (!halaqa) {
+      console.log(`🟢 [HALAQA ROUTES] Halaqa not found with ID: ${halaqaId}`);
       return res.status(404).json({ error: "Halaqa not found" });
     }
     
     // Generate wird suggestions based on the halaqa content
+    console.log(`🟢 [HALAQA ROUTES] Generating wird suggestions for halaqa: ${halaqa.title}`);
     const suggestions = await generateHalaqaWirdSuggestions({
       title: halaqa.title,
       topic: halaqa.topic,
@@ -677,9 +706,10 @@ router.post("/:id/wird-suggestions", authRequired, async (req: AuthenticatedRequ
       impact: halaqa.impact
     });
     
+    console.log(`🟢 [HALAQA ROUTES] Successfully generated ${suggestions.length} wird suggestions`);
     res.json({ suggestions });
   } catch (error) {
-    console.error("Error generating wird suggestions:", error);
+    console.error("🟢 [HALAQA ROUTES] Error generating wird suggestions:", error);
     res.status(500).json({ error: "Failed to generate wird suggestions" });
   }
 });

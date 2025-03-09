@@ -19,6 +19,8 @@ import insightsRoutes from './routes/insights-routes';
 import userRoutes from "./routes/user-routes";
 import reflectionRoutes from "./routes/reflection-routes";
 import transcriptionRoutes from './src/routes/transcription';
+import { authRequired } from './auth';
+import { generateWirdRecommendations } from './lib/anthropic';
 
 // Check for required environment variables
 function checkRequiredEnvVars() {
@@ -50,6 +52,12 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
+// Add a request logger middleware
+app.use((req, res, next) => {
+  console.log(`[SERVER] ${req.method} ${req.path} - Headers: ${JSON.stringify(req.headers)}`);
+  next();
+});
+
 app.use((req, res, next) => {
   const start = Date.now();
   const path = req.path;
@@ -80,6 +88,82 @@ app.use((req, res, next) => {
   next();
 });
 
+// Define a direct route handler for /api/generate/wird-suggestions
+// This must be defined BEFORE any other routes
+app.post('/api/generate/wird-suggestions', (req, res, next) => {
+  console.log('⭐ DIRECT ROUTE HANDLER: /api/generate/wird-suggestions');
+  console.log('⭐ Method:', req.method);
+  console.log('⭐ Headers:', JSON.stringify(req.headers));
+  console.log('⭐ Body:', JSON.stringify(req.body));
+  
+  // Call authRequired middleware
+  authRequired(req, res, (err) => {
+    if (err) {
+      console.log('⭐ Auth error:', err);
+      return next(err);
+    }
+    
+    console.log('⭐ Authentication successful');
+    
+    // Extract data from request body
+    const { conversation, messages, personalizationContext } = req.body;
+    
+    // Validate the request
+    if (!conversation) {
+      console.log('⭐ Missing conversation content');
+      return res.status(400).json({ error: "Missing conversation content" });
+    }
+    
+    console.log('⭐ Conversation length:', conversation.length);
+    
+    // Generate timestamp for IDs
+    const timestamp = Date.now();
+    
+    // Generate fallback suggestions
+    const fallbackSuggestions = [
+      {
+        id: `wird-${timestamp}-1`,
+        type: "Quran",
+        category: "Quran",
+        name: "Daily Quran Reading",
+        title: "Daily Quran Reading",
+        description: "Read portions of the Quran daily to strengthen your connection with Allah's words",
+        target: 5,
+        unit: "pages",
+        duration: "15-20 minutes",
+        frequency: "daily"
+      },
+      {
+        id: `wird-${timestamp}-2`,
+        type: "Dhikr",
+        category: "Dhikr",
+        name: "Morning and Evening Adhkar",
+        title: "Morning and Evening Adhkar",
+        description: "Incorporate the Prophetic morning and evening remembrances into your daily routine",
+        target: 1,
+        unit: "session",
+        duration: "10 minutes",
+        frequency: "twice daily"
+      },
+      {
+        id: `wird-${timestamp}-3`,
+        type: "Dua",
+        category: "Dua",
+        name: "Personal Reflection Dua",
+        title: "Personal Reflection Dua",
+        description: "Take time for personal conversation with Allah, expressing gratitude and seeking guidance",
+        target: 1,
+        unit: "session",
+        duration: "5 minutes",
+        frequency: "daily"
+      }
+    ];
+    
+    console.log('⭐ Returning fallback suggestions');
+    return res.json({ wirdSuggestions: fallbackSuggestions });
+  });
+});
+
 (async () => {
   // Check environment variables
   checkRequiredEnvVars();
@@ -103,11 +187,30 @@ app.use((req, res, next) => {
   app.use('/api', healthRoutes);
   app.use('/api', insightsRoutes);
 
-  // Feature-specific API routes
+  // Add a special route to log and debug requests to /api/generate/wird-suggestions
+  app.use('/api/generate/wird-suggestions', (req, res, next) => {
+    console.log('🔍 DEBUGGING ROUTE: /api/generate/wird-suggestions');
+    console.log('🔍 Method:', req.method);
+    console.log('🔍 Headers:', JSON.stringify(req.headers));
+    console.log('🔍 Body:', JSON.stringify(req.body));
+    console.log('🔍 Passing to next handler...');
+    next();
+  });
+
+  console.log('🚀 ROUTE REGISTRATION ORDER:');
+  console.log('1. Registering wird routes at /api');
+  
+  // Feature-specific API routes - IMPORTANT: Register wird routes BEFORE halaqa routes
+  app.use('/api', wirdRoutes); // Register wird routes first to ensure /api/generate/wird-suggestions is handled correctly
+  
+  console.log('2. Registering user routes at /api/user');
   app.use('/api/user', userRoutes);
+  
+  console.log('3. Registering reflection routes at /api/reflections');
   app.use('/api/reflections', reflectionRoutes);
-  app.use('/api/halaqas', halaqaRoutes);
-  app.use('/api', wirdRoutes);
+  
+  console.log('4. Registering halaqa routes at /api/halaqas');
+  app.use('/api/halaqas', halaqaRoutes); // Register halaqa routes after wird routes
   
   // Mount auth routes at both /api/auth and /auth to handle both API and OAuth callback
   app.use('/auth', authRoutes);
@@ -115,6 +218,12 @@ app.use((req, res, next) => {
 
   // Register transcription routes
   app.use('/api', transcriptionRoutes);
+
+  // Add a catch-all route for debugging unhandled API requests
+  app.use('/api/*', (req, res, next) => {
+    console.log(`⚠️ UNHANDLED API REQUEST: ${req.method} ${req.path}`);
+    next();
+  });
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
