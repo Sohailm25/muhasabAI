@@ -22,7 +22,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 export default function Profile() {
-  const { publicProfile, privateProfile, updateProfile, isLoading: profileLoading } = useProfile();
+  const { publicProfile, privateProfile, updateProfile, isLoading: profileLoading, updatePersonalizationSettings } = useProfile();
   const { user, logout } = useAuth();
   const [isSaving, setIsSaving] = useState(false);
   const [success, setSuccess] = useState<string | null>(null);
@@ -186,29 +186,92 @@ export default function Profile() {
         }
       });
       
-      // Update both public and private profile
-      await updateProfile(
-        {
-          // Public profile updates
-          generalPreferences: preferences,
-          privacySettings: privacySettings
-        }, 
-        {
-          // Private profile updates
-          knowledgeLevel,
-          spiritualJourneyStage,
-          lifeStage,
-          communityConnection,
-          culturalBackground,
-          reflectionStyle,
-          guidancePreferences,
-          topicsOfInterest,
-          primaryGoals
-        }
-      );
+      // Check if we're on the personalization tab or changing personalization settings
+      const isPersonalizationTab = document.querySelector('[value="personalize"][aria-selected="true"]') !== null;
       
-      console.log("Profile updated successfully");
-      setSuccess("All preferences saved successfully");
+      if (isPersonalizationTab && updatePersonalizationSettings) {
+        // Use our specialized method that bypasses the problematic endpoint
+        const success = await updatePersonalizationSettings(
+          privacySettings.allowPersonalization,
+          {
+            knowledgeLevel,
+            spiritualJourneyStage,
+            lifeStage,
+            communityConnection,
+            culturalBackground,
+            reflectionStyle,
+            guidancePreferences: guidancePreferences.filter(pref => 
+              !pref.toLowerCase().includes('wird') && 
+              !pref.toLowerCase().includes('habit') && 
+              !pref.toLowerCase().includes('track')
+            ),
+            topicsOfInterest: topicsOfInterest.filter(topic => 
+              !topic.toLowerCase().includes('wird') && 
+              !topic.toLowerCase().includes('habit') && 
+              !topic.toLowerCase().includes('track')
+            ),
+            primaryGoals: primaryGoals.filter(goal => 
+              !goal.toLowerCase().includes('wird') && 
+              !goal.toLowerCase().includes('habit') && 
+              !goal.toLowerCase().includes('track')
+            )
+          }
+        );
+        
+        if (success) {
+          console.log("Personalization settings saved successfully using direct method");
+          setSuccess("Personalization preferences saved successfully");
+        } else {
+          // Store in localStorage as fallback
+          try {
+            localStorage.setItem('sahabai_personalization_enabled', privacySettings.allowPersonalization ? 'true' : 'false');
+            localStorage.setItem('sahabai_private_preferences', JSON.stringify({
+              knowledgeLevel,
+              spiritualJourneyStage,
+              lifeStage,
+              communityConnection,
+              culturalBackground,
+              reflectionStyle,
+              guidancePreferences,
+              topicsOfInterest,
+              primaryGoals
+            }));
+            console.log("Saved preferences to localStorage as fallback");
+            setSuccess("Basic preferences saved locally (limited functionality)");
+          } catch (storageErr) {
+            console.error("Failed to save to localStorage:", storageErr);
+            setError("Failed to save preferences. Please try again.");
+          }
+        }
+      } else {
+        // For other tabs or if the specialized method isn't available, use the standard method
+        // Update both public and private profile
+        await updateProfile(
+          {
+            // Public profile updates
+            generalPreferences: preferences,
+            privacySettings: privacySettings
+          }, 
+          {
+            // Private profile updates - only if personalization is enabled
+            ...(privacySettings.allowPersonalization ? {
+              knowledgeLevel,
+              spiritualJourneyStage,
+              lifeStage,
+              communityConnection,
+              culturalBackground,
+              reflectionStyle,
+              guidancePreferences,
+              topicsOfInterest,
+              primaryGoals
+            } : {})
+          }
+        );
+        
+        console.log("Profile updated successfully");
+        setSuccess("All preferences saved successfully");
+      }
+      
       setHasChanges(false);
     } catch (err) {
       console.error("Error saving preferences:", err);

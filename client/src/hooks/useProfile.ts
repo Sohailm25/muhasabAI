@@ -168,13 +168,78 @@ export function useProfile() {
       }
       
       // Only load on authenticated pages
-      loadProfiles();
+      loadProfiles().catch(err => {
+        console.error('Error loading profiles from API:', err);
+        // If API profile loading fails, try to load from localStorage as fallback
+        loadFromLocalStorage();
+      });
     } else if (!isAuthenticated) {
       // Make sure to set loading to false if not authenticated
       setIsLoading(false);
       hasAttemptedLoad.current = false; // Reset the load flag when logged out
     }
   }, [isAuthenticated]);
+  
+  // Load profile data from localStorage as fallback when API fails
+  const loadFromLocalStorage = () => {
+    console.log('Attempting to load profile from localStorage as fallback');
+    try {
+      // Try to load personalization settings
+      const allowPersonalization = localStorage.getItem('sahabai_personalization_enabled');
+      const privatePrefsJson = localStorage.getItem('sahabai_private_preferences');
+      
+      let localPublicProfile = null;
+      
+      // Create minimal public profile with personalization settings if available
+      if (allowPersonalization !== null) {
+        localPublicProfile = {
+          userId: userId || 'local-user',
+          privacySettings: {
+            allowPersonalization: allowPersonalization === 'true',
+            localStorageOnly: true,
+            enableSync: false
+          },
+          generalPreferences: {
+            inputMethod: 'text',
+            reflectionFrequency: 'daily',
+            languagePreferences: 'english'
+          },
+          createdAt: new Date(),  // Use Date objects directly
+          updatedAt: new Date(),  // Use Date objects directly
+        } as PublicProfile;  // Type assertion to ensure compatibility
+        
+        // Set the public profile in state
+        setPublicProfile(localPublicProfile);
+        console.log('Set minimal public profile from localStorage');
+      }
+      
+      // Load private profile from localStorage if available
+      if (privatePrefsJson) {
+        try {
+          const localPrivatePrefs = JSON.parse(privatePrefsJson);
+          
+          // Create minimal private profile with stored preferences
+          const localPrivateProfile = {
+            ...getDefaultPrivateProfile(),
+            ...localPrivatePrefs
+          };
+          
+          // Set private profile in state
+          setPrivateProfile(localPrivateProfile);
+          console.log('Set private profile from localStorage');
+        } catch (parseErr) {
+          console.error('Error parsing private preferences from localStorage:', parseErr);
+        }
+      }
+      
+      setIsLoading(false);
+      hasAttemptedLoad.current = true;
+    } catch (err) {
+      console.error('Error loading profile from localStorage:', err);
+      setIsLoading(false);
+      hasAttemptedLoad.current = true;
+    }
+  };
   
   // Update profile - handles both public and private updates
   const updateProfile = async (
@@ -363,6 +428,83 @@ export function useProfile() {
         } catch (storageErr) {
           console.error('Failed to save personalization preference to localStorage:', storageErr);
         }
+      } else {
+        // We don't have a profile yet, so create a minimal one locally
+        console.log('No public profile found, creating a minimal local profile');
+        
+        // First try to get a profile from the API (in case it exists but wasn't loaded)
+        try {
+          const profile = await API.getUserProfile();
+          if (profile) {
+            console.log('Found existing profile on server');
+            setPublicProfile(profile);
+            
+            // Update the retrieved profile with our new settings
+            const updatedPublicProfile: PublicProfile = {
+              ...profile,
+              privacySettings: {
+                ...profile.privacySettings,
+                allowPersonalization,
+              }
+            };
+            
+            setPublicProfile(updatedPublicProfile);
+          }
+        } catch (getProfileErr) {
+          console.log('No profile found on server, will create a local fallback');
+          
+          // Create a minimal local profile
+          const localProfile = {
+            userId: userId || 'local-user',
+            privacySettings: {
+              allowPersonalization,
+              localStorageOnly: true,
+              enableSync: false
+            },
+            generalPreferences: {
+              inputMethod: 'text',
+              reflectionFrequency: 'daily',
+              languagePreferences: 'english'
+            },
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          } as PublicProfile;
+          
+          setPublicProfile(localProfile);
+          
+          // Try to create a profile on the server
+          try {
+            console.log('Attempting to create profile on server');
+            const newProfile = await API.createUserProfile({
+              privacySettings: {
+                allowPersonalization,
+                localStorageOnly: false,
+                enableSync: false
+              },
+              generalPreferences: {
+                inputMethod: 'text',
+                reflectionFrequency: 'daily',
+                languagePreferences: 'english'
+              },
+            });
+            
+            if (newProfile) {
+              console.log('Successfully created profile on server');
+              setPublicProfile(newProfile as PublicProfile);
+            }
+          } catch (createErr) {
+            console.error('Failed to create profile on server:', createErr);
+            // Continue with local profile
+          }
+        }
+        
+        // Store in localStorage regardless of API success
+        try {
+          localStorage.setItem('sahabai_personalization_enabled', allowPersonalization ? 'true' : 'false');
+          console.log('Personalization preference saved to localStorage');
+        } catch (storageErr) {
+          console.error('Failed to save personalization preference to localStorage:', storageErr);
+        }
       }
       
       // If we have private preferences and personalization is enabled, update those
@@ -385,6 +527,19 @@ export function useProfile() {
             try {
               localStorage.setItem('sahabai_private_preferences', JSON.stringify(privatePreferences));
               console.log('Private preferences saved to localStorage as fallback');
+            } catch (localStorageErr) {
+              console.error('Failed to save to localStorage:', localStorageErr);
+            }
+          } else {
+            // No existing private profile, create one from scratch
+            const defaultProfile = getDefaultPrivateProfile();
+            const mergedProfile = mergePrivateProfiles(defaultProfile, privatePreferences);
+            setPrivateProfile(mergedProfile);
+            
+            // Also store in localStorage
+            try {
+              localStorage.setItem('sahabai_private_preferences', JSON.stringify(privatePreferences));
+              console.log('New private preferences saved to localStorage');
             } catch (localStorageErr) {
               console.error('Failed to save to localStorage:', localStorageErr);
             }
