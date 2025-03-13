@@ -3,6 +3,7 @@ import { useProfile } from '../hooks/useProfile';
 import { syncProfileAcrossDevices } from '../lib/profileSync';
 import { useAuth } from '../hooks/useAuth';
 import { API } from '../lib/api';
+import { useLocation } from 'wouter';
 
 interface ProfileIntegrationProps {
   children: React.ReactNode;
@@ -19,9 +20,24 @@ export function ProfileIntegration({ children }: ProfileIntegrationProps) {
   const { isLoading, error, publicProfile, updateProfile } = useProfile();
   const initializeAttempted = useRef(false);
   const [initError, setInitError] = useState<string | null>(null);
+  const [location] = useLocation();
 
-  // Initialize profile on first load if needed
+  // Check if we're on a public page that doesn't need profile data
+  const isPublicPage = 
+    location === '/' || 
+    location === '/login' || 
+    location === '/register' || 
+    location === '/about' || 
+    location.startsWith('/public/');
+
+  // Initialize profile on first load if needed (but skip on public pages)
   useEffect(() => {
+    // Skip profile initialization on public pages
+    if (isPublicPage) {
+      console.log('On public page, skipping profile initialization');
+      return;
+    }
+    
     let isMounted = true;
     let initTimeout: number | undefined;
     
@@ -183,8 +199,8 @@ export function ProfileIntegration({ children }: ProfileIntegrationProps) {
     return () => window.removeEventListener('storage', handleStorageChange);
   }, []);
   
-  // Show loading state only for authenticated users
-  if (userId && (authLoading || isLoading)) {
+  // Show loading state only for authenticated users on non-public pages
+  if (userId && (authLoading || isLoading) && !isPublicPage) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center">
@@ -195,8 +211,8 @@ export function ProfileIntegration({ children }: ProfileIntegrationProps) {
     );
   }
   
-  // Show error state from profile system
-  if (error || initError) {
+  // Show error state from profile system (but not on public pages)
+  if ((error || initError) && !isPublicPage) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="bg-destructive/10 p-6 rounded-lg max-w-md">
@@ -213,8 +229,8 @@ export function ProfileIntegration({ children }: ProfileIntegrationProps) {
     );
   }
   
-  // Public routes don't need a profile
-  if (!userId) {
+  // Public routes or public pages don't need a profile
+  if (!userId || isPublicPage) {
     return <>{children}</>;
   }
   

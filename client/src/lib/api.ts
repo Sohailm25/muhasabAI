@@ -374,8 +374,38 @@ export const API = {
    * Update user profile
    */
   async updateUserProfile(profile: any) {
-    console.log('[API] Updating user profile');
-    return this.put(this.endpoints.profile.update, profile);
+    console.log('[API Debug] Updating user profile with data:', JSON.stringify(profile, null, 2));
+    
+    // Create a sanitized copy of the profile to remove any wird-related properties
+    const sanitizedProfile = JSON.parse(JSON.stringify(profile));
+    
+    // Function to recursively clean wird-related properties from objects
+    const sanitizeObject = (obj: any) => {
+      if (!obj || typeof obj !== 'object') return;
+      
+      // Properties to remove (case insensitive)
+      const wirdTerms = ['wird', 'wirdId', 'wirdPlan', 'wirdSuggestions'];
+      
+      // Check all properties at this level
+      Object.keys(obj).forEach(key => {
+        // Check if the key name contains 'wird' (case insensitive)
+        const lowerKey = key.toLowerCase();
+        if (wirdTerms.some(term => lowerKey.includes(term.toLowerCase()))) {
+          console.log(`[API Debug] Removing wird-related property: ${key}`);
+          delete obj[key];
+        } 
+        // If it's an object or array, recurse
+        else if (obj[key] && typeof obj[key] === 'object') {
+          sanitizeObject(obj[key]);
+        }
+      });
+    };
+    
+    // Sanitize the profile copy
+    sanitizeObject(sanitizedProfile);
+    
+    console.log('[API Debug] Sending sanitized profile without wird-related properties');
+    return this.put(this.endpoints.profile.update, sanitizedProfile);
   },
   
   /**

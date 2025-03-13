@@ -123,23 +123,26 @@ export function PersonalizationModal({ open, onClose }: { open: boolean; onClose
     setIsSubmitting(true);
     
     try {
+      // Create a clean object without any wird-related properties
+      const cleanPrivateProfile = {
+        knowledgeLevel: skippedFields.includes("knowledge") ? "" : knowledgeLevel,
+        topicsOfInterest: skippedFields.includes("topics") ? [] : selectedTopics,
+        spiritualJourneyStage: skippedFields.includes("spiritual-journey") ? "" : spiritualJourney,
+        primaryGoals: skippedFields.includes("goals") ? [] : primaryGoals.filter(goal => !goal.includes("wird")),
+        lifeStage: skippedFields.includes("life-stage") ? "" : lifeStage,
+        communityConnection: skippedFields.includes("community") ? "" : communityConnection,
+        culturalBackground: skippedFields.includes("culture") ? "" : culturalBackground,
+        reflectionStyle: skippedFields.includes("reflection-style") ? "" : reflectionStyle,
+        guidancePreferences: skippedFields.includes("guidance") ? [] : guidancePreferences.filter(pref => !pref.includes("wird")),
+      };
+      
       console.log("Saving personalization data with the following values:", {
         privacySettings: {
           allowPersonalization: enablePersonalization,
           localStorageOnly: true,
           enableSync: false,
         },
-        privateProfile: {
-          knowledgeLevel,
-          topicsOfInterest: selectedTopics,
-          primaryGoals,
-          spiritualJourneyStage: spiritualJourney,
-          lifeStage,
-          communityConnection,
-          culturalBackground,
-          reflectionStyle,
-          guidancePreferences,
-        }
+        privateProfile: cleanPrivateProfile
       });
       
       // Update public profile
@@ -151,18 +154,7 @@ export function PersonalizationModal({ open, onClose }: { open: boolean; onClose
             enableSync: false,
           },
         },
-        enablePersonalization ? {
-          // Only update private profile if personalization is enabled
-          knowledgeLevel: skippedFields.includes("knowledge") ? "" : knowledgeLevel,
-          topicsOfInterest: skippedFields.includes("topics") ? [] : selectedTopics,
-          spiritualJourneyStage: skippedFields.includes("spiritual-journey") ? "" : spiritualJourney,
-          primaryGoals: skippedFields.includes("goals") ? [] : primaryGoals,
-          lifeStage: skippedFields.includes("life-stage") ? "" : lifeStage,
-          communityConnection: skippedFields.includes("community") ? "" : communityConnection,
-          culturalBackground: skippedFields.includes("culture") ? "" : culturalBackground,
-          reflectionStyle: skippedFields.includes("reflection-style") ? "" : reflectionStyle,
-          guidancePreferences: skippedFields.includes("guidance") ? [] : guidancePreferences,
-        } : undefined
+        enablePersonalization ? cleanPrivateProfile : undefined
       );
       
       console.log("Personalization data saved successfully");

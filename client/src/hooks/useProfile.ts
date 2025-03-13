@@ -151,6 +151,23 @@ export function useProfile() {
   useEffect(() => {
     // Only load profiles if user is authenticated and we haven't loaded yet
     if (isAuthenticated && !hasAttemptedLoad.current) {
+      // Check if we're on a public page that doesn't need authentication
+      const isPublicPage = 
+        window.location.pathname === '/' || 
+        window.location.pathname === '/login' || 
+        window.location.pathname === '/register' ||
+        window.location.pathname === '/about' ||
+        window.location.pathname.startsWith('/public/');
+      
+      // Don't attempt profile loading on public pages even if token exists
+      if (isPublicPage) {
+        console.log('On public page, skipping profile load to avoid unnecessary requests');
+        setIsLoading(false);
+        hasAttemptedLoad.current = true;
+        return;
+      }
+      
+      // Only load on authenticated pages
       loadProfiles();
     } else if (!isAuthenticated) {
       // Make sure to set loading to false if not authenticated
@@ -199,47 +216,15 @@ export function useProfile() {
     try {
       setIsLoading(true);
       
-      // Handle case where public profile doesn't exist yet
-      if (!publicProfile && publicUpdates) {
+      // If there are public updates, try to handle those first
+      if (publicUpdates) {
         try {
-          console.log('Attempting to create profile...');
-          // First, try to fetch the profile - it may exist but we don't have it locally
-          try {
-            console.log('Checking if profile already exists...');
-            const existingProfile = await API.getUserProfile();
-            console.log('Profile already exists, using existing profile');
-            setPublicProfile(existingProfile);
-            
-            // If we also have private updates, handle those
-            if (privateUpdates && existingProfile.userId) {
-              await updatePrivateProfile(existingProfile.userId, privateUpdates);
-            }
-            
-            return existingProfile;
-          } catch (fetchErr) {
-            // If profile doesn't exist (401 or other error), proceed with creation
-            console.log('No existing profile found, creating new profile');
-            if (fetchErr instanceof Error && !fetchErr.message.includes('Authentication')) {
-              throw fetchErr; // Re-throw if it's not an authentication error
-            }
-          }
-          
-          // Create new profile
-          const newPublicProfile = await API.createUserProfile(publicUpdates);
-          setPublicProfile(newPublicProfile);
-          
-          // If we also have private updates, handle those
-          if (privateUpdates && newPublicProfile.userId) {
-            await updatePrivateProfile(newPublicProfile.userId, privateUpdates);
-          }
-          
-          return newPublicProfile;
-        } catch (err) {
-          // If profile already exists (409 error), try to fetch it instead
-          if (err instanceof Error && (err.message.includes('409') || err.message.includes('already exists'))) {
-            console.log('Profile already exists (409), fetching instead of creating');
+          // Handle case where public profile doesn't exist yet
+          if (!publicProfile && publicUpdates) {
             try {
+              console.log('Checking if profile already exists...');
               const existingProfile = await API.getUserProfile();
+              console.log('Profile already exists, using existing profile');
               setPublicProfile(existingProfile);
               
               // If we also have private updates, handle those
@@ -249,36 +234,78 @@ export function useProfile() {
               
               return existingProfile;
             } catch (fetchErr) {
-              console.error('Failed to fetch existing profile after 409:', fetchErr);
-              throw new Error('Failed to create or fetch profile. Please try logging out and in again.');
+              // If profile doesn't exist (401 or other error), proceed with creation
+              console.log('No existing profile found, creating new profile');
+              if (fetchErr instanceof Error && !fetchErr.message.includes('Authentication')) {
+                throw fetchErr; // Re-throw if it's not an authentication error
+              }
             }
-          } else {
-            // Rethrow other errors
-            throw err;
+            
+            // Create new profile
+            const newPublicProfile = await API.createUserProfile(publicUpdates);
+            setPublicProfile(newPublicProfile);
+            
+            // If we also have private updates, handle those
+            if (privateUpdates && newPublicProfile.userId) {
+              await updatePrivateProfile(newPublicProfile.userId, privateUpdates);
+            }
+            
+            return newPublicProfile;
+          }
+          
+          // Update public profile
+          const updatedPublicProfile = await API.updateUserProfile({
+            ...publicUpdates,
+            userId: publicProfile.userId,
+          });
+          setPublicProfile(updatedPublicProfile);
+          
+          // If we also have private updates, handle those
+          if (privateUpdates && updatedPublicProfile.userId) {
+            await updatePrivateProfile(updatedPublicProfile.userId, privateUpdates);
+          }
+          
+          return updatedPublicProfile;
+        } catch (err) {
+          console.error('Error updating public profile:', err);
+          
+          // Even if public profile update fails, still try to update private profile
+          // This way we can at least save the private data
+          if (privateUpdates && userId) {
+            console.log('Public profile update failed, but still attempting private profile update');
+            try {
+              await updatePrivateProfile(userId, privateUpdates);
+            } catch (privateErr) {
+              console.error('Private profile update also failed:', privateErr);
+            }
+          }
+          
+          throw err;
+        }
+      }
+      
+      // If there are private updates and we have a user ID, update private profile
+      if (privateUpdates && userId) {
+        try {
+          await updatePrivateProfile(userId, privateUpdates);
+        } catch (err) {
+          console.error('Error updating private profile:', err);
+          
+          // Store private profile locally even if server update fails
+          try {
+            const currentPrivate = privateProfile || getDefaultPrivateProfile();
+            const updatedPrivateProfile = mergePrivateProfiles(currentPrivate, privateUpdates);
+            setPrivateProfile(updatedPrivateProfile);
+            
+            console.log('Stored private profile locally after server update failed');
+            
+            // Don't throw error in this case, as we've managed to store locally
+            // This improves user experience by not showing errors when we can recover
+          } catch (localErr) {
+            console.error('Failed to store private profile locally:', localErr);
+            throw err; // Rethrow the original error if local storage also fails
           }
         }
-      }
-      
-      // Handle updates to existing profile
-      if (publicUpdates && publicProfile) {
-        // Update public profile
-        const updatedPublicProfile = await API.updateUserProfile({
-          ...publicUpdates,
-          userId: publicProfile.userId,
-        });
-        setPublicProfile(updatedPublicProfile);
-        
-        // If we also have private updates, handle those
-        if (privateUpdates && updatedPublicProfile.userId) {
-          await updatePrivateProfile(updatedPublicProfile.userId, privateUpdates);
-        }
-        
-        return updatedPublicProfile;
-      }
-      
-      // If we only have private updates
-      if (privateUpdates && userId) {
-        await updatePrivateProfile(userId, privateUpdates);
       }
       
       return publicProfile;
@@ -495,6 +522,59 @@ export function useProfile() {
       .slice(0, count)
       .map(([key]) => key);
   }
+  
+  // Helper function to get a default private profile structure
+  const getDefaultPrivateProfile = (): PrivateProfile => ({
+    spiritualJourneyStage: '',
+    primaryGoals: [],
+    knowledgeLevel: '',
+    lifeStage: '',
+    communityConnection: '',
+    culturalBackground: '',
+    reflectionStyle: '',
+    guidancePreferences: [],
+    topicsOfInterest: [],
+    dynamicAttributes: {
+      topicsEngagedWith: {},
+      preferredReferences: {},
+      emotionalResponsiveness: {},
+      languageComplexity: 1
+    },
+    observedPatterns: {
+      recurringChallenges: [],
+      strongEmotionalTopics: [],
+      growthAreas: [],
+      spiritualStrengths: [],
+      avoidedTopics: []
+    },
+    recentInteractions: {
+      lastTopics: [],
+      lastActionItems: [],
+      completedActionItems: []
+    }
+  });
+
+  // Helper function to merge private profiles with type safety
+  const mergePrivateProfiles = (
+    currentProfile: PrivateProfile, 
+    updates: Partial<PrivateProfile>
+  ): PrivateProfile => ({
+    ...currentProfile,
+    ...updates,
+    // Handle nested objects correctly with proper type assertions
+    dynamicAttributes: {
+      ...currentProfile.dynamicAttributes,
+      ...((updates.dynamicAttributes || {}) as PrivateProfile['dynamicAttributes'])
+    } as PrivateProfile['dynamicAttributes'],
+    observedPatterns: {
+      ...currentProfile.observedPatterns,
+      ...((updates.observedPatterns || {}) as PrivateProfile['observedPatterns'])
+    } as PrivateProfile['observedPatterns'],
+    recentInteractions: {
+      ...currentProfile.recentInteractions,
+      ...((updates.recentInteractions || {}) as PrivateProfile['recentInteractions'])
+    } as PrivateProfile['recentInteractions']
+  });
   
   return {
     publicProfile,
