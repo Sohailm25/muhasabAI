@@ -118,17 +118,35 @@ export function AuthProvider({ children }: AuthProviderProps) {
       
       // Check if profile already exists
       console.log('[AUTH] Checking if profile exists...');
-      try {
-        const existingProfile = await API.getUserProfile();
-        console.log('[AUTH] Profile check result:', existingProfile ? 'Found' : 'Not found');
-        
-        if (existingProfile) {
-          console.log('[AUTH] Profile already exists, no need to create');
-          return existingProfile;
+      let profileExists = false;
+      let retryCount = 0;
+      const maxRetries = 5;
+      const retryDelay = 2000; // 2 seconds between retries
+
+      // Add more robust retry logic for checking if profile exists
+      while (!profileExists && retryCount < maxRetries) {
+        try {
+          const existingProfile = await API.getUserProfile();
+          console.log('[AUTH] Profile check result:', existingProfile ? 'Found' : 'Not found');
+          
+          if (existingProfile) {
+            console.log('[AUTH] Profile already exists, no need to create');
+            profileExists = true;
+            return existingProfile;
+          }
+        } catch (profileError) {
+          console.log(`[AUTH] Profile check attempt ${retryCount + 1}/${maxRetries} failed:`, profileError);
+          retryCount++;
+          
+          if (retryCount < maxRetries) {
+            console.log(`[AUTH] Waiting ${retryDelay}ms before retrying profile check...`);
+            await new Promise(resolve => setTimeout(resolve, retryDelay));
+          }
         }
-      } catch (profileError) {
-        console.log('[AUTH] Profile not found, creating new one...');
       }
+      
+      // If we got here, we need to create a profile
+      console.log('[AUTH] Profile not found after retries, creating new one...');
       
       // Create profile directly using the new API method
       console.log('[AUTH] Creating profile directly for user:', userId);
@@ -147,15 +165,32 @@ export function AuthProvider({ children }: AuthProviderProps) {
       };
       
       console.log('[AUTH] Sending direct profile creation request with data:', profileData);
-      try {
-        const createdProfile = await API.createOrUpdateUserProfile(profileData);
-        console.log('[AUTH] Profile created successfully:', createdProfile);
-        return createdProfile;
-      } catch (createError) {
-        console.error('[AUTH] Error creating profile:', createError);
-        setError('Failed to set up your profile. Please try again.');
-        return null;
+      
+      // Added retry mechanism for profile creation as well
+      let creationRetryCount = 0;
+      const maxCreationRetries = 3;
+      
+      while (creationRetryCount < maxCreationRetries) {
+        try {
+          const createdProfile = await API.createOrUpdateUserProfile(profileData);
+          console.log('[AUTH] Profile created successfully:', createdProfile);
+          return createdProfile;
+        } catch (createError) {
+          console.error(`[AUTH] Error creating profile (attempt ${creationRetryCount + 1}/${maxCreationRetries}):`, createError);
+          creationRetryCount++;
+          
+          if (creationRetryCount < maxCreationRetries) {
+            console.log(`[AUTH] Waiting ${retryDelay}ms before retrying profile creation...`);
+            await new Promise(resolve => setTimeout(resolve, retryDelay));
+          } else {
+            console.error('[AUTH] Failed to create profile after multiple attempts');
+            setError('Failed to set up your profile. Please try again.');
+            return null;
+          }
+        }
       }
+      
+      return null;
     } catch (error) {
       console.error('[AUTH] Error ensuring user profile exists:', error);
       setError('Failed to set up your profile. Please try again.');

@@ -23,7 +23,7 @@ console.log('API Base URL configured as:', BASE_URL);
  * Enhanced API client with better error handling and standardized endpoints
  */
 export const API = {
-  baseUrl: process.env.REACT_APP_API_URL || '',
+  baseUrl: BASE_URL,
   
   // Standardized endpoints
   endpoints: {
@@ -215,31 +215,75 @@ export const API = {
 
   // Get encrypted profile data
   async getEncryptedProfileData(userId: string): Promise<EncryptedProfileData> {
-    const token = localStorage.getItem('auth_token');
-    if (!token) {
-      console.error('Authentication token not found when getting encrypted profile');
-      throw new Error('Authentication token not found');
-    }
-    
-    const response = await fetch(`${BASE_URL}/api/profile/${userId}/encrypted`, {
-      headers: {
-        'Authorization': `Bearer ${token}`
+    try {
+      const token = localStorage.getItem('auth_token');
+      if (!token) {
+        console.error('Authentication token not found when getting encrypted profile');
+        throw new Error('Authentication token not found');
       }
-    });
-
-    if (!response.ok) {
+      
+      console.log(`[API] Getting encrypted profile data for user: ${userId}`);
+      const url = `${this.baseUrl}/api/profile/${userId}/encrypted`;
+      
+      const response = await fetch(url, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
+      console.log(`[API] Encrypted profile get response status: ${response.status}`);
+      
       if (response.status === 404) {
         // No encrypted data found, return empty
+        console.log('[API] No encrypted profile data found, returning empty data');
         return { data: '', iv: [] };
       }
-      const status = response.status;
-      if (status === 401) {
-        throw new Error('Authentication required');
+      
+      if (!response.ok) {
+        // Handle other error statuses
+        const status = response.status;
+        
+        if (status === 401) {
+          throw new Error('Authentication required');
+        }
+        
+        // Try to parse error response as JSON
+        let errorMessage = `Failed to fetch encrypted profile: ${status}`;
+        
+        try {
+          // Only try to parse as JSON if the content type is application/json
+          const contentType = response.headers.get('content-type');
+          if (contentType && contentType.includes('application/json')) {
+            const errorData = await response.json();
+            errorMessage = errorData.error || errorMessage;
+          }
+        } catch (parseError) {
+          // If JSON parsing fails, try to get text
+          try {
+            const textError = await response.text();
+            if (textError) {
+              errorMessage += ` - ${textError.substring(0, 100)}`;
+            }
+          } catch (textError) {
+            // Ignore text parsing errors
+          }
+        }
+        
+        throw new Error(errorMessage);
       }
-      throw new Error(`Failed to fetch encrypted profile: ${status}`);
+      
+      // Check content type
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        console.error('[API] Received non-JSON response for encrypted profile data');
+        throw new Error('Invalid response format: expected JSON');
+      }
+      
+      return await response.json();
+    } catch (error) {
+      console.error('[API] Error getting encrypted profile data:', error);
+      throw error;
     }
-
-    return await response.json();
   },
 
   // Update encrypted profile data
@@ -247,20 +291,61 @@ export const API = {
     userId: string, 
     encryptedData: EncryptedProfileData
   ): Promise<boolean> {
-    const response = await fetch(`/api/profile/${userId}/encrypted`, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${localStorage.getItem('auth_token') || ''}`
-      },
-      body: JSON.stringify(encryptedData)
-    });
-
-    if (!response.ok) {
-      throw new Error(`Failed to update encrypted profile: ${response.status}`);
+    try {
+      const token = localStorage.getItem('auth_token');
+      if (!token) {
+        console.error('Authentication token not found when updating encrypted profile');
+        throw new Error('Authentication token not found');
+      }
+      
+      console.log(`[API] Updating encrypted profile data for user: ${userId}`);
+      const url = `${this.baseUrl}/api/profile/${userId}/encrypted`;
+      
+      const response = await fetch(url, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(encryptedData)
+      });
+      
+      console.log(`[API] Encrypted profile update response status: ${response.status}`);
+      
+      // Handle various response types
+      if (response.status === 204 || response.status === 200) {
+        // Success, may or may not have body
+        console.log('[API] Encrypted profile updated successfully');
+        return true;
+      }
+      
+      // Try to parse error response as JSON
+      let errorMessage = `Failed to update encrypted profile: ${response.status}`;
+      
+      try {
+        // Only try to parse as JSON if the content type is application/json
+        const contentType = response.headers.get('content-type');
+        if (contentType && contentType.includes('application/json')) {
+          const errorData = await response.json();
+          errorMessage = errorData.error || errorMessage;
+        }
+      } catch (parseError) {
+        // If JSON parsing fails, try to get text
+        try {
+          const textError = await response.text();
+          if (textError) {
+            errorMessage += ` - ${textError.substring(0, 100)}`;
+          }
+        } catch (textError) {
+          // Ignore text parsing errors
+        }
+      }
+      
+      throw new Error(errorMessage);
+    } catch (error) {
+      console.error('[API] Error updating encrypted profile data:', error);
+      throw error;
     }
-
-    return true;
   },
 
   /**
