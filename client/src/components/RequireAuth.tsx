@@ -6,7 +6,7 @@ import { toast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { API } from "@/lib/api";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertCircle, RefreshCcw, RotateCcw, ExternalLink } from "lucide-react";
+import { AlertCircle, RefreshCcw, RotateCcw, ExternalLink, Trash2 } from "lucide-react";
 
 interface RequireAuthProps {
   children: ReactNode;
@@ -20,31 +20,49 @@ export function RequireAuth({ children }: RequireAuthProps) {
   const [profileRecoveryAttempt, setProfileRecoveryAttempt] = useState(false);
   const [recoveryError, setRecoveryError] = useState<string | null>(null);
   const [showDetailedInfo, setShowDetailedInfo] = useState(false);
+  const [clearingStorage, setClearingStorage] = useState(false);
 
-  // Handle profile loading errors
+  // Handle profile loading errors and clear any circuit breakers
   useEffect(() => {
+    // Always clear profile-related circuit breakers on mount
+    clearProfileCircuitBreakers();
+    
     if (error && (error.includes("profile") || error.includes("Profile")) && isAuthenticated && !isLoading) {
       console.log('[RequireAuth Debug] Profile error detected:', error);
-      
-      // Check if there are any circuit breakers active
-      const circuitBreakerKeys = Object.keys(localStorage).filter(key => key.startsWith('circuit_'));
-      if (circuitBreakerKeys.length > 0) {
-        console.log('[RequireAuth Debug] Active circuit breakers found:', circuitBreakerKeys);
-        // Clear circuit breakers to allow fresh attempts
-        circuitBreakerKeys.forEach(key => localStorage.removeItem(key));
-        console.log('[RequireAuth Debug] Circuit breakers cleared');
-      }
-      
       setShowProfileError(true);
       
       // Show toast notification
       toast({
         title: "Profile Error",
-        description: "We're having trouble loading your profile. You can try refreshing the page or resetting your profile.",
+        description: "We're having trouble loading your profile. Attempting automatic recovery...",
         variant: "destructive",
+      });
+      
+      // Auto-attempt recovery immediately
+      attemptProfileRecovery().catch(err => {
+        console.error('[RequireAuth] Initial recovery attempt failed:', err);
       });
     }
   }, [error, isAuthenticated, isLoading]);
+
+  // Function to clear profile-related circuit breakers
+  const clearProfileCircuitBreakers = () => {
+    try {
+      const circuitBreakerKeys = Object.keys(localStorage).filter(key => 
+        key.startsWith('circuit_') || 
+        key.startsWith('failures_') || 
+        key.includes('profile')
+      );
+      
+      if (circuitBreakerKeys.length > 0) {
+        console.log('[RequireAuth Debug] Clearing circuit breakers:', circuitBreakerKeys);
+        circuitBreakerKeys.forEach(key => localStorage.removeItem(key));
+        console.log('[RequireAuth Debug] Circuit breakers cleared');
+      }
+    } catch (e) {
+      console.error('[RequireAuth Debug] Error clearing circuit breakers:', e);
+    }
+  };
 
   // Clean up error state when component unmounts
   useEffect(() => {
@@ -55,28 +73,15 @@ export function RequireAuth({ children }: RequireAuthProps) {
     };
   }, []);
 
-  // Auto-retry profile loading on error with exponential backoff
-  useEffect(() => {
-    if (showProfileError && retryCount < 3 && !profileRecoveryAttempt) {
-      const delay = Math.pow(2, retryCount) * 1000; // Exponential backoff: 1s, 2s, 4s
-      
-      console.log(`[RequireAuth Debug] Scheduling auto-retry attempt ${retryCount + 1} in ${delay}ms`);
-      
-      const timer = setTimeout(() => {
-        console.log(`[RequireAuth Debug] Auto-retrying profile load (attempt ${retryCount + 1})`);
-        retryProfileLoad();
-      }, delay);
-      
-      return () => clearTimeout(timer);
-    }
-  }, [showProfileError, retryCount, profileRecoveryAttempt]);
-
   // Function to retry profile loading with enhanced diagnostics
   const retryProfileLoad = async () => {
     setRetryCount(prev => prev + 1);
     setRecoveryError(null);
     
     try {
+      // Clear any circuit breakers first
+      clearProfileCircuitBreakers();
+      
       console.log('[RequireAuth Debug] Manually retrying profile load');
       
       // Check auth token before attempting
@@ -108,7 +113,7 @@ export function RequireAuth({ children }: RequireAuthProps) {
       
       // If we've retried a few times without success, suggest recovery
       if (retryCount >= 2) {
-        console.log('[RequireAuth Debug] Multiple retries failed, suggesting profile recovery');
+        console.log('[RequireAuth Debug] Multiple retries failed, suggesting profile reset');
         toast({
           title: "Profile Recovery Needed",
           description: "We couldn't load your profile after multiple attempts. Try resetting your profile.",
@@ -125,6 +130,9 @@ export function RequireAuth({ children }: RequireAuthProps) {
     
     try {
       console.log('[RequireAuth Debug] Attempting profile recovery');
+      
+      // Clear any circuit breakers before attempting recovery
+      clearProfileCircuitBreakers();
       
       if (!user?.id) {
         console.error('[RequireAuth Debug] Cannot recover profile: No user ID available');
@@ -163,11 +171,6 @@ export function RequireAuth({ children }: RequireAuthProps) {
       
       console.log('[RequireAuth Debug] Attempting to create profile with data:', profileData);
       
-      // Clear any circuit breakers before attempting recovery
-      Object.keys(localStorage)
-        .filter(key => key.startsWith('circuit_') || key.startsWith('failures_'))
-        .forEach(key => localStorage.removeItem(key));
-      
       // Use priority flag to bypass circuit breaker and increase retries
       const createdProfile = await API.createOrUpdateUserProfile(profileData, { 
         priority: true, 
@@ -186,6 +189,8 @@ export function RequireAuth({ children }: RequireAuthProps) {
       setTimeout(() => {
         window.location.reload();
       }, 2000);
+      
+      return createdProfile;
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       console.error('[RequireAuth Debug] Profile recovery failed:', errorMessage);
@@ -196,6 +201,8 @@ export function RequireAuth({ children }: RequireAuthProps) {
         description: "Unable to recover your profile automatically. Please try logging out and back in.",
         variant: "destructive",
       });
+      
+      return null;
     } finally {
       setProfileRecoveryAttempt(false);
     }
@@ -216,6 +223,35 @@ export function RequireAuth({ children }: RequireAuthProps) {
       // Force redirect to login if logout fails
       localStorage.removeItem('auth_token');
       setLocation('/login');
+    }
+  };
+
+  // Nuclear option: clear all local storage and force a clean start
+  const handleClearStorage = () => {
+    setClearingStorage(true);
+    
+    try {
+      console.log('[RequireAuth Debug] Clearing all local storage');
+      localStorage.clear();
+      sessionStorage.clear();
+      
+      // Display confirmation toast
+      toast({
+        title: "Storage Cleared",
+        description: "All local data has been cleared. You will need to log in again.",
+      });
+      
+      // Force reload after a brief delay
+      setTimeout(() => {
+        window.location.href = '/login';
+      }, 1500);
+    } catch (error) {
+      console.error('[RequireAuth Debug] Error clearing storage:', error);
+      
+      // Force reload anyway
+      setTimeout(() => {
+        window.location.href = '/login';
+      }, 1500);
     }
   };
 
@@ -250,7 +286,7 @@ export function RequireAuth({ children }: RequireAuthProps) {
     return <LoadingAnimation message="Authenticating..." />;
   }
 
-  // Show profile error state
+  // Show profile error state with improved layout and actions
   if (showProfileError) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen p-4 space-y-6">
@@ -271,11 +307,11 @@ export function RequireAuth({ children }: RequireAuthProps) {
           </Alert>
         )}
         
-        <div className="flex flex-col gap-4 mt-4">
+        <div className="flex flex-col gap-4 mt-4 w-full max-w-md">
           <Button 
             onClick={retryProfileLoad} 
             variant="outline" 
-            disabled={profileRecoveryAttempt}
+            disabled={profileRecoveryAttempt || clearingStorage}
             className="flex items-center gap-2"
           >
             <RefreshCcw className="h-4 w-4" /> Retry Loading Profile
@@ -284,7 +320,7 @@ export function RequireAuth({ children }: RequireAuthProps) {
           <Button
             onClick={attemptProfileRecovery}
             variant="secondary"
-            disabled={profileRecoveryAttempt}
+            disabled={profileRecoveryAttempt || clearingStorage}
             className="flex items-center gap-2"
           >
             <RotateCcw className="h-4 w-4" />
@@ -294,14 +330,26 @@ export function RequireAuth({ children }: RequireAuthProps) {
           <Button 
             onClick={handleLogout}
             variant="default"
+            disabled={clearingStorage}
           >
             Log Out and Sign In Again
           </Button>
           
           <Button 
+            onClick={handleClearStorage} 
+            variant="destructive"
+            disabled={clearingStorage}
+            className="flex items-center gap-2 mt-4"
+          >
+            <Trash2 className="h-4 w-4" />
+            {clearingStorage ? "Clearing..." : "Clear All Data & Restart (Nuclear Option)"}
+          </Button>
+          
+          <Button 
             onClick={toggleDetailedInfo}
             variant="link"
-            className="flex items-center gap-2"
+            disabled={clearingStorage}
+            className="flex items-center gap-2 mt-2"
           >
             <ExternalLink className="h-4 w-4" />
             {showDetailedInfo ? "Hide Technical Info" : "Show Technical Info"}
@@ -309,7 +357,7 @@ export function RequireAuth({ children }: RequireAuthProps) {
         </div>
         
         {showDetailedInfo && (
-          <div className="mt-4 p-4 bg-muted text-sm rounded-md max-w-md">
+          <div className="mt-4 p-4 bg-muted text-sm rounded-md max-w-md overflow-auto w-full">
             <h3 className="font-semibold mb-2">Technical Information:</h3>
             <ul className="list-disc pl-5 space-y-1">
               <li>User ID: {user?.id || 'Not available'}</li>
@@ -318,7 +366,20 @@ export function RequireAuth({ children }: RequireAuthProps) {
               <li>Error: {error || 'None'}</li>
               <li>Browser: {navigator.userAgent}</li>
               <li>API Base URL: {API.baseUrl}</li>
+              <li>Current Time: {new Date().toISOString()}</li>
             </ul>
+            
+            <h3 className="font-semibold mt-4 mb-2">Local Storage Keys:</h3>
+            <div className="text-xs">
+              {Object.keys(localStorage).map(key => (
+                <div key={key} className="mb-1">
+                  <strong>{key}:</strong> {key.includes('token') 
+                    ? '******' 
+                    : localStorage.getItem(key)?.substring(0, 30) + 
+                      (localStorage.getItem(key)?.length || 0 > 30 ? '...' : '')}
+                </div>
+              ))}
+            </div>
           </div>
         )}
       </div>

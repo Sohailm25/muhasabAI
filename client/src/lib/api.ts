@@ -16,6 +16,18 @@ const getBaseUrl = () => {
   return 'http://localhost:8080';
 };
 
+// Clear any existing circuit breakers on page load to prevent persistent blocking
+(() => {
+  try {
+    Object.keys(localStorage)
+      .filter(key => key.startsWith('circuit_') || key.startsWith('failures_'))
+      .forEach(key => localStorage.removeItem(key));
+    console.log('[API] Cleared circuit breakers at startup');
+  } catch (e) {
+    console.error('[API] Error clearing circuit breakers:', e);
+  }
+})();
+
 const BASE_URL = getBaseUrl();
 console.log('[API] Base URL configured as:', BASE_URL);
 
@@ -53,7 +65,9 @@ export const API = {
         'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
         ...options.headers
       },
-      body: data ? JSON.stringify(data) : undefined
+      body: data ? JSON.stringify(data) : undefined,
+      // Increase timeout for profile-related requests
+      ...(url.includes('/profile') ? { timeout: 10000 } : {})
     };
     
     try {
@@ -61,7 +75,13 @@ export const API = {
       
       // Ensure URL has correct format
       const fullUrl = url.startsWith('http') ? url : this.baseUrl + url;
-      const response = await fetch(fullUrl, requestOptions);
+      
+      // Add cache busting for profile requests to avoid stale responses
+      const urlWithCacheBusting = url.includes('/profile') && method === 'GET' 
+        ? `${fullUrl}${fullUrl.includes('?') ? '&' : '?'}_t=${Date.now()}` 
+        : fullUrl;
+      
+      const response = await fetch(urlWithCacheBusting, requestOptions);
       console.log(`[API] ${method} ${url} response status:`, response.status);
       
       // Check content type
@@ -100,49 +120,28 @@ export const API = {
   /**
    * Request with retry logic
    */
-  async requestWithRetry(method: string, url: string, data: any = null, options: any = {}) {
+  async requestWithRetry<T>(method: string, url: string, data: any = null, options: any = {}): Promise<T> {
     const maxRetries = options.maxRetries || 3;
     const baseDelay = options.baseDelay || 1000;
     const priorityRequest = options.priority || false;
     let retries = 0;
     
-    // For profile requests, we'll implement a basic circuit breaker
+    // For profile requests, we'll implement a simplified retry mechanism
+    // REMOVED: Complex circuit breaker logic for profile endpoints as it was causing more problems than it solved
     const isProfileRequest = url.includes('/profile');
-    const circuitKey = `circuit_${method}_${url.split('?')[0]}`;
     
-    // For priority requests, always clear any open circuit
-    if (priorityRequest && isProfileRequest) {
-      console.log(`[API] Priority request detected, clearing any open circuit for ${url}`);
-      localStorage.removeItem(circuitKey);
-      
-      // Also clear any failure counters
-      localStorage.removeItem(`failures_${method}_${url.split('?')[0]}`);
-    }
-    
-    // Check if circuit is open (too many failures)
-    if (isProfileRequest && localStorage.getItem(circuitKey)) {
-      const circuitData = JSON.parse(localStorage.getItem(circuitKey) || '{}');
-      const now = Date.now();
-      
-      if (circuitData.openUntil && circuitData.openUntil > now && !priorityRequest) {
-        console.log(`[API] Circuit open for ${url}, blocking request until ${new Date(circuitData.openUntil).toISOString()}`);
-        throw new Error(`Service temporarily unavailable (circuit open): ${url}`);
-      } else if (circuitData.openUntil && circuitData.openUntil <= now) {
-        // Circuit timeout expired, clear it
-        console.log(`[API] Circuit timeout expired for ${url}, resetting`);
-        localStorage.removeItem(circuitKey);
-      }
-    }
-    
-    // Track consecutive failures for this endpoint
-    let consecutiveFailures = 0;
+    // For profile requests, we will always clear any circuit breakers to prevent dead loops
     if (isProfileRequest) {
-      const failureData = localStorage.getItem(`failures_${method}_${url.split('?')[0]}`);
-      if (failureData) {
-        consecutiveFailures = parseInt(failureData, 10);
+      const circuitKeys = Object.keys(localStorage)
+        .filter(key => key.startsWith('circuit_') && key.includes('/profile'));
+      
+      if (circuitKeys.length > 0) {
+        console.log(`[API] Clearing ${circuitKeys.length} profile circuit breakers`);
+        circuitKeys.forEach(key => localStorage.removeItem(key));
       }
     }
     
+    // Simpler retry mechanism without circuit breakers for profile endpoints
     while (retries < maxRetries) {
       try {
         // Ensure URL is properly formatted with base URL
@@ -159,83 +158,148 @@ export const API = {
         
         // Use the properly formatted URL in the request
         const result = await this.request(method, fullUrl, data, options);
-        
-        // On success, reset failure count
-        if (isProfileRequest) {
-          localStorage.removeItem(`failures_${method}_${url.split('?')[0]}`);
-          console.log(`[API] Success: Cleared failure count for ${url}`);
-        }
-        
-        return result;
+        return result as T;
       } catch (error) {
         retries++;
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
         
-        // For profile requests, track consecutive failures
-        if (isProfileRequest) {
-          consecutiveFailures++;
-          localStorage.setItem(`failures_${method}_${url.split('?')[0]}`, consecutiveFailures.toString());
+        console.error(`[API] Attempt ${retries}/${maxRetries} failed for ${method} ${url}: ${errorMessage}`);
+        
+        // Special handling for profile 404 errors
+        if (isProfileRequest && errorMessage.includes('not found') && method === 'GET') {
+          console.log('[API] Profile not found, will attempt to create it automatically');
           
-          // If too many consecutive failures, open circuit breaker
-          if (consecutiveFailures >= 5 && !priorityRequest) {
-            const openUntil = Date.now() + (10 * 1000); // 10 seconds (reduced from 30)
-            localStorage.setItem(circuitKey, JSON.stringify({ openUntil }));
-            console.log(`[API] Opening circuit for ${url} until ${new Date(openUntil).toISOString()} due to ${consecutiveFailures} consecutive failures`);
+          if (options.autoCreateProfile !== false) {
+            try {
+              // Try to create a profile automatically
+              return await this.createDefaultProfile() as T;
+            } catch (createError) {
+              console.error('[API] Failed to auto-create profile:', createError);
+            }
           }
         }
         
         if (retries >= maxRetries) {
-          // Enhanced error logging for profile requests
-          if (isProfileRequest) {
-            console.error(`[API] All ${maxRetries} retries failed for profile request:`, {
-              url,
-              method,
-              consecutiveFailures,
-              error: error instanceof Error ? error.message : 'Unknown error'
-            });
-          }
           throw error;
         }
         
         // Exponential backoff with jitter
-        const delay = Math.pow(2, retries) * baseDelay + Math.random() * baseDelay;
+        const delay = Math.min(
+          Math.pow(1.5, retries) * baseDelay + Math.random() * baseDelay,
+          10000 // Cap at 10 seconds
+        );
         console.log(`[API] Retrying ${method} ${url} in ${delay}ms (${retries}/${maxRetries})`);
         await new Promise(resolve => setTimeout(resolve, delay));
       }
     }
+    
+    // This should never be reached due to the throw in the loop above
+    throw new Error(`Failed to ${method} ${url} after ${maxRetries} attempts`);
   },
   
   /**
    * GET request
    */
-  async get(endpoint: string, options = {}) {
-    return this.requestWithRetry('GET', endpoint, null, options);
+  async get<T>(endpoint: string, options = {}): Promise<T> {
+    return this.requestWithRetry<T>('GET', endpoint, null, options);
   },
   
   /**
    * POST request
    */
-  async post(endpoint: string, data = {}, options = {}) {
-    return this.requestWithRetry('POST', endpoint, data, options);
+  async post<T>(endpoint: string, data = {}, options = {}): Promise<T> {
+    return this.requestWithRetry<T>('POST', endpoint, data, options);
   },
   
   /**
    * PUT request
    */
-  async put(endpoint: string, data = {}, options = {}) {
-    return this.requestWithRetry('PUT', endpoint, data, options);
+  async put<T>(endpoint: string, data = {}, options = {}): Promise<T> {
+    return this.requestWithRetry<T>('PUT', endpoint, data, options);
   },
   
   /**
    * DELETE request
    */
-  async delete(endpoint: string, options = {}) {
-    return this.requestWithRetry('DELETE', endpoint, null, options);
+  async delete<T>(endpoint: string, options = {}): Promise<T> {
+    return this.requestWithRetry<T>('DELETE', endpoint, null, options);
+  },
+  
+  /**
+   * Create a default profile when none exists
+   */
+  async createDefaultProfile(): Promise<any> {
+    console.log('[API] Creating default profile as none exists');
+    
+    try {
+      // Get current user ID from token validation
+      const userData: { id: string } = await this.validateToken();
+      
+      if (!userData || !userData.id) {
+        throw new Error('Cannot create profile: No authenticated user');
+      }
+      
+      // Create default profile data
+      const profileData: {
+        userId: string;
+        generalPreferences: {
+          inputMethod: string;
+          reflectionFrequency: string;
+          languagePreferences: string;
+          theme: string;
+          fontSize: string;
+        };
+        privacySettings: {
+          localStorageOnly: boolean;
+          allowPersonalization: boolean;
+          enableSync: boolean;
+          shareAnonymousUsageData: boolean;
+        };
+      } = {
+        userId: userData.id,
+        generalPreferences: {
+          inputMethod: 'text',
+          reflectionFrequency: 'daily',
+          languagePreferences: 'english',
+          theme: 'system',
+          fontSize: 'medium'
+        },
+        privacySettings: {
+          localStorageOnly: false,
+          allowPersonalization: true,
+          enableSync: true,
+          shareAnonymousUsageData: false
+        }
+      };
+      
+      console.log('[API] Attempting to create default profile with data:', profileData);
+      
+      // Try both profile creation endpoints
+      try {
+        // First try the dedicated create endpoint
+        return await this.post(this.endpoints.profile.create, profileData, {
+          priority: true,
+          maxRetries: 2
+        });
+      } catch (createError) {
+        console.error('[API] Default profile creation failed, trying fallback:', createError);
+        
+        // Try fallback method
+        return await this.post(this.endpoints.profile.get, profileData, {
+          priority: true,
+          maxRetries: 2
+        });
+      }
+    } catch (error) {
+      console.error('[API] Failed to create default profile:', error);
+      throw error;
+    }
   },
   
   /**
    * Validate authentication token
    */
-  async validateToken() {
+  async validateToken(): Promise<any> {
     console.log('[API] Validating authentication token');
     
     try {
@@ -256,22 +320,28 @@ export const API = {
   },
   
   /**
-   * Get user profile with enhanced error handling
+   * Get user profile with enhanced error handling and auto-creation
    */
   async getUserProfile(userId?: string) {
     console.log('[API] Getting user profile');
     const endpoint = userId ? `${this.endpoints.profile.get}/${userId}` : this.endpoints.profile.get;
     
     try {
-      return await this.get(endpoint);
+      return await this.get(endpoint, { autoCreateProfile: true });
     } catch (error) {
-      // Handle profile not found by providing a clearer error
+      // Handle profile not found by auto-creating
       if (error instanceof Error && (
           error.message.includes('404') || 
           error.message.includes('not found')
       )) {
-        console.log('[API] Profile not found, throwing formatted error');
-        throw new Error('Profile not found');
+        console.log('[API] Profile not found, attempting to create automatically');
+        
+        try {
+          return await this.createDefaultProfile();
+        } catch (createError) {
+          console.error('[API] Auto-creation failed:', createError);
+          throw new Error(`Profile not found and creation failed: ${createError instanceof Error ? createError.message : 'Unknown error'}`);
+        }
       }
       
       // Re-throw other errors
@@ -314,21 +384,6 @@ export const API = {
   async createOrUpdateUserProfile(profileData: any, options: any = {}) {
     console.log('[API] Creating or updating user profile with data:', profileData);
     
-    // Track attempts for this specific user
-    const userId = profileData.userId;
-    if (userId) {
-      const attemptKey = `profile_create_attempts_${userId}`;
-      const currentAttempts = parseInt(localStorage.getItem(attemptKey) || '0', 10);
-      localStorage.setItem(attemptKey, (currentAttempts + 1).toString());
-      
-      // If we've tried too many times for this user, add delay
-      if (currentAttempts > 5 && !options.priority) {
-        const delay = Math.min(currentAttempts * 1000, 10000); // Max 10 second delay
-        console.log(`[API] Adding ${delay}ms delay before profile creation due to ${currentAttempts} previous attempts`);
-        await new Promise(resolve => setTimeout(resolve, delay));
-      }
-    }
-    
     try {
       // First try the new endpoint
       console.log('[API] Trying new /api/profile/create endpoint');
@@ -338,24 +393,10 @@ export const API = {
           maxRetries: options.maxRetries || 3
         });
         console.log('[API] Profile created/updated successfully using new endpoint');
-        
-        // On success, reset attempt counter
-        if (userId) {
-          localStorage.removeItem(`profile_create_attempts_${userId}`);
-        }
-        
         return response;
       } catch (createError) {
         // If the endpoint doesn't exist or returns 404, try fallback
         console.log(`[API] New endpoint failed: ${createError instanceof Error ? createError.message : 'Unknown error'}`);
-        
-        // If the new endpoint fails with anything other than 404, it might be a data issue
-        // In that case, we should propagate the original error
-        if (createError instanceof Error && 
-            !createError.message.includes('404') && 
-            !createError.message.includes('not found')) {
-          throw createError;
-        }
         
         // Try legacy endpoint as fallback
         console.log('[API] Falling back to regular /api/profile endpoint');
@@ -364,23 +405,10 @@ export const API = {
           maxRetries: options.maxRetries || 3
         });
         console.log('[API] Profile created/updated successfully using fallback endpoint');
-        
-        // On success, reset attempt counter
-        if (userId) {
-          localStorage.removeItem(`profile_create_attempts_${userId}`);
-        }
-        
         return fallbackResponse;
       }
     } catch (error) {
       console.error('[API] Both profile endpoints failed');
-      
-      // Enhance error with attempt information
-      if (userId) {
-        const attempts = localStorage.getItem(`profile_create_attempts_${userId}`);
-        console.error(`[API] This is attempt ${attempts} for user ${userId}`);
-      }
-      
       throw error;
     }
   },

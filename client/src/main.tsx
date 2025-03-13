@@ -57,6 +57,25 @@ class ErrorBoundary extends React.Component<{children: React.ReactNode}, {hasErr
   }
 }
 
+// Clear any circuit breakers on app startup
+(() => {
+  try {
+    console.log('[App] Clearing any circuit breakers on startup');
+    Object.keys(localStorage)
+      .filter(key => 
+        key.startsWith('circuit_') || 
+        key.startsWith('failures_') || 
+        key.includes('profile')
+      )
+      .forEach(key => {
+        console.log('[App] Removing stored key:', key);
+        localStorage.removeItem(key);
+      });
+  } catch (e) {
+    console.error('[App] Error clearing circuit breakers:', e);
+  }
+})();
+
 // Root
 const root = createRoot(document.getElementById("root")!);
 
