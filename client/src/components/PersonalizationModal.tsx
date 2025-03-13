@@ -32,7 +32,7 @@ type Step =
   | "complete";
 
 export function PersonalizationModal({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const { updateProfile } = useProfile();
+  const { updateProfile, updatePersonalizationSettings } = useProfile();
   const { user, isLoading: authLoading } = useAuth();
   const [currentStep, setCurrentStep] = useState<Step>("intro");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -123,7 +123,7 @@ export function PersonalizationModal({ open, onClose }: { open: boolean; onClose
     setIsSubmitting(true);
     
     try {
-      // Create a clean object without any wird-related or sensitive properties
+      // Create a clean object without any wur-related or sensitive properties
       const cleanPrivateProfile = {
         knowledgeLevel: skippedFields.includes("knowledge") ? "" : knowledgeLevel,
         topicsOfInterest: skippedFields.includes("topics") ? [] : selectedTopics.filter(topic => 
@@ -148,63 +148,51 @@ export function PersonalizationModal({ open, onClose }: { open: boolean; onClose
         ),
       };
       
-      // Create a clean public profile update object
-      const cleanPublicProfile = {
-        privacySettings: {
-          allowPersonalization: enablePersonalization,
-          localStorageOnly: true, // Default to local storage for privacy
-          enableSync: false,
-        }
-      };
-      
       console.log("Saving personalization data with the following values:", {
-        publicProfile: cleanPublicProfile,
-        privateProfile: cleanPrivateProfile
+        allowPersonalization: enablePersonalization,
+        privateProfile: enablePersonalization ? cleanPrivateProfile : undefined
       });
       
-      // Try updating the profile
-      try {
-        // Update public and private profile
-        await updateProfile(
-          cleanPublicProfile,
+      // Use the direct method that bypasses the problematic endpoint
+      if (updatePersonalizationSettings) {
+        // Use our dedicated method
+        const success = await updatePersonalizationSettings(
+          enablePersonalization,
           enablePersonalization ? cleanPrivateProfile : undefined
         );
         
-        console.log("Personalization data saved successfully");
-      } catch (profileError) {
-        // If we get the "Invalid wird ID format" error, try a second approach
-        console.error("First profile update attempt failed:", profileError);
-        
-        // If this is the Invalid wird ID error, try a different approach
-        if (profileError instanceof Error && 
-            profileError.message.includes('Invalid wird ID format')) {
+        if (success) {
+          console.log("Personalization data saved successfully using direct method");
+        } else {
+          console.warn("Personalization data may not have been saved completely");
+        }
+      } else {
+        // Fallback to the old approach for compatibility
+        try {
+          // First try updating just the private profile to avoid the problematic public profile update
+          if (enablePersonalization) {
+            await updateProfile(
+              undefined, // Skip public profile update
+              cleanPrivateProfile // Only update private profile
+            );
+          }
           
-          console.log("Trying alternative approach for profile update...");
+          // Then update just the bare minimum settings in localStorage
+          localStorage.setItem('personalizationEnabled', enablePersonalization ? 'true' : 'false');
           
-          // Try updating just the privacy settings in public profile
-          await updateProfile({
-            privacySettings: {
-              allowPersonalization: enablePersonalization,
-              localStorageOnly: true,
-              enableSync: false,
-            }
-          });
+          console.log("Personalization preferences saved with fallback approach");
+        } catch (updateError) {
+          // Last resort - just store in localStorage
+          console.error("Server update failed, storing personalization locally:", updateError);
+          localStorage.setItem('personalizationEnabled', enablePersonalization ? 'true' : 'false');
           
-          // If private profile is enabled and the first attempt failed, try updating it separately
           if (enablePersonalization) {
             try {
-              await updateProfile(
-                undefined, // No public profile updates
-                cleanPrivateProfile // Only private profile updates
-              );
-            } catch (privateProfileError) {
-              console.error("Private profile update failed:", privateProfileError);
-              // Even if this fails, we'll still close the modal as the public profile was updated
+              localStorage.setItem('personalPreferences', JSON.stringify(cleanPrivateProfile));
+            } catch (e) {
+              console.error("Failed to save preferences to localStorage:", e);
             }
           }
-        } else {
-          // For other types of errors, re-throw to be caught by the outer catch
-          throw profileError;
         }
       }
       

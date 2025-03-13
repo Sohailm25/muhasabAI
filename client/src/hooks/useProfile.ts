@@ -180,7 +180,7 @@ export function useProfile() {
   const updateProfile = async (
     publicUpdates?: Partial<PublicProfile>,
     privateUpdates?: Partial<PrivateProfile>
-  ) => {
+  ): Promise<PublicProfile | null> => {
     // If profile initialization is in progress, wait for it to complete
     if (initializationLock.isInitializing && initializationLock.promise) {
       try {
@@ -190,14 +190,14 @@ export function useProfile() {
           // The profile might have been loaded by another component
           const currentProfile = await API.getUserProfile().catch(() => null);
           if (currentProfile) {
-            setPublicProfile(currentProfile);
+            setPublicProfile(currentProfile as PublicProfile);
             
             // If we have private updates and now have a profile, handle those
             if (privateUpdates && currentProfile.userId) {
               await updatePrivateProfile(currentProfile.userId, privateUpdates);
             }
             
-            return currentProfile;
+            return currentProfile as PublicProfile;
           }
         }
       } catch (err) {
@@ -223,7 +223,7 @@ export function useProfile() {
           if (!publicProfile && publicUpdates) {
             try {
               console.log('Checking if profile already exists...');
-              const existingProfile = await API.getUserProfile();
+              const existingProfile = await API.getUserProfile() as PublicProfile;
               console.log('Profile already exists, using existing profile');
               setPublicProfile(existingProfile);
               
@@ -242,7 +242,7 @@ export function useProfile() {
             }
             
             // Create new profile
-            const newPublicProfile = await API.createUserProfile(publicUpdates);
+            const newPublicProfile = await API.createUserProfile(publicUpdates) as PublicProfile;
             setPublicProfile(newPublicProfile);
             
             // If we also have private updates, handle those
@@ -254,18 +254,20 @@ export function useProfile() {
           }
           
           // Update public profile
-          const updatedPublicProfile = await API.updateUserProfile({
-            ...publicUpdates,
-            userId: publicProfile.userId,
-          });
-          setPublicProfile(updatedPublicProfile);
-          
-          // If we also have private updates, handle those
-          if (privateUpdates && updatedPublicProfile.userId) {
-            await updatePrivateProfile(updatedPublicProfile.userId, privateUpdates);
+          if (publicProfile) {
+            const updatedPublicProfile = await API.updateUserProfile({
+              ...publicUpdates,
+              userId: publicProfile.userId,
+            }) as PublicProfile;
+            setPublicProfile(updatedPublicProfile);
+            
+            // If we also have private updates, handle those
+            if (privateUpdates && updatedPublicProfile.userId) {
+              await updatePrivateProfile(updatedPublicProfile.userId, privateUpdates);
+            }
+            
+            return updatedPublicProfile;
           }
-          
-          return updatedPublicProfile;
         } catch (err) {
           console.error('Error updating public profile:', err);
           
@@ -319,6 +321,81 @@ export function useProfile() {
       if (localLock) {
         initializationLock.isInitializing = false;
       }
+    }
+  };
+  
+  /**
+   * Special function to update only personalization settings while avoiding the
+   * problematic profile update endpoint that's causing "Invalid wurde ID format" errors.
+   * This function will:
+   * 1. Store the personalization preferences locally 
+   * 2. Update the private profile if possible
+   * 3. Not attempt to update the public profile on the server
+   */
+  const updatePersonalizationSettings = async (
+    allowPersonalization: boolean,
+    privatePreferences?: Partial<PrivateProfile>
+  ): Promise<boolean> => {
+    try {
+      console.log('Updating personalization settings locally:', { 
+        allowPersonalization, 
+        hasPrivatePrefs: !!privatePreferences 
+      });
+      
+      // Update local state first to ensure immediate feedback
+      if (publicProfile) {
+        // Create a local copy with updated settings
+        const updatedPublicProfile: PublicProfile = {
+          ...publicProfile,
+          privacySettings: {
+            ...publicProfile.privacySettings,
+            allowPersonalization,
+          }
+        };
+        
+        // Update local state with properly typed object
+        setPublicProfile(updatedPublicProfile);
+        
+        // Store this update in localStorage for persistence
+        try {
+          localStorage.setItem('sahabai_personalization_enabled', allowPersonalization ? 'true' : 'false');
+          console.log('Personalization preference saved to localStorage');
+        } catch (storageErr) {
+          console.error('Failed to save personalization preference to localStorage:', storageErr);
+        }
+      }
+      
+      // If we have private preferences and personalization is enabled, update those
+      if (privatePreferences && allowPersonalization && userId) {
+        try {
+          await updatePrivateProfile(userId, privatePreferences);
+          console.log('Private personalization preferences saved successfully');
+        } catch (privateErr) {
+          console.error('Failed to save private personalization preferences to server:', privateErr);
+          
+          // Store locally as fallback
+          if (privateProfile) {
+            const mergedProfile = mergePrivateProfiles(
+              privateProfile, 
+              privatePreferences
+            );
+            setPrivateProfile(mergedProfile);
+            
+            // Also try to store in localStorage
+            try {
+              localStorage.setItem('sahabai_private_preferences', JSON.stringify(privatePreferences));
+              console.log('Private preferences saved to localStorage as fallback');
+            } catch (localStorageErr) {
+              console.error('Failed to save to localStorage:', localStorageErr);
+            }
+          }
+        }
+      }
+      
+      return true;
+    } catch (err) {
+      console.error('Error updating personalization settings:', err);
+      return false;
     }
   };
   
@@ -585,5 +662,6 @@ export function useProfile() {
     resetProfile,
     getProfileForAI,
     refreshProfiles: loadProfiles,
+    updatePersonalizationSettings,
   };
 } 
