@@ -21,7 +21,7 @@ interface AuthContextType {
   login: (email: string, password: string, rememberMe?: boolean) => Promise<void>;
   register: (email: string, password: string, name: string) => Promise<void>;
   loginWithGoogle: (action?: 'login' | 'signup') => Promise<void>;
-  logout: () => Promise<void>;
+  logout: (silent?: boolean) => Promise<void>;
 }
 
 // Create context
@@ -82,7 +82,25 @@ export function AuthProvider({ children }: AuthProviderProps) {
               
               // Ensure user profile exists
               console.log('[AUTH] Ensuring user profile exists after token validation');
-              await ensureUserProfile(userData.id);
+              try {
+                const profile = await ensureUserProfile(userData.id);
+                
+                // If no profile was found or created after multiple attempts
+                if (!profile) {
+                  console.log('[AUTH] Profile could not be created after multiple attempts');
+                  console.log('[AUTH] Invalidating authentication token due to missing profile');
+                  // Force logout to clear token and reset auth state
+                  await logout(true);
+                  setError('Your profile could not be found. Please try logging in again.');
+                  return;
+                }
+              } catch (profileError) {
+                console.error('[AUTH] Critical profile error:', profileError);
+                // Force logout on critical profile errors
+                await logout(true);
+                setError('Error retrieving your profile. Please try logging in again.');
+                return;
+              }
             } else {
               console.log('[AUTH] No user data returned from token validation');
               setUser(null);
@@ -148,54 +166,80 @@ export function AuthProvider({ children }: AuthProviderProps) {
       // If we got here, we need to create a profile
       console.log('[AUTH] Profile not found after retries, creating new one...');
       
-      // Create profile directly using the new API method
-      console.log('[AUTH] Creating profile directly for user:', userId);
-      const profileData = {
-        userId,
-        generalPreferences: {
-          inputMethod: 'text',
-          reflectionFrequency: 'daily',
-          languagePreferences: 'english'
-        },
-        privacySettings: {
-          localStorageOnly: false,
-          allowPersonalization: true,
-          enableSync: true
-        }
-      };
-      
-      console.log('[AUTH] Sending direct profile creation request with data:', profileData);
-      
-      // Added retry mechanism for profile creation as well
-      let creationRetryCount = 0;
-      const maxCreationRetries = 3;
-      
-      while (creationRetryCount < maxCreationRetries) {
-        try {
-          const createdProfile = await API.createOrUpdateUserProfile(profileData);
-          console.log('[AUTH] Profile created successfully:', createdProfile);
-          return createdProfile;
-        } catch (createError) {
-          console.error(`[AUTH] Error creating profile (attempt ${creationRetryCount + 1}/${maxCreationRetries}):`, createError);
-          creationRetryCount++;
-          
-          if (creationRetryCount < maxCreationRetries) {
-            console.log(`[AUTH] Waiting ${retryDelay}ms before retrying profile creation...`);
-            await new Promise(resolve => setTimeout(resolve, retryDelay));
-          } else {
-            console.error('[AUTH] Failed to create profile after multiple attempts');
-            setError('Failed to set up your profile. Please try again.');
-            return null;
-          }
-        }
-      }
-      
-      return null;
+      // Attempt auto-recovery: Force profile creation with max priority
+      return await createProfileWithPriority(userId);
     } catch (error) {
       console.error('[AUTH] Error ensuring user profile exists:', error);
       setError('Failed to set up your profile. Please try again.');
       return null;
     }
+  };
+  
+  /**
+   * Creates a profile with maximum priority - used for profile recovery
+   */
+  const createProfileWithPriority = async (userId: string) => {
+    console.log('[AUTH] Creating profile with maximum priority for user:', userId);
+    
+    // Create profile with comprehensive default values
+    const profileData = {
+      userId,
+      generalPreferences: {
+        inputMethod: 'text',
+        reflectionFrequency: 'daily',
+        languagePreferences: 'english',
+        theme: 'system',
+        fontSize: 'medium'
+      },
+      privacySettings: {
+        localStorageOnly: false,
+        allowPersonalization: true,
+        enableSync: true,
+        shareAnonymousUsageData: false
+      }
+    };
+    
+    console.log('[AUTH] Sending priority profile creation request with data:', profileData);
+    
+    // Added retry mechanism with extended parameters
+    let creationRetryCount = 0;
+    const maxCreationRetries = 5; // Increased from 3 to 5
+    const initialRetryDelay = 2000;
+    
+    while (creationRetryCount < maxCreationRetries) {
+      try {
+        // Try both profile creation endpoints with higher timeout
+        try {
+          console.log(`[AUTH] Attempting direct profile creation (attempt ${creationRetryCount + 1}/${maxCreationRetries})`);
+          const createdProfile = await API.createUserProfile(profileData);
+          console.log('[AUTH] Profile created successfully via direct endpoint:', createdProfile);
+          return createdProfile;
+        } catch (directError) {
+          console.error('[AUTH] Direct profile creation failed, trying fallback method:', directError);
+          
+          // Try fallback method - creationOrUpdate
+          const fallbackProfile = await API.createOrUpdateUserProfile(profileData);
+          console.log('[AUTH] Profile created successfully via fallback method:', fallbackProfile);
+          return fallbackProfile;
+        }
+      } catch (createError) {
+        console.error(`[AUTH] Error creating profile (attempt ${creationRetryCount + 1}/${maxCreationRetries}):`, createError);
+        creationRetryCount++;
+        
+        if (creationRetryCount < maxCreationRetries) {
+          // Exponential backoff with jitter
+          const delay = Math.pow(1.5, creationRetryCount) * initialRetryDelay + Math.random() * 1000;
+          console.log(`[AUTH] Waiting ${delay}ms before retrying profile creation...`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+        } else {
+          console.error('[AUTH] Failed to create profile after multiple attempts');
+          // At this point we've tried both endpoints multiple times with backoff
+          return null;
+        }
+      }
+    }
+    
+    return null;
   };
   
   // Modify the register function to ensure profile creation
@@ -451,12 +495,21 @@ export function AuthProvider({ children }: AuthProviderProps) {
   }, []);
   
   // Logout
-  const logout = useCallback(async () => {
+  const logout = useCallback(async (silent = false) => {
     try {
-      setIsLoading(true);
+      if (!silent) {
+        setIsLoading(true);
+      }
       
-      // Call logout API
-      await API.post('/auth/logout');
+      // Only call logout API if not in silent mode
+      if (!silent) {
+        try {
+          await API.post('/auth/logout');
+        } catch (apiError) {
+          console.error('API logout error:', apiError);
+          // Continue with local logout even if API call fails
+        }
+      }
       
       // Clear local storage
       localStorage.removeItem('auth_token');
@@ -464,13 +517,16 @@ export function AuthProvider({ children }: AuthProviderProps) {
       
       // Reset user state
       setUser(null);
+      setIsAuthenticated(false);
       
       // Reset profile
       await resetProfile();
     } catch (err) {
       console.error('Logout error:', err);
     } finally {
-      setIsLoading(false);
+      if (!silent) {
+        setIsLoading(false);
+      }
     }
   }, [resetProfile]);
   
