@@ -234,11 +234,46 @@ export async function deleteEncryptedProfileData(userId: unknown): Promise<boole
 }
 
 /**
- * Get the PostgreSQL connection pool
+ * Get the PostgreSQL connection pool or a mock in-memory pool if database is not configured
  */
 export function getPool(): any {
-  if (!pg.pool) {
-    throw new Error('PostgreSQL pool not initialized');
+  if (pg.pool) {
+    return pg.pool;
   }
-  return pg.pool;
+  
+  // If no database connection exists, provide a mock pool for compatibility
+  // This allows code that depends on the pool to run in in-memory mode
+  log('Using mock database pool for in-memory storage mode', 'database');
+  
+  const mockPool = {
+    query: async (text: string, params: any[] = []): Promise<any> => {
+      // Log the query for debugging
+      log(`[MOCK DB] SQL: ${text}`, 'database');
+      if (params.length > 0) {
+        log(`[MOCK DB] Params: ${JSON.stringify(params)}`, 'database');
+      }
+      
+      // Return a mock response for different query types
+      if (text.trim().toUpperCase().startsWith('SELECT')) {
+        return { rows: [], rowCount: 0 };
+      } else if (text.trim().toUpperCase().startsWith('INSERT')) {
+        return { rows: [{ id: 'mock-id', user_id: params[0], preferences: params[1], sharing_preferences: params[2], version: 1, created_at: new Date(), updated_at: new Date() }], rowCount: 1 };
+      } else if (text.trim().toUpperCase().startsWith('UPDATE')) {
+        return { rows: [{ id: 'mock-id', user_id: params[0], preferences: params[1], sharing_preferences: params[2], version: 1, created_at: new Date(), updated_at: new Date() }], rowCount: 1 };
+      } else if (text.trim().toUpperCase().startsWith('DELETE')) {
+        return { rows: [], rowCount: 0 };
+      } else {
+        return { rows: [], rowCount: 0 };
+      }
+    },
+    connect: async () => {
+      return {
+        query: async () => ({ rows: [] }),
+        release: () => {}
+      };
+    },
+    on: (event: string, callback: Function) => {}
+  };
+  
+  return mockPool;
 } 

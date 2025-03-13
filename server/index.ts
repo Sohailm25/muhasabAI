@@ -8,6 +8,7 @@ import { initializeDatabase } from "./db";
 import * as db from './db/index';
 import cors from 'cors';
 import bodyParser from 'body-parser';
+import { createServer } from 'http';
 
 // Import route modules
 import profileRoutes, { initProfileRoutes } from './routes/profile-routes';
@@ -218,6 +219,15 @@ async function initializeDatabaseWithMigrations() {
   console.log('🔍 [SERVER INIT] Initializing database...');
   
   try {
+    // Check if we're using a database or in-memory storage
+    const usingDatabase = !!process.env.DATABASE_URL;
+    
+    if (!usingDatabase) {
+      console.log('🔍 [SERVER INIT] No DATABASE_URL provided - using in-memory storage mode');
+      console.log('✅ [SERVER INIT] Database initialization skipped - using in-memory storage');
+      return true;
+    }
+    
     // Initialize database connection
     await initializeDatabase();
     
@@ -237,6 +247,10 @@ async function initializeDatabaseWithMigrations() {
     return true;
   } catch (error) {
     console.error('❌ [SERVER INIT] Database initialization failed:', error);
+    if (!process.env.DATABASE_URL) {
+      console.log('✅ [SERVER INIT] Continuing with in-memory storage mode');
+      return true;
+    }
     throw error;
   }
 }
@@ -338,9 +352,17 @@ async function startServer() {
     // Register routes
     registerRoutes();
     
+    // Create HTTP server
+    const server = createServer(app);
+    
+    // Setup Vite or serve static files
+    console.log('🔍 [SERVER INIT] Setting up static file serving');
+    serveStatic(app);
+    
     // Start server
-    app.listen(PORT, () => {
+    server.listen(PORT, () => {
       console.log(`🚀 [SERVER] Server running on port ${PORT}`);
+      console.log(`🚀 [SERVER] Access the application at http://localhost:${PORT}`);
     });
   } catch (error) {
     console.error('❌ [SERVER INIT] Failed to start server:', error);

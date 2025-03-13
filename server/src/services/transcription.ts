@@ -3,7 +3,7 @@ import {
   GetTranscriptionJobCommand,
   DeleteTranscriptionJobCommand
 } from '@aws-sdk/client-transcribe';
-import { transcribeClient, MAX_AUDIO_DURATION_MINUTES, isAudioFormatSupported } from './aws-config';
+import { transcribeClient, MAX_AUDIO_DURATION_MINUTES, isAudioFormatSupported, isAwsServicesAvailable } from './aws-config';
 import { v4 as uuidv4 } from 'uuid';
 import fs from 'fs';
 import path from 'path';
@@ -87,6 +87,11 @@ export class TranscriptionService {
    * @throws {TranscriptionError} If transcription fails or format is unsupported
    */
   public async transcribeAudio(audioBuffer: Buffer, fileExtension: string): Promise<string> {
+    // Check if AWS services are available
+    if (!isAwsServicesAvailable()) {
+      throw new TranscriptionError('AWS transcription services are not configured. Please set AWS environment variables.');
+    }
+    
     if (!isAudioFormatSupported(fileExtension)) {
       throw new TranscriptionError(`Unsupported audio format: ${fileExtension}`);
     }
