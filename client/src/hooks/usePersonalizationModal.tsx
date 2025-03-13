@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from './useAuth';
+import { useLocation } from 'wouter';
 
 /**
  * Custom hook to manage the personalization modal for first-time users
@@ -8,19 +9,35 @@ import { useAuth } from './useAuth';
 export function usePersonalizationModal() {
   const [isOpen, setIsOpen] = useState(false);
   const { user, isLoading } = useAuth();
+  const [location] = useLocation();
+  
+  // Check if we're on a public page that doesn't need personalization
+  const isPublicPage = 
+    location === '/' || 
+    location === '/login' || 
+    location === '/register' || 
+    location === '/about' || 
+    location.startsWith('/public/');
   
   useEffect(() => {
-    // When auth state is loaded and we have a user 
-    if (!isLoading && user) {
+    // Only show personalization modal if:
+    // 1. Auth state is loaded
+    // 2. We have a user (authenticated)
+    // 3. Not on a public page
+    // 4. User hasn't seen the welcome modal before
+    if (!isLoading && user && !isPublicPage) {
       // Check if this is a first-time login
       const hasSeenWelcome = localStorage.getItem(`${user.id}_has_seen_welcome`);
       
       if (!hasSeenWelcome) {
-        // Open the modal for first-time users
+        // Open the modal for first-time users, but only on protected pages
         setIsOpen(true);
       }
+    } else {
+      // Make sure modal is closed on public pages or when not authenticated
+      setIsOpen(false);
     }
-  }, [isLoading, user]);
+  }, [isLoading, user, isPublicPage]);
   
   // Function to close the modal and mark as seen
   const closeModal = () => {
@@ -32,7 +49,10 @@ export function usePersonalizationModal() {
   
   // Function to manually open the modal (e.g., from settings)
   const openModal = () => {
-    setIsOpen(true);
+    // Only allow opening the modal if authenticated and not on a public page
+    if (user && !isPublicPage) {
+      setIsOpen(true);
+    }
   };
   
   return {

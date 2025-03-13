@@ -376,27 +376,66 @@ export const API = {
   async updateUserProfile(profile: any) {
     console.log('[API Debug] Updating user profile with data:', JSON.stringify(profile, null, 2));
     
-    // Create a sanitized copy of the profile to remove any wird-related properties
+    // Create a deep copy of the profile for sanitization
     const sanitizedProfile = JSON.parse(JSON.stringify(profile));
     
     // Function to recursively clean wird-related properties from objects
     const sanitizeObject = (obj: any) => {
       if (!obj || typeof obj !== 'object') return;
       
-      // Properties to remove (case insensitive)
-      const wirdTerms = ['wird', 'wirdId', 'wirdPlan', 'wirdSuggestions'];
+      // Expanded list of words to detect and remove (case insensitive)
+      const sensitiveTerms = ['wird', 'wirdid', 'wirdplan', 'wirdsuggestion', 'habit', 'tracker'];
       
-      // Check all properties at this level
+      // Process all properties at this level
       Object.keys(obj).forEach(key => {
-        // Check if the key name contains 'wird' (case insensitive)
+        // Check if the key contains any sensitive terms (case insensitive)
         const lowerKey = key.toLowerCase();
-        if (wirdTerms.some(term => lowerKey.includes(term.toLowerCase()))) {
-          console.log(`[API Debug] Removing wird-related property: ${key}`);
+        
+        // Check if this key should be removed based on any sensitive term
+        if (sensitiveTerms.some(term => lowerKey.includes(term.toLowerCase()))) {
+          console.log(`[API Debug] Removing sensitive property: ${key}`);
           delete obj[key];
+          return; // Skip further processing of this property
+        }
+        
+        // If value is an array, check each item
+        if (Array.isArray(obj[key])) {
+          // First sanitize any object elements in the array
+          obj[key].forEach((item: any, index: number) => {
+            if (item && typeof item === 'object') {
+              sanitizeObject(item);
+            }
+          });
+          
+          // Then filter out any string elements that contain sensitive terms
+          obj[key] = obj[key].filter((item: any) => {
+            if (typeof item === 'string') {
+              const containsSensitiveTerm = sensitiveTerms.some(term => 
+                item.toLowerCase().includes(term.toLowerCase())
+              );
+              if (containsSensitiveTerm) {
+                console.log(`[API Debug] Removing sensitive array item: ${item}`);
+                return false;
+              }
+            }
+            return true;
+          });
         } 
-        // If it's an object or array, recurse
+        // If it's an object, recurse
         else if (obj[key] && typeof obj[key] === 'object') {
           sanitizeObject(obj[key]);
+        }
+        // If it's a string, check if it contains any sensitive terms
+        else if (typeof obj[key] === 'string') {
+          const containsSensitiveTerm = sensitiveTerms.some(term => 
+            obj[key].toLowerCase().includes(term.toLowerCase())
+          );
+          if (containsSensitiveTerm) {
+            console.log(`[API Debug] Removing sensitive string value for ${key}: ${obj[key]}`);
+            // For string values that contain sensitive terms, replace with empty string
+            // rather than deleting the property
+            obj[key] = '';
+          }
         }
       });
     };
@@ -404,7 +443,20 @@ export const API = {
     // Sanitize the profile copy
     sanitizeObject(sanitizedProfile);
     
-    console.log('[API Debug] Sending sanitized profile without wird-related properties');
+    // Make sure we're not sending any nested plans or wirdPlan properties
+    if (sanitizedProfile.plans) delete sanitizedProfile.plans;
+    if (sanitizedProfile.wirdPlan) delete sanitizedProfile.wirdPlan;
+    
+    // Additional safety check for common sources of Invalid wird ID format
+    const keysToCheck = ['dailyTracking', 'habits', 'trackingData', 'wirdPlans', 'wirdData', 'trackers'];
+    keysToCheck.forEach(key => {
+      if (sanitizedProfile[key]) {
+        console.log(`[API Debug] Removing potential source of wird issues: ${key}`);
+        delete sanitizedProfile[key];
+      }
+    });
+    
+    console.log('[API Debug] Sending sanitized profile without sensitive properties:', JSON.stringify(sanitizedProfile, null, 2));
     return this.put(this.endpoints.profile.update, sanitizedProfile);
   },
   

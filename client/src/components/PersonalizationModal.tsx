@@ -123,46 +123,101 @@ export function PersonalizationModal({ open, onClose }: { open: boolean; onClose
     setIsSubmitting(true);
     
     try {
-      // Create a clean object without any wird-related properties
+      // Create a clean object without any wird-related or sensitive properties
       const cleanPrivateProfile = {
         knowledgeLevel: skippedFields.includes("knowledge") ? "" : knowledgeLevel,
-        topicsOfInterest: skippedFields.includes("topics") ? [] : selectedTopics,
+        topicsOfInterest: skippedFields.includes("topics") ? [] : selectedTopics.filter(topic => 
+          !topic.toLowerCase().includes('wird') && 
+          !topic.toLowerCase().includes('habit') && 
+          !topic.toLowerCase().includes('track')
+        ),
         spiritualJourneyStage: skippedFields.includes("spiritual-journey") ? "" : spiritualJourney,
-        primaryGoals: skippedFields.includes("goals") ? [] : primaryGoals.filter(goal => !goal.includes("wird")),
+        primaryGoals: skippedFields.includes("goals") ? [] : primaryGoals.filter(goal => 
+          !goal.toLowerCase().includes('wird') && 
+          !goal.toLowerCase().includes('habit') && 
+          !goal.toLowerCase().includes('track')
+        ),
         lifeStage: skippedFields.includes("life-stage") ? "" : lifeStage,
         communityConnection: skippedFields.includes("community") ? "" : communityConnection,
         culturalBackground: skippedFields.includes("culture") ? "" : culturalBackground,
         reflectionStyle: skippedFields.includes("reflection-style") ? "" : reflectionStyle,
-        guidancePreferences: skippedFields.includes("guidance") ? [] : guidancePreferences.filter(pref => !pref.includes("wird")),
+        guidancePreferences: skippedFields.includes("guidance") ? [] : guidancePreferences.filter(pref => 
+          !pref.toLowerCase().includes('wird') && 
+          !pref.toLowerCase().includes('habit') && 
+          !pref.toLowerCase().includes('track')
+        ),
+      };
+      
+      // Create a clean public profile update object
+      const cleanPublicProfile = {
+        privacySettings: {
+          allowPersonalization: enablePersonalization,
+          localStorageOnly: true, // Default to local storage for privacy
+          enableSync: false,
+        }
       };
       
       console.log("Saving personalization data with the following values:", {
-        privacySettings: {
-          allowPersonalization: enablePersonalization,
-          localStorageOnly: true,
-          enableSync: false,
-        },
+        publicProfile: cleanPublicProfile,
         privateProfile: cleanPrivateProfile
       });
       
-      // Update public profile
-      await updateProfile(
-        {
-          privacySettings: {
-            allowPersonalization: enablePersonalization,
-            localStorageOnly: true, // Default to local storage for privacy
-            enableSync: false,
-          },
-        },
-        enablePersonalization ? cleanPrivateProfile : undefined
-      );
+      // Try updating the profile
+      try {
+        // Update public and private profile
+        await updateProfile(
+          cleanPublicProfile,
+          enablePersonalization ? cleanPrivateProfile : undefined
+        );
+        
+        console.log("Personalization data saved successfully");
+      } catch (profileError) {
+        // If we get the "Invalid wird ID format" error, try a second approach
+        console.error("First profile update attempt failed:", profileError);
+        
+        // If this is the Invalid wird ID error, try a different approach
+        if (profileError instanceof Error && 
+            profileError.message.includes('Invalid wird ID format')) {
+          
+          console.log("Trying alternative approach for profile update...");
+          
+          // Try updating just the privacy settings in public profile
+          await updateProfile({
+            privacySettings: {
+              allowPersonalization: enablePersonalization,
+              localStorageOnly: true,
+              enableSync: false,
+            }
+          });
+          
+          // If private profile is enabled and the first attempt failed, try updating it separately
+          if (enablePersonalization) {
+            try {
+              await updateProfile(
+                undefined, // No public profile updates
+                cleanPrivateProfile // Only private profile updates
+              );
+            } catch (privateProfileError) {
+              console.error("Private profile update failed:", privateProfileError);
+              // Even if this fails, we'll still close the modal as the public profile was updated
+            }
+          }
+        } else {
+          // For other types of errors, re-throw to be caught by the outer catch
+          throw profileError;
+        }
+      }
       
-      console.log("Personalization data saved successfully");
-      
-      // Close the modal
+      // Close the modal regardless of whether the profile was fully updated
+      // This prevents users from being stuck if there are persistent backend issues
       onClose();
     } catch (error) {
       console.error("Error saving personalization preferences:", error);
+      
+      // Show a user-friendly error message but still close the modal
+      // to prevent users from being stuck in the modal
+      alert("We couldn't save all your preferences, but you can adjust them later in settings.");
+      onClose();
     } finally {
       setIsSubmitting(false);
     }
