@@ -299,8 +299,8 @@ function registerRoutes() {
   app.use('/api/transcribe', transcriptionRoutes);
   
   // Register wird routes
-  console.log("🔍 [SERVER INIT] Registering wird routes at /api");
-  app.use('/api', wirdRoutes);
+  console.log("🔍 [SERVER INIT] Registering wird routes at /api/wirds");
+  app.use('/api/wirds', wirdRoutes);
   
   // Register user routes
   console.log("🔍 [SERVER INIT] Registering user routes at /api/user");

@@ -97,11 +97,28 @@ export const PersonalizationProvider = ({ children }: { children: ReactNode }) =
       console.log('[PersonalizationProvider] No private profile, checking localStorage fallback');
       
       try {
-        const localPrefs = localStorage.getItem('sahabai_private_preferences');
+        // Try multiple localStorage keys for backward compatibility
+        const localPrefs = localStorage.getItem('sahabai_private_preferences') || 
+                          localStorage.getItem('personalPreferences');
+        
         if (localPrefs) {
           const parsedPrefs = JSON.parse(localPrefs);
           console.log('[PersonalizationProvider] Found preferences in localStorage');
-          setPersonalizationContext(parsedPrefs);
+          
+          // Validate the parsed preferences
+          if (parsedPrefs && typeof parsedPrefs === 'object') {
+            console.log('[PersonalizationProvider] Setting context from localStorage with:', {
+              knowledgeLevel: parsedPrefs.knowledgeLevel,
+              topicsCount: parsedPrefs.topicsOfInterest?.length || 0,
+              goalsCount: parsedPrefs.primaryGoals?.length || 0,
+              spiritualJourney: parsedPrefs.spiritualJourneyStage,
+            });
+            
+            setPersonalizationContext(parsedPrefs);
+          } else {
+            console.error('[PersonalizationProvider] Invalid preferences format in localStorage');
+            setPersonalizationContext(null);
+          }
         } else {
           console.log('[PersonalizationProvider] No preferences found in localStorage');
           setPersonalizationContext(null);

@@ -138,6 +138,21 @@ router.post('/', verifyToken, async (req: express.Request, res: express.Response
       throw new AuthenticationError('User ID mismatch between token and request body');
     }
     
+    // Check for wird-related properties that might cause issues
+    const sensitiveProps = ['wird', 'wirdId', 'wirdPlan', 'wirdSuggestion', 'habit', 'tracker'];
+    const hasSensitiveProps = Object.keys(req.body).some(key => 
+      sensitiveProps.some(prop => key.toLowerCase().includes(prop.toLowerCase()))
+    );
+    
+    if (hasSensitiveProps) {
+      console.log('[PROFILE_ROUTES] Request contains wird-related properties that might cause issues');
+      console.log('[PROFILE_ROUTES] These properties should be removed before sending the request');
+      return res.status(400).json({ 
+        error: 'Request contains wird-related properties that might cause issues',
+        message: 'Please remove wird-related properties from the request body'
+      });
+    }
+    
     // Prepare profile data
     const profileData = {
       userId,
@@ -168,6 +183,7 @@ router.post('/', verifyToken, async (req: express.Request, res: express.Response
     console.log('[PROFILE_ROUTES] Profile created/updated successfully');
     res.status(200).json(response);
   } catch (error) {
+    console.error('[PROFILE_ROUTES] Error in POST /profile:', error);
     next(error);
   }
 });

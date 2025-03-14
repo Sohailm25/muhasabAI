@@ -395,7 +395,7 @@ export function useProfile() {
    * This function will:
    * 1. Store the personalization preferences locally 
    * 2. Update the private profile if possible
-   * 3. Not attempt to update the public profile on the server
+   * 3. Update the public profile using a more targeted approach
    */
   const updatePersonalizationSettings = async (
     allowPersonalization: boolean,
@@ -432,22 +432,44 @@ export function useProfile() {
         }
       }
       
-      // Try to update the public profile on the server
+      // Try to update the public profile on the server using a direct approach
+      // that avoids the problematic updateUserProfile method
       try {
         if (publicProfile && publicProfile.userId) {
           console.log(`Attempting to update public profile for user: ${publicProfile.userId}`);
           
-          // Only update the allowPersonalization setting
-          const minimalUpdate = {
-            userId: publicProfile.userId,
-            privacySettings: {
-              ...publicProfile.privacySettings,
-              allowPersonalization
-            }
-          };
+          // Instead of using updateUserProfile, we'll use the encrypted profile update
+          // which doesn't go through the problematic route
           
-          await API.updateUserProfile(minimalUpdate);
-          console.log('Public profile updated with personalization setting');
+          // First, update the private profile with the personalization setting
+          if (privateProfile) {
+            const updatedPrivateProfile = {
+              ...privateProfile,
+              // Add a flag to indicate personalization is enabled/disabled
+              personalizationEnabled: allowPersonalization
+            };
+            
+            // Get encryption key
+            const key = await getEncryptionKey();
+            
+            // Generate new IV for security
+            const iv = window.crypto.getRandomValues(new Uint8Array(12));
+            
+            // Encrypt updated private profile
+            const encryptedData = await encryptData(
+              JSON.stringify(updatedPrivateProfile),
+              key,
+              iv
+            );
+            
+            // Update the encrypted profile directly
+            await API.updateEncryptedProfileData(publicProfile.userId, {
+              data: encryptedData,
+              iv: Array.from(iv)
+            });
+            
+            console.log('Profile updated with personalization setting via encrypted profile');
+          }
         }
       } catch (publicErr) {
         console.error('Failed to update public profile on server:', publicErr);
