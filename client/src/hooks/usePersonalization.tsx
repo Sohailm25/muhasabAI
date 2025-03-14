@@ -68,67 +68,81 @@ export const PersonalizationProvider = ({ children }: { children: ReactNode }) =
       hasPrivateProfile: !!privateProfile 
     });
     
-    if (personalizationEnabled && privateProfile) {
-      console.log('[PersonalizationProvider] Updating personalization context from profile');
-      
-      const context: Partial<PrivateProfile> = {
-        knowledgeLevel: privateProfile.knowledgeLevel,
-        topicsOfInterest: privateProfile.topicsOfInterest,
-        primaryGoals: privateProfile.primaryGoals,
-        spiritualJourneyStage: privateProfile.spiritualJourneyStage,
-        lifeStage: privateProfile.lifeStage,
-        communityConnection: privateProfile.communityConnection,
-        culturalBackground: privateProfile.culturalBackground,
-        reflectionStyle: privateProfile.reflectionStyle,
-        guidancePreferences: privateProfile.guidancePreferences,
-      };
-      
-      // Log what we're setting for debugging
-      console.log('[PersonalizationProvider] Setting context with:', {
-        knowledgeLevel: context.knowledgeLevel,
-        topicsCount: context.topicsOfInterest?.length || 0,
-        goalsCount: context.primaryGoals?.length || 0,
-        spiritualJourney: context.spiritualJourneyStage,
-      });
-      
-      setPersonalizationContext(context);
-    } else if (personalizationEnabled) {
-      // If personalization is enabled but no profile, try to load from localStorage
-      console.log('[PersonalizationProvider] No private profile, checking localStorage fallback');
-      
-      try {
-        // Try multiple localStorage keys for backward compatibility
-        const localPrefs = localStorage.getItem('sahabai_private_preferences') || 
-                          localStorage.getItem('personalPreferences') ||
-                          localStorage.getItem(`encrypted_profile_${publicProfile?.userId}`);
+    if (personalizationEnabled) {
+      if (privateProfile) {
+        console.log('[PersonalizationProvider] Updating personalization context from profile');
         
-        if (localPrefs) {
-          console.log('[PersonalizationProvider] Found preferences in localStorage');
+        const context: Partial<PrivateProfile> = {
+          knowledgeLevel: privateProfile.knowledgeLevel,
+          topicsOfInterest: privateProfile.topicsOfInterest,
+          primaryGoals: privateProfile.primaryGoals,
+          spiritualJourneyStage: privateProfile.spiritualJourneyStage,
+          lifeStage: privateProfile.lifeStage,
+          communityConnection: privateProfile.communityConnection,
+          culturalBackground: privateProfile.culturalBackground,
+          reflectionStyle: privateProfile.reflectionStyle,
+          guidancePreferences: privateProfile.guidancePreferences,
+        };
+        
+        // Log what we're setting for debugging
+        console.log('[PersonalizationProvider] Setting context with:', {
+          knowledgeLevel: context.knowledgeLevel,
+          topicsCount: context.topicsOfInterest?.length || 0,
+          goalsCount: context.primaryGoals?.length || 0,
+          spiritualJourney: context.spiritualJourneyStage,
+        });
+        
+        setPersonalizationContext(context);
+      } else {
+        // If personalization is enabled but no profile, try to load from localStorage
+        console.log('[PersonalizationProvider] No private profile, checking localStorage fallback');
+        
+        try {
+          // Try multiple localStorage keys for backward compatibility
+          const localPrefsKeys = [
+            'sahabai_private_preferences',
+            'personalPreferences',
+            `encrypted_profile_${publicProfile?.userId}`
+          ];
           
-          let parsedPrefs;
-          try {
-            parsedPrefs = JSON.parse(localPrefs);
-            
-            // If this is an encrypted profile, extract the data
-            if (parsedPrefs.data && parsedPrefs.iv) {
-              console.log('[PersonalizationProvider] Found encrypted profile in localStorage, attempting to decrypt');
-              // We can't decrypt here, so just use what we have
-              parsedPrefs = {
-                knowledgeLevel: 'intermediate',
-                topicsOfInterest: ['general'],
-                primaryGoals: ['spiritual_growth'],
-                spiritualJourneyStage: 'practicing',
-                reflectionStyle: 'balanced',
-                guidancePreferences: ['practical', 'spiritual']
-              };
+          let foundPrefs = false;
+          let parsedPrefs: Partial<PrivateProfile> | null = null;
+          
+          // Try each key in order
+          for (const key of localPrefsKeys) {
+            const localPrefs = localStorage.getItem(key);
+            if (localPrefs) {
+              console.log(`[PersonalizationProvider] Found preferences in localStorage with key: ${key}`);
+              
+              try {
+                const tempPrefs = JSON.parse(localPrefs);
+                
+                // If this is an encrypted profile, extract the data
+                if (tempPrefs && typeof tempPrefs === 'object' && tempPrefs.data && tempPrefs.iv) {
+                  console.log('[PersonalizationProvider] Found encrypted profile in localStorage, using default values');
+                  // We can't decrypt here, so just use default values
+                  parsedPrefs = {
+                    knowledgeLevel: 'intermediate',
+                    topicsOfInterest: ['general'],
+                    primaryGoals: ['spiritual_growth'],
+                    spiritualJourneyStage: 'practicing',
+                    reflectionStyle: 'balanced',
+                    guidancePreferences: ['practical', 'spiritual']
+                  };
+                } else {
+                  parsedPrefs = tempPrefs as Partial<PrivateProfile>;
+                }
+                
+                foundPrefs = true;
+                break;
+              } catch (parseError) {
+                console.error(`[PersonalizationProvider] Error parsing localStorage data from key ${key}:`, parseError);
+              }
             }
-          } catch (parseError) {
-            console.error('[PersonalizationProvider] Error parsing localStorage data:', parseError);
-            parsedPrefs = null;
           }
           
           // Validate the parsed preferences
-          if (parsedPrefs && typeof parsedPrefs === 'object') {
+          if (foundPrefs && parsedPrefs && typeof parsedPrefs === 'object') {
             console.log('[PersonalizationProvider] Setting context from localStorage with:', {
               knowledgeLevel: parsedPrefs.knowledgeLevel,
               topicsCount: parsedPrefs.topicsOfInterest?.length || 0,
@@ -138,16 +152,13 @@ export const PersonalizationProvider = ({ children }: { children: ReactNode }) =
             
             setPersonalizationContext(parsedPrefs);
           } else {
-            console.error('[PersonalizationProvider] Invalid preferences format in localStorage');
+            console.log('[PersonalizationProvider] No valid preferences found in localStorage');
             setPersonalizationContext(null);
           }
-        } else {
-          console.log('[PersonalizationProvider] No preferences found in localStorage');
+        } catch (err) {
+          console.error('[PersonalizationProvider] Error loading from localStorage:', err);
           setPersonalizationContext(null);
         }
-      } catch (err) {
-        console.error('[PersonalizationProvider] Error loading from localStorage:', err);
-        setPersonalizationContext(null);
       }
     } else {
       console.log('[PersonalizationProvider] Personalization disabled, clearing context');

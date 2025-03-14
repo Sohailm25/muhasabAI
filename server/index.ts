@@ -285,6 +285,10 @@ function registerRoutes() {
   console.log("🔍 [SERVER INIT] Registering profile routes at /api/profile");
   app.use(PROFILE_PREFIX, initProfileRoutes(db.getPool()));
   
+  // Register profile routes at the root API path to handle /api/profile/:userId/encrypted endpoints
+  console.log("🔍 [SERVER INIT] Registering profile routes at /api for encrypted profile endpoints");
+  app.use(API_PREFIX, initProfileRoutes(db.getPool()));
+  
   // Register compatibility routes
   console.log("🔍 [SERVER INIT] Registering compatibility routes");
   

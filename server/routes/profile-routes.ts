@@ -20,9 +20,59 @@ const JWT_SECRET = process.env.JWT_SECRET || 'sahabai-secret-key';
 // Initialize profile repository
 let profileRepository: ProfileRepository;
 
-export function initProfileRoutes(db: Pool) {
+/**
+ * Initialize profile routes with database connection
+ */
+export function initProfileRoutes(pool: any) {
   console.log('[PROFILE_ROUTES] Initializing profile routes with database connection');
-  profileRepository = new ProfileRepository(db);
+  
+  // Initialize the profile repository with the database pool
+  profileRepository = new ProfileRepository(pool);
+  
+  // Add middleware to verify tokens for all profile routes
+  router.use(verifyToken);
+  
+  // Log all requests to profile routes
+  router.use((req, res, next) => {
+    console.log('[PROFILE_ROUTES] Verifying token for request:', req.path);
+    console.log('[PROFILE_ROUTES] Auth header present:', !!req.headers.authorization);
+    
+    if (req.headers.authorization) {
+      const token = req.headers.authorization.split(' ')[1];
+      console.log('[PROFILE_ROUTES] Token extracted from header:', token.substring(0, 10) + '...');
+      
+      try {
+        const secret = process.env.JWT_SECRET || 'sahabai-secret-key';
+        console.log('[PROFILE_ROUTES] Verifying JWT token with secret:', secret.substring(0, 10) + '...');
+        
+        const decoded = jwt.verify(token, secret);
+        console.log('[PROFILE_ROUTES] JWT verification successful, userId:', (decoded as any).userId);
+        console.log('[PROFILE_ROUTES] Full decoded payload:', JSON.stringify(decoded));
+      } catch (error) {
+        console.error('[PROFILE_ROUTES] JWT verification failed:', error);
+      }
+    }
+    
+    next();
+  });
+  
+  // Ensure all responses have the correct content-type header
+  router.use((req, res, next) => {
+    // Store the original json method
+    const originalJson = res.json;
+    
+    // Override the json method
+    res.json = function(body) {
+      // Set the content-type header
+      res.setHeader('Content-Type', 'application/json');
+      
+      // Call the original json method
+      return originalJson.call(this, body);
+    };
+    
+    next();
+  });
+  
   return router;
 }
 
@@ -357,6 +407,8 @@ router.get('/profile/:userId/encrypted', async (req, res) => {
     console.log('[PROFILE_ROUTES] GET /profile/:userId/encrypted request received');
     console.log('[PROFILE_ROUTES] User ID:', userId);
     console.log('[PROFILE_ROUTES] Headers:', JSON.stringify(req.headers));
+    console.log('[PROFILE_ROUTES] Full URL path:', req.originalUrl);
+    console.log('[PROFILE_ROUTES] Route path:', req.route.path);
     
     if (!userId) {
       console.log('[PROFILE_ROUTES] No userId provided');
@@ -385,7 +437,7 @@ router.get('/profile/:userId/encrypted', async (req, res) => {
       iv: encryptedData.iv.split(',').map(Number) // Convert string to array of numbers
     };
 
-    console.log('[PROFILE_ROUTES] Sending encrypted data response');
+    console.log('[PROFILE_ROUTES] Sending encrypted data response with explicit content-type header');
     res.setHeader('Content-Type', 'application/json');
     return res.json(clientEncryptedData);
   } catch (error) {
@@ -406,6 +458,8 @@ router.put('/profile/:userId/encrypted', async (req, res) => {
     console.log('[PROFILE_ROUTES] PUT /profile/:userId/encrypted request received');
     console.log('[PROFILE_ROUTES] User ID:', userId);
     console.log('[PROFILE_ROUTES] Headers:', JSON.stringify(req.headers));
+    console.log('[PROFILE_ROUTES] Full URL path:', req.originalUrl);
+    console.log('[PROFILE_ROUTES] Route path:', req.route.path);
     console.log('[PROFILE_ROUTES] Request body has data:', !!data);
     console.log('[PROFILE_ROUTES] Request body has IV:', !!iv);
     

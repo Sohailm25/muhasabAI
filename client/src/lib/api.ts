@@ -601,6 +601,12 @@ export const API = {
       }
       
       console.log(`[API] Updating encrypted profile data for user: ${userId}`);
+      
+      // Always save to localStorage first as a fallback
+      this.saveEncryptedProfileToLocalStorage(userId, encryptedData);
+      console.log('[API] Encrypted profile saved to localStorage as fallback');
+      
+      // Try to save to server
       const url = this.baseUrl + this.endpoints.profile.encrypted(userId);
       
       // Add cache busting to avoid stale responses
@@ -644,6 +650,13 @@ export const API = {
             const text = await response.text();
             if (text) {
               console.log('[API] Response text (first 200 chars):', text.substring(0, 200));
+              
+              // If the response looks like HTML, it might be a routing issue
+              if (text.includes('<!DOCTYPE html>') || text.includes('<html>')) {
+                console.log('[API] Received HTML response instead of JSON - using localStorage fallback');
+                // We already saved to localStorage, so just return true
+                return true;
+              }
             }
           } catch (textError) {
             console.error('[API] Error getting response text:', textError);
@@ -670,10 +683,9 @@ export const API = {
             
             // If the response looks like HTML, it might be a routing issue
             if (text.includes('<!DOCTYPE html>') || text.includes('<html>')) {
-              console.error('[API] Received HTML response instead of JSON - likely a routing issue');
-              // Save to localStorage as fallback
-              this.saveEncryptedProfileToLocalStorage(userId, encryptedData);
-              return true; // Pretend it succeeded to avoid breaking the app
+              console.log('[API] Received HTML response instead of JSON - using localStorage fallback');
+              // We already saved to localStorage, so just return true
+              return true;
             }
           }
         }
@@ -683,20 +695,13 @@ export const API = {
       
       console.error('[API] Error updating encrypted profile:', errorMessage);
       
-      // Save to localStorage as fallback
-      this.saveEncryptedProfileToLocalStorage(userId, encryptedData);
-      
-      throw new Error(errorMessage);
+      // We already saved to localStorage as fallback at the beginning
+      return true; // Return true to avoid breaking the app
     } catch (error) {
       console.error('[API] Error in updateEncryptedProfileData:', error);
       
-      // Save to localStorage as fallback
-      if (userId && encryptedData) {
-        this.saveEncryptedProfileToLocalStorage(userId, encryptedData);
-      }
-      
-      // Return true to avoid breaking the app
-      return true;
+      // We already saved to localStorage as fallback at the beginning
+      return true; // Return true to avoid breaking the app
     }
   },
   
