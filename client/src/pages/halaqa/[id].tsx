@@ -46,6 +46,8 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Badge } from "@/components/ui/badge";
+import { usePersonalization } from "@/hooks/usePersonalization";
+import { HalaqaService } from "@/services/halaqaService";
 
 export default function HalaqaDetailPage() {
   const [, params] = useRoute<{ id: string }>("/halaqa/:id");
@@ -240,6 +242,9 @@ export default function HalaqaDetailPage() {
     }
   }, [halaqa, editMode]);
   
+  // Add personalization hook
+  const personalization = usePersonalization();
+  
   // Fetch halaqa data
   const fetchHalaqa = async (id: number) => {
     // Don't start a new fetch if we're already fetching this ID
@@ -354,104 +359,104 @@ export default function HalaqaDetailPage() {
     const MAX_RETRIES = 2;
     
     try {
-      const halaqaId = typeof halaqa.id === 'string' ? parseInt(halaqa.id) : halaqa.id;
+      // Get personalization context if available
+      let personalizationContext = null;
       
-      // Track if this is a fresh analysis or from cache
-      let isFromCache = false;
+      try {
+        // Check if personalization is enabled and available
+        if (personalization && personalization.isPersonalizationEnabled && personalization.isPersonalizationEnabled()) {
+          console.log("[HalaqaAnalysis] Personalization is enabled, getting context");
+          personalizationContext = personalization.getPersonalizationContext();
+          
+          if (personalizationContext) {
+            console.log("[HalaqaAnalysis] Using personalization data for analysis:", {
+              knowledgeLevel: personalizationContext.knowledgeLevel,
+              topicsCount: personalizationContext.topicsOfInterest?.length || 0,
+              goalsCount: personalizationContext.primaryGoals?.length || 0,
+            });
+          } else {
+            console.log("[HalaqaAnalysis] Personalization is enabled but no data available");
+          }
+        } else {
+          console.log("[HalaqaAnalysis] Personalization is not enabled");
+        }
+      } catch (personalizationError) {
+        console.error("[HalaqaAnalysis] Error getting personalization data:", personalizationError);
+      }
       
-      // Add a timeout to prevent hanging if the server doesn't respond
-      const fetchWithTimeout = async (id: number) => {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 30000); // 30-second timeout
-        
+      // Analyze the halaqa
+      while (retryCount <= MAX_RETRIES) {
         try {
-          // Check if this result will be from cache
-          if (halaqaService.hasAnalysisCached(id)) {
-            isFromCache = true;
+          const halaqaService = new HalaqaService();
+          
+          // Create an abort controller to cancel the request if needed
+          const abortController = new AbortController();
+          const timeoutId = setTimeout(() => abortController.abort(), 60000); // 60 second timeout
+          
+          // Call the API with personalization context if available
+          const result = await halaqaService.analyzeHalaqaEntry(
+            halaqa.id, 
+            { 
+              signal: abortController.signal,
+              personalizationContext
+            }
+          );
+          
+          // Clear the timeout
+          clearTimeout(timeoutId);
+          
+          // Update state with the results
+          if (result.wirdSuggestions && result.wirdSuggestions.length > 0) {
+            setWirdSuggestions(result.wirdSuggestions as any);
+            
+            // Show success message
+            toast({
+              title: "Analysis complete",
+              description: "Wird suggestions have been generated based on your halaqa reflection.",
+            });
+            
+            // Update the halaqa object with the new suggestions
+            setHalaqa({
+              ...halaqa,
+              wirdSuggestions: result.wirdSuggestions as any
+            } as any);
+          } else {
+            // Show error message
+            toast({
+              title: "Analysis incomplete",
+              description: "Unable to generate wird suggestions. Please try again later.",
+              variant: "destructive"
+            });
           }
           
-          const result = await halaqaService.analyzeHalaqaEntry(id, { signal: controller.signal });
-          clearTimeout(timeoutId);
-          return result;
+          // Break out of the retry loop
+          break;
         } catch (error) {
-          clearTimeout(timeoutId);
-          throw error;
-        }
-      };
-      
-      const result = await fetchWithTimeout(halaqaId);
-      
-      // If the server responded successfully, update the UI
-      if (result) {
-        // Store wird suggestions if available
-        if (result.wirdSuggestions && result.wirdSuggestions.length > 0) {
-          setWirdSuggestions(result.wirdSuggestions);
+          retryCount++;
+          console.error(`[handleAnalyzeHalaqa] Error analyzing halaqa (attempt ${retryCount}/${MAX_RETRIES}):`, error);
           
-          // Update the halaqa object with the wird suggestions
-          setHalaqa(prevHalaqa => {
-            if (!prevHalaqa) return null;
-            return {
-              ...prevHalaqa,
-              wirdSuggestions: result.wirdSuggestions
-            };
-          });
-        }
-        
-        // Store personalized insights if available
-        if (result.personalizedInsights && result.personalizedInsights.length > 0) {
-          setPersonalizedInsights(result.personalizedInsights);
+          if (retryCount > MAX_RETRIES) {
+            // Show error message
+            toast({
+              title: "Analysis failed",
+              description: "Unable to analyze halaqa. Please try again later.",
+              variant: "destructive"
+            });
+            break;
+          }
           
-          console.log("Received personalized insights:", result.personalizedInsights);
+          // Wait before retrying
+          await new Promise(resolve => setTimeout(resolve, 1000));
         }
-        
-        // Only show success toast if this wasn't a cached result
-        if (!isFromCache) {
-          toast({
-            title: "Success!",
-            description: "Analysis completed successfully.",
-          });
-        }
-      } else {
-        // If we got a response but no suggestions, show a notification
-        toast({
-          title: "Partial Success",
-          description: "The analysis completed but no suggestions were generated. Please try again later.",
-          variant: "destructive",
-        });
       }
     } catch (error) {
-      console.error("Error analyzing halaqa:", error);
+      console.error("[handleAnalyzeHalaqa] Unexpected error:", error);
       
-      // Only retry if it's an abort error (timeout), not for other errors
-      if (error instanceof DOMException && error.name === 'AbortError' && retryCount < MAX_RETRIES) {
-        retryCount++;
-        
-        const retryDelay = 2000 * Math.pow(2, retryCount); // Exponential backoff
-        toast({
-          title: "Retrying...",
-          description: `Attempt ${retryCount} of ${MAX_RETRIES}. Please wait.`,
-          variant: "destructive",
-        });
-        
-        // Wait before retrying
-        await new Promise(resolve => setTimeout(resolve, retryDelay));
-        
-        // Try again, but make sure to reset the analyzing state first
-        setAnalyzingHalaqa(false);
-        
-        // Use setTimeout to avoid potential React state update loops
-        setTimeout(() => {
-          handleAnalyzeHalaqa();
-        }, 100);
-        
-        return;
-      }
-      
-      // If we've reached max retries or it's not an abort error, show an error
+      // Show error message
       toast({
-        title: "Error",
-        description: "Failed to analyze halaqa. Please try again later.",
-        variant: "destructive",
+        title: "Analysis failed",
+        description: "An unexpected error occurred. Please try again later.",
+        variant: "destructive"
       });
     } finally {
       setAnalyzingHalaqa(false);

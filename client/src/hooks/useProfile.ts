@@ -424,94 +424,57 @@ export function useProfile() {
         // Store this update in localStorage for persistence
         try {
           localStorage.setItem('sahabai_personalization_enabled', allowPersonalization ? 'true' : 'false');
-          console.log('Personalization preference saved to localStorage');
-        } catch (storageErr) {
-          console.error('Failed to save personalization preference to localStorage:', storageErr);
-        }
-      } else {
-        // We don't have a profile yet, so create a minimal one locally
-        console.log('No public profile found, creating a minimal local profile');
-        
-        // First try to get a profile from the API (in case it exists but wasn't loaded)
-        try {
-          const profile = await API.getUserProfile();
-          if (profile) {
-            console.log('Found existing profile on server');
-            setPublicProfile(profile);
-            
-            // Update the retrieved profile with our new settings
-            const updatedPublicProfile: PublicProfile = {
-              ...profile,
-              privacySettings: {
-                ...profile.privacySettings,
-                allowPersonalization,
-              }
-            };
-            
-            setPublicProfile(updatedPublicProfile);
-          }
-        } catch (getProfileErr) {
-          console.log('No profile found on server, will create a local fallback');
-          
-          // Create a minimal local profile
-          const localProfile = {
-            userId: userId || 'local-user',
-            privacySettings: {
-              allowPersonalization,
-              localStorageOnly: true,
-              enableSync: false
-            },
-            generalPreferences: {
-              inputMethod: 'text',
-              reflectionFrequency: 'daily',
-              languagePreferences: 'english'
-            },
-            createdAt: new Date(),
-            updatedAt: new Date(),
-          } as PublicProfile;
-          
-          setPublicProfile(localProfile);
-          
-          // Try to create a profile on the server
-          try {
-            console.log('Attempting to create profile on server');
-            const newProfile = await API.createUserProfile({
-              privacySettings: {
-                allowPersonalization,
-                localStorageOnly: false,
-                enableSync: false
-              },
-              generalPreferences: {
-                inputMethod: 'text',
-                reflectionFrequency: 'daily',
-                languagePreferences: 'english'
-              },
-            });
-            
-            if (newProfile) {
-              console.log('Successfully created profile on server');
-              setPublicProfile(newProfile as PublicProfile);
-            }
-          } catch (createErr) {
-            console.error('Failed to create profile on server:', createErr);
-            // Continue with local profile
-          }
-        }
-        
-        // Store in localStorage regardless of API success
-        try {
-          localStorage.setItem('sahabai_personalization_enabled', allowPersonalization ? 'true' : 'false');
+          // Also update the legacy key for backward compatibility
+          localStorage.setItem('personalizationEnabled', allowPersonalization ? 'true' : 'false');
           console.log('Personalization preference saved to localStorage');
         } catch (storageErr) {
           console.error('Failed to save personalization preference to localStorage:', storageErr);
         }
       }
       
+      // Try to update the public profile on the server
+      try {
+        if (publicProfile && publicProfile.userId) {
+          console.log(`Attempting to update public profile for user: ${publicProfile.userId}`);
+          
+          // Only update the allowPersonalization setting
+          const minimalUpdate = {
+            userId: publicProfile.userId,
+            privacySettings: {
+              ...publicProfile.privacySettings,
+              allowPersonalization
+            }
+          };
+          
+          await API.updateUserProfile(minimalUpdate);
+          console.log('Public profile updated with personalization setting');
+        }
+      } catch (publicErr) {
+        console.error('Failed to update public profile on server:', publicErr);
+        // Continue with private profile update even if public update fails
+      }
+      
       // If we have private preferences and personalization is enabled, update those
       if (privatePreferences && allowPersonalization && userId) {
         try {
+          console.log(`Updating private profile for user: ${userId}`);
+          console.log('Private preferences data:', JSON.stringify(privatePreferences, null, 2));
+          
           await updatePrivateProfile(userId, privatePreferences);
-          console.log('Private personalization preferences saved successfully');
+          console.log('Private personalization preferences saved successfully to server');
+          
+          // Also update local state
+          if (privateProfile) {
+            const mergedProfile = mergePrivateProfiles(privateProfile, privatePreferences);
+            setPrivateProfile(mergedProfile);
+            console.log('Private profile state updated with new preferences');
+          } else {
+            // No existing private profile, create one from scratch
+            const defaultProfile = getDefaultPrivateProfile();
+            const mergedProfile = mergePrivateProfiles(defaultProfile, privatePreferences);
+            setPrivateProfile(mergedProfile);
+            console.log('New private profile created from preferences');
+          }
         } catch (privateErr) {
           console.error('Failed to save private personalization preferences to server:', privateErr);
           

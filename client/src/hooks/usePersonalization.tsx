@@ -40,20 +40,37 @@ const PersonalizationContext = createContext<PersonalizationContextState>({
 export const PersonalizationProvider = ({ children }: { children: ReactNode }) => {
   const [personalizationEnabled, setPersonalizationEnabled] = useState(false);
   const [personalizationContext, setPersonalizationContext] = useState<Partial<PrivateProfile> | null>(null);
-  const { privateProfile, isLoading: profileLoading } = useProfile();
+  const { publicProfile, privateProfile, isLoading: profileLoading } = useProfile();
 
   // Initialize from localStorage on mount
   useEffect(() => {
-    const savedPref = localStorage.getItem('personalizationEnabled');
+    // Check both possible localStorage keys for backward compatibility
+    const savedPref = localStorage.getItem('sahabai_personalization_enabled') || 
+                      localStorage.getItem('personalizationEnabled');
+    
     if (savedPref) {
       const isEnabled = savedPref === 'true';
+      console.log('[PersonalizationProvider] Initializing from localStorage:', { isEnabled });
       setPersonalizationEnabled(isEnabled);
+    } else if (publicProfile?.privacySettings?.allowPersonalization) {
+      // If no localStorage value but profile has it enabled, use that
+      console.log('[PersonalizationProvider] Initializing from profile:', { 
+        allowPersonalization: publicProfile.privacySettings.allowPersonalization 
+      });
+      setPersonalizationEnabled(publicProfile.privacySettings.allowPersonalization);
     }
-  }, []);
+  }, [publicProfile]);
 
   // Update context when personalization is enabled and profile is available
   useEffect(() => {
+    console.log('[PersonalizationProvider] Checking for context update:', { 
+      personalizationEnabled, 
+      hasPrivateProfile: !!privateProfile 
+    });
+    
     if (personalizationEnabled && privateProfile) {
+      console.log('[PersonalizationProvider] Updating personalization context from profile');
+      
       const context: Partial<PrivateProfile> = {
         knowledgeLevel: privateProfile.knowledgeLevel,
         topicsOfInterest: privateProfile.topicsOfInterest,
@@ -65,8 +82,36 @@ export const PersonalizationProvider = ({ children }: { children: ReactNode }) =
         reflectionStyle: privateProfile.reflectionStyle,
         guidancePreferences: privateProfile.guidancePreferences,
       };
+      
+      // Log what we're setting for debugging
+      console.log('[PersonalizationProvider] Setting context with:', {
+        knowledgeLevel: context.knowledgeLevel,
+        topicsCount: context.topicsOfInterest?.length || 0,
+        goalsCount: context.primaryGoals?.length || 0,
+        spiritualJourney: context.spiritualJourneyStage,
+      });
+      
       setPersonalizationContext(context);
+    } else if (personalizationEnabled) {
+      // If personalization is enabled but no profile, try to load from localStorage
+      console.log('[PersonalizationProvider] No private profile, checking localStorage fallback');
+      
+      try {
+        const localPrefs = localStorage.getItem('sahabai_private_preferences');
+        if (localPrefs) {
+          const parsedPrefs = JSON.parse(localPrefs);
+          console.log('[PersonalizationProvider] Found preferences in localStorage');
+          setPersonalizationContext(parsedPrefs);
+        } else {
+          console.log('[PersonalizationProvider] No preferences found in localStorage');
+          setPersonalizationContext(null);
+        }
+      } catch (err) {
+        console.error('[PersonalizationProvider] Error loading from localStorage:', err);
+        setPersonalizationContext(null);
+      }
     } else {
+      console.log('[PersonalizationProvider] Personalization disabled, clearing context');
       setPersonalizationContext(null);
     }
   }, [personalizationEnabled, privateProfile]);
@@ -74,8 +119,12 @@ export const PersonalizationProvider = ({ children }: { children: ReactNode }) =
   // Toggle personalization and save to localStorage
   const togglePersonalization = () => {
     const newValue = !personalizationEnabled;
+    console.log('[PersonalizationProvider] Toggling personalization:', { newValue });
     setPersonalizationEnabled(newValue);
+    
+    // Update both localStorage keys for consistency
     localStorage.setItem('personalizationEnabled', newValue.toString());
+    localStorage.setItem('sahabai_personalization_enabled', newValue.toString());
   };
 
   // Function to get personalization context - safely

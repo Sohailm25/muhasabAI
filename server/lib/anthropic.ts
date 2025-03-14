@@ -838,78 +838,106 @@ const fallbackHalaqaActionItems = [
  * Generates actionable items based on a halaqa reflection
  * @param keyReflection The main reflection from the halaqa
  * @param impact The personal impact statement from the halaqa
+ * @param personalizationContext Optional personalization context
  * @returns An array of action items
  */
 export async function generateHalaqaActions(
   keyReflection: string,
-  impact: string
+  impact: string,
+  personalizationContext?: PersonalizationContext
 ): Promise<{ description: string }[]> {
   const logger = getLogger("generateHalaqaActions");
   logger.info(
     `Generating action items for halaqa with key reflection length: ${keyReflection.length}, impact length: ${impact.length}`
   );
 
+  // Log if personalization is being used
+  if (personalizationContext) {
+    logger.info("Using personalization context for action items");
+  }
+
   try {
-    // Combine system and user message since Anthropic API only supports user and assistant roles
-    const fullPrompt = `You are an expert in Islamic studies and personal development. Your goal is to help Muslims implement knowledge they've gained from Islamic lectures and classes.
-    
-Based on the following reflection from a lecture/halaqa and the statement about personal impact, generate 3-5 specific, practical action items they can implement in their life. 
+    // Build the prompt with personalization if available
+    let personalizationSection = "";
+    if (personalizationContext) {
+      personalizationSection = `
+USER PERSONALIZATION CONTEXT:
+- Knowledge Level: ${personalizationContext.knowledgeLevel || "Not specified"}
+- Spiritual Journey Stage: ${personalizationContext.spiritualJourneyStage || "Not specified"}
+- Cultural Background: ${personalizationContext.culturalBackground || "Not specified"}
+- Primary Goals: ${personalizationContext.primaryGoals?.join(", ") || "Not specified"}
+- Topics of Interest: ${personalizationContext.topicsOfInterest?.join(", ") || "Not specified"}
+- Guidance Preferences: ${personalizationContext.guidancePreferences?.join(", ") || "Not specified"}
 
-Here is the reflection from an Islamic lecture/class:
-    
-KEY REFLECTION:
-${keyReflection}
+Please tailor your action items to match this user's specific context, knowledge level, and preferences.
+`;
+    }
 
-PERSONAL IMPACT:
-${impact}
-    
-These action items should:
-1. Be specific and actionable (not vague like "be a better Muslim")
-2. Be realistic for an average person to implement
-3. Connect directly to the content in their reflection
-4. Include a mix of short-term and long-term actions
-5. Focus on practical steps rather than just gaining more knowledge
+    const safeKeyReflection = keyReflection || "";
+    const safeImpact = impact || "";
 
-Format each action item as a clear instruction starting with a verb. Do NOT include any numbering, bullets, or prefixes.`;
+    const prompt = `
+You are a knowledgeable Islamic scholar specializing in practical spiritual development. Your task is to suggest personalized action items based on a Muslim's halaqa (Islamic study circle) reflection.
+
+${personalizationSection}
+
+HALAQA REFLECTION:
+Key Reflection: ${safeKeyReflection}
+Personal Impact: ${safeImpact}
+
+Based on this reflection, suggest 3-5 specific, actionable items that would help this person implement the insights from their halaqa. Each action item should:
+
+1. Be directly relevant to the specific themes and challenges mentioned in their reflection
+2. Be concrete, specific, and immediately actionable
+3. Be appropriate for their knowledge level and spiritual journey stage
+4. Connect to Islamic principles while remaining practical
+
+Format your response as a JSON array with objects containing:
+- description: A clear, actionable statement (1-2 sentences)
+
+THE OUTPUT MUST BE VALID JSON WITH NO MARKDOWN FORMATTING. Do not include any other text, commentary, or explanation outside the JSON array.
+`;
 
     // Call Claude API
     const completion = await anthropic.messages.create({
-      model: 'claude-3-7-sonnet-20250219',
+      model: 'claude-3-haiku-20240307',
       max_tokens: 1000,
+      temperature: 0.7,
       messages: [
-        { role: "user", content: fullPrompt }
+        { role: "user", content: prompt }
       ],
     });
 
-    // Handle the response
-    const responseContent = completion.content?.[0]?.text || "";
-    logger.info(`Generated action items: ${responseContent}`);
-
-    // Parse the response into individual action items
-    const actionItems = responseContent
-      .split("\n")
-      .filter((line) => line.trim().length > 0)
-      .map((item) => ({ description: item.trim() }));
-
-    if (actionItems.length === 0) {
-      logger.warn("No action items were generated from Claude's response");
-      // Provide fallback action items
-      return [
-        { description: "Schedule time to review the lecture notes weekly" },
-        { description: "Share one key insight from this lecture with a family member or friend" },
-        { description: "Implement one practical change based on what you learned" },
-      ];
+    // Extract the content from the response
+    let content = '';
+    if (completion.content && completion.content.length > 0) {
+      content = completion.content[0].text || '';
     }
-
-    return actionItems;
+    
+    // Clean and normalize the content for parsing
+    let cleanedContent = content
+      // Remove markdown code blocks
+      .replace(/```json\s*/g, '')
+      .replace(/```\s*$/g, '')
+      .replace(/```/g, '')
+      // Trim whitespace
+      .trim();
+      
+    try {
+      const parsedData = JSON.parse(cleanedContent);
+      if (Array.isArray(parsedData) && parsedData.length > 0) {
+        logger.info(`Successfully generated ${parsedData.length} action items`);
+        return parsedData;
+      }
+    } catch (e) {
+      logger.error("Error parsing action items JSON:", e);
+    }
+    
+    // Return fallback action items if parsing fails
+    return fallbackHalaqaActionItems.map(item => ({ description: item }));
   } catch (error) {
-    logger.error("Error generating action items:", error);
-    // Return fallback action items in case of error
-    return [
-      { description: "Schedule time to review the lecture notes weekly" },
-      { description: "Share one key insight from this lecture with a family member or friend" },
-      { description: "Implement one practical change based on what you learned" },
-    ];
+    logger.error("Error generating halaqa action items:", error);
+    return fallbackHalaqaActionItems.map(item => ({ description: item }));
   }
 }
 
@@ -1144,55 +1172,99 @@ Ensure all recommendations are firmly rooted in mainstream Islamic tradition and
   }
 }
 
+// Define a more complete WirdSuggestion type that includes all the fields we need
+interface HalaqaWirdSuggestion {
+  id: string;
+  title: string;
+  name?: string;
+  type?: string;
+  category?: string;
+  target?: number;
+  unit?: string;
+  description: string;
+  duration: string;
+  frequency: string;
+  benefit: string;
+  source: string;
+}
+
 /**
- * Generate devotional practice (wird) suggestions based on halaqa entry
+ * Generates wird suggestions based on a halaqa reflection
  * @param halaqaContent Content from the halaqa entry
+ * @param personalizationContext Optional personalization context
  * @returns Array of wird suggestions
  */
-export async function generateHalaqaWirdSuggestions(halaqaContent: {
-  title: string;
-  topic: string;
-  keyReflection: string;
-  impact: string;
-}): Promise<ExtendedWirdSuggestion[]> {
+export async function generateHalaqaWirdSuggestions(
+  halaqaContent: {
+    title: string;
+    topic: string;
+    keyReflection: string;
+    impact: string;
+  },
+  personalizationContext?: PersonalizationContext
+): Promise<HalaqaWirdSuggestion[]> {
+  const logger = getLogger("generateHalaqaWirdSuggestions");
+  logger.info(`Generating wird suggestions for halaqa: ${halaqaContent.title}`);
+
+  // Log if personalization is being used
+  if (personalizationContext) {
+    logger.info("Using personalization context for wird suggestions");
+  }
+
   try {
-    console.log("Generating wird suggestions for halaqa:", halaqaContent.title);
-    
+    // Build the prompt with personalization if available
+    let personalizationSection = "";
+    if (personalizationContext) {
+      personalizationSection = `
+USER PERSONALIZATION CONTEXT:
+- Knowledge Level: ${personalizationContext.knowledgeLevel || "Not specified"}
+- Spiritual Journey Stage: ${personalizationContext.spiritualJourneyStage || "Not specified"}
+- Cultural Background: ${personalizationContext.culturalBackground || "Not specified"}
+- Primary Goals: ${personalizationContext.primaryGoals?.join(", ") || "Not specified"}
+- Topics of Interest: ${personalizationContext.topicsOfInterest?.join(", ") || "Not specified"}
+- Guidance Preferences: ${personalizationContext.guidancePreferences?.join(", ") || "Not specified"}
+
+Please tailor your suggestions to match this user's specific context, knowledge level, and preferences.
+`;
+    }
+
+    const safeKeyReflection = halaqaContent.keyReflection || "";
+    const safeImpact = halaqaContent.impact || "";
+
     const prompt = `
-You are an Islamic spiritual mentor helping with personalized devotional practices (wird) for a Muslim based on their halaqa reflection.
+You are a knowledgeable Islamic scholar specializing in spiritual development. Your task is to suggest personalized wird (daily Islamic spiritual practices) based on a Muslim's halaqa (Islamic study circle) reflection.
 
-CRITICAL INSTRUCTION: Your suggestions MUST be based EXCLUSIVELY on the specific content of their reflection below. DO NOT provide generic Islamic practices that aren't directly connected to their exact words and themes.
+${personalizationSection}
 
-HALAQA REFLECTION DETAILS:
-- Title: ${halaqaContent.title}
-- Topic: ${halaqaContent.topic}
-- Key Reflection: ${halaqaContent.keyReflection}
-- Personal Impact: ${halaqaContent.impact}
+HALAQA REFLECTION:
+Title: ${halaqaContent.title}
+Topic: ${halaqaContent.topic}
+Key Reflection: ${safeKeyReflection}
+Personal Impact: ${safeImpact}
 
-Step 1: First, identify and list 3-5 SPECIFIC PHRASES, CONCEPTS, or THEMES that the user explicitly mentioned in their reflection.
+Based on this reflection, suggest 3 specific wird practices that would help this person grow spiritually in alignment with their reflection. Each suggestion should:
 
-Step 2: For each identified phrase/concept/theme, create a tailored wird suggestion that:
-1. Directly quotes or references the user's exact language from their reflection
-2. Provides concrete, customized guidance specifically addressing that phrase/concept
-3. Includes detailed implementation steps with specifics (e.g., which verses, which times of day)
-4. Grounds the practice in Islamic tradition relevant to their specific reflection topic
+1. Be directly relevant to the specific themes and challenges mentioned in their reflection
+2. Include a clear, actionable practice with specific instructions
+3. Explain the spiritual benefit and connection to their reflection
+4. Be appropriate for their knowledge level and spiritual journey stage
+5. Include a relevant Quranic verse or hadith that supports this practice
 
-IMPORTANT: Your suggestions must be highly customized to their specific reflection content. Each suggestion should clearly reference elements from their actual reflection and quote their own words where possible.
-
-Provide your output as a JSON array of Wird suggestion objects with these fields:
-- type: a category like "Quran", "Dhikr", "Dua", "Sunnah", or "Charity" 
-- title: a concise, action-oriented title (5-7 words) that references their specific reflection content
-- description: a detailed explanation connecting to specific phrases or concepts from their reflection (3-4 sentences)
-- duration: an estimated time commitment (e.g., "5 minutes")
-- frequency: how often to practice (e.g., "daily", "weekly")
-- benefit: the specific spiritual/personal benefit of this practice as it relates to their expressed needs
+Format your response as a JSON array with objects containing:
+- id: A unique identifier like "wird-1", "wird-2", etc.
+- title: A concise, descriptive title for the practice
+- description: A 2-3 sentence explanation of what the practice involves
+- benefit: The spiritual benefit of this practice
+- source: The Quranic verse or hadith that supports this practice
+- frequency: How often to perform this practice (e.g., "daily", "weekly")
+- duration: How long each session should take (e.g., "5 minutes", "10 minutes")
 
 THE OUTPUT MUST BE VALID JSON WITH NO MARKDOWN FORMATTING. Do not include any other text, commentary, or explanation outside the JSON array.
-IMPORTANT: Ensure all strings are properly escaped with double quotes and the JSON is valid.
 `;
 
-    const response = await anthropic.messages.create({
-      model: "claude-3-haiku-20240307",
+    // Call Claude API
+    const completion = await anthropic.messages.create({
+      model: 'claude-3-haiku-20240307',
       max_tokens: 4000,
       temperature: 0.7,
       messages: [
@@ -1200,10 +1272,10 @@ IMPORTANT: Ensure all strings are properly escaped with double quotes and the JS
       ],
     });
 
-    // Extract the content from the message
+    // Extract the content from the response
     let content = '';
-    if (response.content && response.content.length > 0) {
-      content = response.content[0].text || '';
+    if (completion.content && completion.content.length > 0) {
+      content = completion.content[0].text || '';
     }
     
     // Clean and normalize the content for parsing
@@ -1215,63 +1287,20 @@ IMPORTANT: Ensure all strings are properly escaped with double quotes and the JS
       // Trim whitespace
       .trim();
       
-    // Try several parsing strategies
     try {
-      // Strategy 1: Try to parse the entire cleaned content as JSON
-      try {
-        const parsedData = JSON.parse(cleanedContent);
-        if (Array.isArray(parsedData) && parsedData.length > 0) {
-          return parsedData.map(s => ({ ...s, id: v4() }));
-        }
-      } catch (e) {
-        // Continue to next strategy if this fails
-        console.log("Strategy 1 failed, trying next approach");
+      const parsedData = JSON.parse(cleanedContent);
+      if (Array.isArray(parsedData) && parsedData.length > 0) {
+        logger.info(`Successfully generated ${parsedData.length} wird suggestions`);
+        return parsedData;
       }
-      
-      // Strategy 2: Try to extract JSON array using regex
-      const jsonRegex = /\[[\s\S]*?\]/;
-      const match = cleanedContent.match(jsonRegex);
-      if (match && match[0]) {
-        try {
-          const parsedData = JSON.parse(match[0]);
-          if (Array.isArray(parsedData) && parsedData.length > 0) {
-            return parsedData.map(s => ({ ...s, id: v4() }));
-          }
-        } catch (e) {
-          console.log("Strategy 2 failed, trying next approach");
-        }
-      }
-      
-      // Strategy 3: More aggressive JSON cleanup and try again
-      // This handles cases with trailing commas or other common JSON errors
-      let fixedContent = cleanedContent
-        // Fix common JSON errors like trailing commas
-        .replace(/,(\s*[\]}])/g, '$1')
-        // Ensure property names are double-quoted
-        .replace(/([{,]\s*)([a-zA-Z0-9_]+)(\s*:)/g, '$1"$2"$3')
-        // Ensure string values use double quotes
-        .replace(/:\s*'([^']*)'/g, ': "$1"');
-      
-      try {
-        const parsedData = JSON.parse(fixedContent);
-        if (Array.isArray(parsedData) && parsedData.length > 0) {
-          return parsedData.map(s => ({ ...s, id: v4() }));
-        }
-      } catch (e) {
-        console.log("Strategy 3 failed, falling back to default suggestions");
-      }
-      
-      // If we got here, all parsing strategies failed
-      console.error("All JSON parsing strategies failed. Returning fallback suggestions.");
-      return generateFallbackWirdSuggestions();
-      
-    } catch (parseError) {
-      console.error("Error parsing wird suggestion response:", parseError);
-      // Provide fallback suggestions when parsing fails
-      return generateFallbackWirdSuggestions();
+    } catch (e) {
+      logger.error("Error parsing wird suggestions JSON:", e);
     }
+    
+    // Return fallback suggestions if parsing fails
+    return generateFallbackWirdSuggestions();
   } catch (error) {
-    console.error("Error generating wird suggestions:", error);
+    logger.error("Error generating wird suggestions:", error);
     return generateFallbackWirdSuggestions();
   }
 }
@@ -1280,34 +1309,34 @@ IMPORTANT: Ensure all strings are properly escaped with double quotes and the JS
  * Generate fallback wird suggestions if the API call fails
  * @returns Array of default wird suggestions
  */
-function generateFallbackWirdSuggestions(): ExtendedWirdSuggestion[] {
+function generateFallbackWirdSuggestions(): HalaqaWirdSuggestion[] {
   return [
     {
-      id: v4(),
+      id: "wird-1",
       title: "Daily Quran Reflection",
       description: "Take 10 minutes each day to read and reflect on a few verses of the Quran, focusing on their meaning in your life.",
-      type: "Quran",
-      duration: "10 minutes",
+      benefit: "Deepens connection with Allah through His words",
+      source: "The Quran itself encourages reflection: 'Do they not then reflect on the Quran?' (4:82)",
       frequency: "daily",
-      benefit: "Deepens connection with Allah through His words"
+      duration: "10 minutes"
     },
     {
-      id: v4(),
+      id: "wird-2",
       title: "Morning and Evening Adhkar",
       description: "Establish a consistent practice of morning and evening remembrances (adhkar) to strengthen your connection with Allah throughout the day.",
-      type: "Dhikr",
-      duration: "5 minutes",
+      benefit: "Provides spiritual protection and mindfulness",
+      source: "The Prophet (PBUH) said: 'Whoever recites the morning and evening adhkar, they will suffice him against anything that may harm him.' (Abu Dawud)",
       frequency: "twice daily",
-      benefit: "Provides spiritual protection and mindfulness"
+      duration: "5 minutes"
     },
     {
-      id: v4(),
+      id: "wird-3",
       title: "Weekly Gratitude Journaling",
       description: "Set aside time each week to write down blessings Allah has bestowed upon you, fostering a mindset of gratitude and contentment.",
-      type: "Reflection",
-      duration: "15 minutes",
+      benefit: "Cultivates thankfulness and recognition of Allah's favors",
+      source: "Allah says in the Quran: 'If you are grateful, I will surely increase you [in favor]' (14:7)",
       frequency: "weekly",
-      benefit: "Cultivates thankfulness and recognition of Allah's favors"
+      duration: "15 minutes"
     }
   ];
 }
@@ -1315,28 +1344,58 @@ function generateFallbackWirdSuggestions(): ExtendedWirdSuggestion[] {
 /**
  * Generates detailed, personalized insights based on a halaqa reflection
  * @param halaqaContent Content from the halaqa entry
+ * @param personalizationContext Optional personalization context
  * @returns Array of personalized insights
  */
-export async function generateHalaqaInsights(halaqaContent: {
-  title: string;
-  topic: string;
-  keyReflection: string;
-  impact: string;
-}): Promise<Array<{id: string; title: string; content: string;}>> {
+export async function generateHalaqaInsights(
+  halaqaContent: {
+    title: string;
+    topic: string;
+    keyReflection: string;
+    impact: string;
+  },
+  personalizationContext?: PersonalizationContext
+): Promise<Array<{id: string; title: string; content: string;}>> {
   const logger = getLogger("generateHalaqaInsights");
   logger.info(`Generating personalized insights for halaqa: ${halaqaContent.title}`);
 
+  // Log if personalization is being used
+  if (personalizationContext) {
+    logger.info("Using personalization context for insights");
+  }
+
   try {
+    // Build the prompt with personalization if available
+    let personalizationSection = "";
+    if (personalizationContext) {
+      personalizationSection = `
+USER PERSONALIZATION CONTEXT:
+- Knowledge Level: ${personalizationContext.knowledgeLevel || "Not specified"}
+- Spiritual Journey Stage: ${personalizationContext.spiritualJourneyStage || "Not specified"}
+- Cultural Background: ${personalizationContext.culturalBackground || "Not specified"}
+- Primary Goals: ${personalizationContext.primaryGoals?.join(", ") || "Not specified"}
+- Topics of Interest: ${personalizationContext.topicsOfInterest?.join(", ") || "Not specified"}
+- Guidance Preferences: ${personalizationContext.guidancePreferences?.join(", ") || "Not specified"}
+
+Please tailor your insights to match this user's specific context, knowledge level, and preferences.
+`;
+    }
+
+    const safeKeyReflection = halaqaContent.keyReflection || "";
+    const safeImpact = halaqaContent.impact || "";
+
     const prompt = `
 You are a deeply knowledgeable Islamic scholar with expertise in spiritual development and practical application of Islamic teachings. Your task is to generate personalized, specific insights based on a Muslim's halaqa (Islamic study circle) reflection.
+
+${personalizationSection}
 
 CRITICAL INSTRUCTION: Your insights MUST be based EXCLUSIVELY on the specific content provided below. DO NOT provide generic Islamic advice that isn't directly connected to the user's exact words and themes.
 
 HALAQA REFLECTION:
 Title: ${halaqaContent.title}
 Topic: ${halaqaContent.topic}
-Key Reflection: ${halaqaContent.keyReflection}
-Personal Impact: ${halaqaContent.impact}
+Key Reflection: ${safeKeyReflection}
+Personal Impact: ${safeImpact}
 
 Step 1: First, carefully extract and list 4-6 SPECIFIC PHRASES, CONCEPTS, or THEMES that the user explicitly mentioned in their reflection.
 

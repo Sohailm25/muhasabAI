@@ -161,71 +161,43 @@ import { usePersonalization } from '@/hooks/usePersonalization';
  */
 export function useReflectionService() {
   const personalization = usePersonalization();
-  // Get an instance of the reflection service
-  const reflectionService = new ReflectionService();
   
-  // Wrap the submitReflection method to inject personalization
+  // Submit a reflection and get a response
   const submitReflection = async (content: string): Promise<ReflectionResponse> => {
-    console.log("useReflectionService.submitReflection called with content:", content.substring(0, 30) + "...");
-    
-    // Get personalization data if enabled
+    // Check if personalization is enabled and available
     let personalizationContext = null;
     
     if (personalization.isPersonalizationEnabled()) {
-      console.log("Personalization is enabled, fetching context...");
       try {
-        // Use the same getPersonalizationContext function we use everywhere else
-        personalizationContext = await personalization.getPersonalizationContext();
-        console.log("Retrieved personalization context:", personalizationContext ? "yes" : "no");
+        // Get personalization context for API
+        personalizationContext = personalization.getPersonalizationContext();
+        
+        // Log for debugging
+        console.log("Personalization is enabled for this reflection");
         
         if (personalizationContext) {
-          // Check if it's an object or a string
-          console.log("Personalization context type:", typeof personalizationContext);
-          console.log("Personalization context keys:", Object.keys(personalizationContext).join(", "));
           console.log("DEBUG - Full personalization context:", JSON.stringify(personalizationContext, null, 2));
           
-          // Validate expected structure
-          if (typeof personalizationContext !== 'object') {
-            console.warn("WARNING: personalizationContext is not an object, type:", typeof personalizationContext);
-            
-            // Try to parse if it's a string
+          // Validate that personalizationContext is an object, not a string
+          if (typeof personalizationContext !== 'object' || personalizationContext === null) {
+            console.error("❌ Personalization context is not an object:", personalizationContext);
+            // Try to fix if it's a string
             if (typeof personalizationContext === 'string') {
-              console.log("Attempting to parse personalizationContext string");
               try {
                 personalizationContext = JSON.parse(personalizationContext);
-                console.log("Successfully parsed personalizationContext from string to object with keys:", 
-                  Object.keys(personalizationContext).join(", "));
-              } catch (e) {
-                console.error("Failed to parse personalizationContext string:", e);
-                
-                // If we can't parse it, log it for diagnosis
-                console.log("Problematic personalizationContext string:", 
-                  personalizationContext.substring(0, 100) + "...");
-                  
-                // Check localStorage as fallback
-                const privateProfile = localStorage.getItem('private_profile');
-                if (privateProfile) {
-                  try {
-                    const profile = JSON.parse(privateProfile);
-                    console.log("Falling back to profile from localStorage:", profile);
-                    personalizationContext = profile;
-                  } catch (e) {
-                    console.error("Failed to parse profile from localStorage:", e);
-                    personalizationContext = null;
-                  }
-                } else {
-                  console.warn("No private profile data found in localStorage");
-                  personalizationContext = null;
-                }
+                console.log("Fixed personalization context by parsing JSON string");
+              } catch (parseError) {
+                console.error("Failed to parse personalization context string:", parseError);
+                personalizationContext = null;
               }
             } else {
-              console.log("✅ Personalization context is correctly an object type");
+              personalizationContext = null;
             }
           } else {
             console.log("✅ Personalization context is correctly an object type");
           }
         } else {
-          console.log("Personalization is enabled, but no data is available");
+          console.log("No personalization context available despite being enabled");
         }
       } catch (error) {
         console.error("Error preparing personalization context:", error);

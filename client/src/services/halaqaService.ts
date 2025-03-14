@@ -413,7 +413,10 @@ export class HalaqaService {
    * @param options Options for the request
    * @returns Analysis results
    */
-  async analyzeHalaqaEntry(id: string | number, options?: { signal?: AbortSignal }): Promise<any> {
+  async analyzeHalaqaEntry(id: string | number, options?: { 
+    signal?: AbortSignal,
+    personalizationContext?: any
+  }): Promise<any> {
     const numericId = typeof id === 'string' ? parseInt(id) : id;
     
     // Check cache first
@@ -456,11 +459,19 @@ export class HalaqaService {
       const url = `${this.apiBase}/${numericId}/analyze`;
       console.log(`[analyzeHalaqaEntry] Making API request to: ${url}`);
       
+      // Include personalization context if provided
+      const requestBody = options?.personalizationContext 
+        ? { personalizationContext: options.personalizationContext }
+        : {};
+      
+      if (options?.personalizationContext) {
+        console.log(`[analyzeHalaqaEntry] Including personalization context in request`);
+      }
+      
       const response = await fetch(url, {
         method: 'POST',
         headers: getAuthHeaders(),
-        // No need to send halaqaId in the body since it's in the URL
-        body: JSON.stringify({}),
+        body: JSON.stringify(requestBody),
         signal: options?.signal
       });
       
