@@ -558,8 +558,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.use("/api", masjidiRouter);
   
   // Mount the Profile API routes
-  console.log("🔍 [ROUTE DEBUG] Registering Profile API routes at /api");
-  app.use("/api", profileRouter);
+  console.log("🔍 [ROUTE DEBUG] Registering Profile API routes at /api/profile");
+  app.use("/api/profile", profileRouter);
   
   // Mount the Auth routes
   console.log("🔍 [ROUTE DEBUG] Registering Auth routes at /auth");
