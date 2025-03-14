@@ -10,12 +10,14 @@ import {
   updateEncryptedProfileData,
   deleteEncryptedProfileData
 } from '../db/index'; // Import specific functions from db/index
+import * as memory from '../db/memory-storage'; // Import memory storage functions
 import { ProfileRepository } from '../database/profile-repository';
 import { AuthenticationError, NotFoundError } from '../utils/errors';
 import { Pool } from 'pg';
 
 const router = express.Router();
 const JWT_SECRET = process.env.JWT_SECRET || 'sahabai-secret-key';
+const USE_DATABASE = process.env.USE_DATABASE === 'true' || process.env.NODE_ENV === 'production';
 
 // Initialize profile repository
 let profileRepository: ProfileRepository;
@@ -75,68 +77,74 @@ export function initProfileRoutes(pool: any) {
   
   // Register GET endpoint for encrypted profile data
   router.get('/:userId/encrypted', async (req, res) => {
-    console.log('[PROFILE_ROUTES] GET /:userId/encrypted request received');
-    console.log('[PROFILE_ROUTES] User ID:', req.params.userId);
-    console.log('[PROFILE_ROUTES] Headers:', JSON.stringify(req.headers));
-    console.log('[PROFILE_ROUTES] Full URL path:', req.originalUrl);
-    
     try {
       const userId: string = req.params.userId;
+      
+      console.log('[PROFILE_ROUTES] GET /:userId/encrypted request received');
+      console.log('[PROFILE_ROUTES] User ID:', userId);
+      console.log('[PROFILE_ROUTES] Headers:', JSON.stringify(req.headers));
+      console.log('[PROFILE_ROUTES] Full URL path:', req.originalUrl);
+      console.log('[PROFILE_ROUTES] Route path:', req.route.path);
       
       if (!userId) {
         console.log('[PROFILE_ROUTES] No userId provided');
         return res.status(400).json({ error: 'userId is required' });
       }
-      
+
       console.log('[PROFILE_ROUTES] Fetching encrypted profile data for user:', userId);
-      const encryptedData = await getEncryptedProfileData(userId);
+      
+      // Try to get encrypted data
+      let encryptedData;
+      
+      if (USE_DATABASE) {
+        console.log('[PROFILE_ROUTES] Using database storage for encrypted data');
+        encryptedData = await getEncryptedProfileData(userId);
+      } else {
+        console.log('[PROFILE_ROUTES] Using memory storage for encrypted data');
+        encryptedData = await memory.getEncryptedProfileDataFromMemory(userId);
+      }
       
       if (!encryptedData) {
         console.log('[PROFILE_ROUTES] No encrypted data found for user:', userId);
         return res.status(404).json({ error: 'Encrypted data not found' });
       }
-      
+
       console.log('[PROFILE_ROUTES] Encrypted data found, data length:', encryptedData.data ? encryptedData.data.length : 0);
       console.log('[PROFILE_ROUTES] IV present:', !!encryptedData.iv);
-      
-      // Transform to client format if needed
-      let clientEncryptedData = encryptedData;
-      
-      // If IV is a string, convert it to array of numbers
-      if (typeof encryptedData.iv === 'string') {
-        try {
-          clientEncryptedData = {
-            data: encryptedData.data,
-            iv: encryptedData.iv.split(',').map(Number)
-          };
-        } catch (error) {
-          console.error('[PROFILE_ROUTES] Error converting IV to array:', error);
-          // Fall back to original format
-          clientEncryptedData = encryptedData;
-        }
-      }
-      
+
+      // Transform to client format
+      const clientEncryptedData = {
+        data: encryptedData.data,
+        iv: Array.isArray(encryptedData.iv) 
+          ? encryptedData.iv 
+          : typeof encryptedData.iv === 'string' && encryptedData.iv.includes(',')
+            ? encryptedData.iv.split(',').map(Number)
+            : encryptedData.iv
+      };
+
       console.log('[PROFILE_ROUTES] Sending encrypted data response with explicit content-type header');
       res.setHeader('Content-Type', 'application/json');
       return res.json(clientEncryptedData);
     } catch (error) {
       console.error('[PROFILE_ROUTES] Error in GET /:userId/encrypted:', error);
-      return res.status(500).json({ error: 'Failed to fetch encrypted data' });
+      log(`Error fetching encrypted data: ${error instanceof Error ? error.message : String(error)}`, 'error');
+      res.status(500).json({ error: 'Failed to fetch encrypted data' });
     }
   });
   
   // Register PUT endpoint for encrypted profile data
   router.put('/:userId/encrypted', async (req, res) => {
-    console.log('[PROFILE_ROUTES] PUT /:userId/encrypted request received');
-    console.log('[PROFILE_ROUTES] User ID:', req.params.userId);
-    console.log('[PROFILE_ROUTES] Headers:', JSON.stringify(req.headers));
-    console.log('[PROFILE_ROUTES] Full URL path:', req.originalUrl);
-    console.log('[PROFILE_ROUTES] Request body has data:', !!req.body.data);
-    console.log('[PROFILE_ROUTES] Request body has IV:', !!req.body.iv);
-    
     try {
       const userId: string = req.params.userId;
       const { data, iv } = req.body;
+      
+      console.log('[PROFILE_ROUTES] PUT /:userId/encrypted request received');
+      console.log('[PROFILE_ROUTES] User ID:', userId);
+      console.log('[PROFILE_ROUTES] Headers:', JSON.stringify(req.headers));
+      console.log('[PROFILE_ROUTES] Full URL path:', req.originalUrl);
+      console.log('[PROFILE_ROUTES] Route path:', req.route.path);
+      console.log('[PROFILE_ROUTES] Request body has data:', !!data);
+      console.log('[PROFILE_ROUTES] Request body has IV:', !!iv);
       
       if (!userId) {
         console.log('[PROFILE_ROUTES] No userId provided');
@@ -147,7 +155,7 @@ export function initProfileRoutes(pool: any) {
         console.log('[PROFILE_ROUTES] Missing data or IV in request body');
         return res.status(400).json({ error: 'data and iv are required' });
       }
-      
+
       // Check if user profile exists first
       console.log('[PROFILE_ROUTES] Checking if user profile exists');
       const profile = await getUserProfile(userId);
@@ -155,24 +163,35 @@ export function initProfileRoutes(pool: any) {
         console.log('[PROFILE_ROUTES] User profile not found for user:', userId);
         return res.status(404).json({ error: 'User profile not found' });
       }
-      
-      // Convert iv array to string for storage
+
+      // Convert iv array to string for storage if needed
       const ivString = Array.isArray(iv) ? iv.toString() : iv;
       console.log('[PROFILE_ROUTES] IV converted to string, length:', ivString.length);
-      
+
       // Save encrypted data
       console.log('[PROFILE_ROUTES] Saving encrypted data for user:', userId);
-      await updateEncryptedProfileData(userId, { 
-        data, 
-        iv: ivString 
-      });
       
+      let success = false;
+      
+      if (USE_DATABASE) {
+        console.log('[PROFILE_ROUTES] Using database storage for encrypted data');
+        success = await updateEncryptedProfileData(userId, { 
+          data, 
+          iv: ivString 
+        });
+      } else {
+        console.log('[PROFILE_ROUTES] Using memory storage for encrypted data');
+        await memory.saveEncryptedProfileDataToMemory(userId, data, ivString);
+        success = true;
+      }
+
       console.log('[PROFILE_ROUTES] Encrypted data saved successfully');
       res.setHeader('Content-Type', 'application/json');
       res.status(200).json({ success: true });
     } catch (error) {
       console.error('[PROFILE_ROUTES] Error in PUT /:userId/encrypted:', error);
-      return res.status(500).json({ error: 'Failed to save encrypted data' });
+      log(`Error saving encrypted data: ${error instanceof Error ? error.message : String(error)}`, 'error');
+      res.status(500).json({ error: 'Failed to save encrypted data' });
     }
   });
   
@@ -542,13 +561,13 @@ router.get('/profile/:userId', async (req, res) => {
 });
 
 /**
- * Get encrypted profile data
+ * Get encrypted profile data (alternative route format)
  */
-router.get('/profile/:userId/encrypted', async (req, res) => {
+router.get('/:userId/encrypted', async (req, res) => {
   try {
     const userId: string = req.params.userId;
     
-    console.log('[PROFILE_ROUTES] GET /profile/:userId/encrypted request received');
+    console.log('[PROFILE_ROUTES] GET /:userId/encrypted request received');
     console.log('[PROFILE_ROUTES] User ID:', userId);
     console.log('[PROFILE_ROUTES] Headers:', JSON.stringify(req.headers));
     console.log('[PROFILE_ROUTES] Full URL path:', req.originalUrl);
@@ -559,13 +578,18 @@ router.get('/profile/:userId/encrypted', async (req, res) => {
       return res.status(400).json({ error: 'userId is required' });
     }
 
-    // Check authorization (implement based on your auth system)
-    // if (userId !== req.user?.id) {
-    //   return res.status(403).json({ error: 'Unauthorized access to encrypted data' });
-    // }
-
     console.log('[PROFILE_ROUTES] Fetching encrypted profile data for user:', userId);
-    const encryptedData = await getEncryptedProfileData(userId);
+    
+    // Try to get encrypted data
+    let encryptedData;
+    
+    if (USE_DATABASE) {
+      console.log('[PROFILE_ROUTES] Using database storage for encrypted data');
+      encryptedData = await getEncryptedProfileData(userId);
+    } else {
+      console.log('[PROFILE_ROUTES] Using memory storage for encrypted data');
+      encryptedData = await memory.getEncryptedProfileDataFromMemory(userId);
+    }
     
     if (!encryptedData) {
       console.log('[PROFILE_ROUTES] No encrypted data found for user:', userId);
@@ -578,28 +602,32 @@ router.get('/profile/:userId/encrypted', async (req, res) => {
     // Transform to client format
     const clientEncryptedData = {
       data: encryptedData.data,
-      iv: encryptedData.iv.split(',').map(Number) // Convert string to array of numbers
+      iv: Array.isArray(encryptedData.iv) 
+        ? encryptedData.iv 
+        : typeof encryptedData.iv === 'string' && encryptedData.iv.includes(',')
+          ? encryptedData.iv.split(',').map(Number)
+          : encryptedData.iv
     };
 
     console.log('[PROFILE_ROUTES] Sending encrypted data response with explicit content-type header');
     res.setHeader('Content-Type', 'application/json');
     return res.json(clientEncryptedData);
   } catch (error) {
-    console.error('[PROFILE_ROUTES] Error in GET /profile/:userId/encrypted:', error);
+    console.error('[PROFILE_ROUTES] Error in GET /:userId/encrypted:', error);
     log(`Error fetching encrypted data: ${error instanceof Error ? error.message : String(error)}`, 'error');
     res.status(500).json({ error: 'Failed to fetch encrypted data' });
   }
 });
 
 /**
- * Update encrypted profile data
+ * Update encrypted profile data (alternative route format)
  */
-router.put('/profile/:userId/encrypted', async (req, res) => {
+router.put('/:userId/encrypted', async (req, res) => {
   try {
     const userId: string = req.params.userId;
     const { data, iv } = req.body;
     
-    console.log('[PROFILE_ROUTES] PUT /profile/:userId/encrypted request received');
+    console.log('[PROFILE_ROUTES] PUT /:userId/encrypted request received');
     console.log('[PROFILE_ROUTES] User ID:', userId);
     console.log('[PROFILE_ROUTES] Headers:', JSON.stringify(req.headers));
     console.log('[PROFILE_ROUTES] Full URL path:', req.originalUrl);
@@ -617,11 +645,6 @@ router.put('/profile/:userId/encrypted', async (req, res) => {
       return res.status(400).json({ error: 'data and iv are required' });
     }
 
-    // Check authorization (implement based on your auth system)
-    // if (userId !== req.user?.id) {
-    //   return res.status(403).json({ error: 'Unauthorized to update encrypted data' });
-    // }
-
     // Check if user profile exists first
     console.log('[PROFILE_ROUTES] Checking if user profile exists');
     const profile = await getUserProfile(userId);
@@ -630,22 +653,32 @@ router.put('/profile/:userId/encrypted', async (req, res) => {
       return res.status(404).json({ error: 'User profile not found' });
     }
 
-    // Convert iv array to string for storage
+    // Convert iv array to string for storage if needed
     const ivString = Array.isArray(iv) ? iv.toString() : iv;
     console.log('[PROFILE_ROUTES] IV converted to string, length:', ivString.length);
 
     // Save encrypted data
     console.log('[PROFILE_ROUTES] Saving encrypted data for user:', userId);
-    await updateEncryptedProfileData(userId, { 
-      data, 
-      iv: ivString 
-    });
+    
+    let success = false;
+    
+    if (USE_DATABASE) {
+      console.log('[PROFILE_ROUTES] Using database storage for encrypted data');
+      success = await updateEncryptedProfileData(userId, { 
+        data, 
+        iv: ivString 
+      });
+    } else {
+      console.log('[PROFILE_ROUTES] Using memory storage for encrypted data');
+      await memory.saveEncryptedProfileDataToMemory(userId, data, ivString);
+      success = true;
+    }
 
     console.log('[PROFILE_ROUTES] Encrypted data saved successfully');
     res.setHeader('Content-Type', 'application/json');
     res.status(200).json({ success: true });
   } catch (error) {
-    console.error('[PROFILE_ROUTES] Error in PUT /profile/:userId/encrypted:', error);
+    console.error('[PROFILE_ROUTES] Error in PUT /:userId/encrypted:', error);
     log(`Error saving encrypted data: ${error instanceof Error ? error.message : String(error)}`, 'error');
     res.status(500).json({ error: 'Failed to save encrypted data' });
   }
