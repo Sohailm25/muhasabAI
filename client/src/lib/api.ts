@@ -7,9 +7,10 @@ const getBaseUrl = () => {
     return import.meta.env.VITE_API_URL;
   }
   
-  // In production, default to the Railway URL
+  // In production, use the current domain as the base URL to avoid CORS issues
   if (window.location.hostname === 'www.sahabai.dev' || window.location.hostname === 'sahabai.dev') {
-    return 'https://sahabai-production.up.railway.app';
+    // Use the same domain for API requests to avoid CORS issues
+    return window.location.origin;
   }
   
   // In development, default to localhost:8080 (server runs on 8080 according to logs)

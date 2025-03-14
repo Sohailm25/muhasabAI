@@ -67,27 +67,27 @@ app.get('/api/health', (req, res) => {
 });
 
 // Configure CORS
+const allowedOrigins = [
+  'http://localhost:3000',
+  'http://localhost:3001',
+  'https://www.sahabai.dev',
+  'https://sahabai.dev'
+];
+
+console.log('🔍 [SERVER INIT] CORS configured with allowed origins:', allowedOrigins);
+
 app.use(cors({
   origin: function(origin, callback) {
-    // Allow requests with no origin (like mobile apps or curl requests)
+    // Allow requests with no origin (like mobile apps, curl requests)
     if (!origin) return callback(null, true);
     
-    // List of allowed origins
-    const allowedOrigins = [
-      'http://localhost:3000',
-      'http://localhost:3001',
-      'https://www.sahabai.dev',
-      'https://sahabai.dev'
-    ];
-    
-    if (allowedOrigins.indexOf(origin) !== -1 || !origin) {
+    if (allowedOrigins.indexOf(origin) !== -1 || process.env.NODE_ENV !== 'production') {
       callback(null, true);
     } else {
-      console.log('[CORS] Blocked request from:', origin);
+      console.log(`CORS blocked request from origin: ${origin}`);
       callback(new Error('Not allowed by CORS'));
     }
   },
-  credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
 }));

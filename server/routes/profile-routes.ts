@@ -561,13 +561,14 @@ router.get('/profile/:userId', async (req, res) => {
 });
 
 /**
- * Get encrypted profile data (alternative route format)
+ * Get encrypted profile data (direct API path format)
+ * This route matches the exact path the client is using: /api/profile/{userId}/encrypted
  */
-router.get('/:userId/encrypted', async (req, res) => {
+router.get('/profile/:userId/encrypted', async (req, res) => {
   try {
     const userId: string = req.params.userId;
     
-    console.log('[PROFILE_ROUTES] GET /:userId/encrypted request received');
+    console.log('[PROFILE_ROUTES] GET /profile/:userId/encrypted request received');
     console.log('[PROFILE_ROUTES] User ID:', userId);
     console.log('[PROFILE_ROUTES] Headers:', JSON.stringify(req.headers));
     console.log('[PROFILE_ROUTES] Full URL path:', req.originalUrl);
@@ -613,21 +614,22 @@ router.get('/:userId/encrypted', async (req, res) => {
     res.setHeader('Content-Type', 'application/json');
     return res.json(clientEncryptedData);
   } catch (error) {
-    console.error('[PROFILE_ROUTES] Error in GET /:userId/encrypted:', error);
+    console.error('[PROFILE_ROUTES] Error in GET /profile/:userId/encrypted:', error);
     log(`Error fetching encrypted data: ${error instanceof Error ? error.message : String(error)}`, 'error');
     res.status(500).json({ error: 'Failed to fetch encrypted data' });
   }
 });
 
 /**
- * Update encrypted profile data (alternative route format)
+ * Update encrypted profile data (direct API path format)
+ * This route matches the exact path the client is using: /api/profile/{userId}/encrypted
  */
-router.put('/:userId/encrypted', async (req, res) => {
+router.put('/profile/:userId/encrypted', async (req, res) => {
   try {
     const userId: string = req.params.userId;
     const { data, iv } = req.body;
     
-    console.log('[PROFILE_ROUTES] PUT /:userId/encrypted request received');
+    console.log('[PROFILE_ROUTES] PUT /profile/:userId/encrypted request received');
     console.log('[PROFILE_ROUTES] User ID:', userId);
     console.log('[PROFILE_ROUTES] Headers:', JSON.stringify(req.headers));
     console.log('[PROFILE_ROUTES] Full URL path:', req.originalUrl);
@@ -643,14 +645,6 @@ router.put('/:userId/encrypted', async (req, res) => {
     if (!data || !iv) {
       console.log('[PROFILE_ROUTES] Missing data or IV in request body');
       return res.status(400).json({ error: 'data and iv are required' });
-    }
-
-    // Check if user profile exists first
-    console.log('[PROFILE_ROUTES] Checking if user profile exists');
-    const profile = await getUserProfile(userId);
-    if (!profile) {
-      console.log('[PROFILE_ROUTES] User profile not found for user:', userId);
-      return res.status(404).json({ error: 'User profile not found' });
     }
 
     // Convert iv array to string for storage if needed
@@ -678,7 +672,7 @@ router.put('/:userId/encrypted', async (req, res) => {
     res.setHeader('Content-Type', 'application/json');
     res.status(200).json({ success: true });
   } catch (error) {
-    console.error('[PROFILE_ROUTES] Error in PUT /:userId/encrypted:', error);
+    console.error('[PROFILE_ROUTES] Error in PUT /profile/:userId/encrypted:', error);
     log(`Error saving encrypted data: ${error instanceof Error ? error.message : String(error)}`, 'error');
     res.status(500).json({ error: 'Failed to save encrypted data' });
   }

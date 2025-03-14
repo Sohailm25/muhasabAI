@@ -21,12 +21,6 @@ export interface UserSettings {
  * Service for handling user settings operations
  */
 export class UserService {
-  private apiBase: string;
-
-  constructor() {
-    this.apiBase = '/api/user';
-  }
-
   /**
    * Get user settings
    * @returns User settings object
@@ -36,7 +30,7 @@ export class UserService {
       console.log('[UserService] Getting user settings');
       
       // Use the API client for better error handling
-      const data = await API.get<UserSettings>(`${this.apiBase}/settings`);
+      const data = await API.get<UserSettings>('/api/user/settings');
       
       console.log('[UserService] User settings retrieved successfully:', data);
       return data;
@@ -69,7 +63,7 @@ export class UserService {
       console.log('[UserService] Updating user settings:', settings);
       
       // Use the API client for better error handling
-      const data = await API.post<UserSettings>(`${this.apiBase}/settings`, settings);
+      const data = await API.post<UserSettings>('/api/user/settings', settings);
       
       console.log('[UserService] User settings updated successfully:', data);
       return data;
@@ -101,7 +95,7 @@ export class UserService {
       console.log('[UserService] Accepting privacy policy');
       
       // Use the API client for better error handling
-      const data = await API.post<{ success: boolean }>(`${this.apiBase}/accept-privacy-policy`, {});
+      const data = await API.post<{ success: boolean }>('/api/user/accept-privacy-policy', {});
       
       console.log('[UserService] Privacy policy accepted successfully:', data);
       return data;
