@@ -73,6 +73,109 @@ export function initProfileRoutes(pool: any) {
     next();
   });
   
+  // Register GET endpoint for encrypted profile data
+  router.get('/:userId/encrypted', async (req, res) => {
+    console.log('[PROFILE_ROUTES] GET /:userId/encrypted request received');
+    console.log('[PROFILE_ROUTES] User ID:', req.params.userId);
+    console.log('[PROFILE_ROUTES] Headers:', JSON.stringify(req.headers));
+    console.log('[PROFILE_ROUTES] Full URL path:', req.originalUrl);
+    
+    try {
+      const userId: string = req.params.userId;
+      
+      if (!userId) {
+        console.log('[PROFILE_ROUTES] No userId provided');
+        return res.status(400).json({ error: 'userId is required' });
+      }
+      
+      console.log('[PROFILE_ROUTES] Fetching encrypted profile data for user:', userId);
+      const encryptedData = await getEncryptedProfileData(userId);
+      
+      if (!encryptedData) {
+        console.log('[PROFILE_ROUTES] No encrypted data found for user:', userId);
+        return res.status(404).json({ error: 'Encrypted data not found' });
+      }
+      
+      console.log('[PROFILE_ROUTES] Encrypted data found, data length:', encryptedData.data ? encryptedData.data.length : 0);
+      console.log('[PROFILE_ROUTES] IV present:', !!encryptedData.iv);
+      
+      // Transform to client format if needed
+      let clientEncryptedData = encryptedData;
+      
+      // If IV is a string, convert it to array of numbers
+      if (typeof encryptedData.iv === 'string') {
+        try {
+          clientEncryptedData = {
+            data: encryptedData.data,
+            iv: encryptedData.iv.split(',').map(Number)
+          };
+        } catch (error) {
+          console.error('[PROFILE_ROUTES] Error converting IV to array:', error);
+          // Fall back to original format
+          clientEncryptedData = encryptedData;
+        }
+      }
+      
+      console.log('[PROFILE_ROUTES] Sending encrypted data response with explicit content-type header');
+      res.setHeader('Content-Type', 'application/json');
+      return res.json(clientEncryptedData);
+    } catch (error) {
+      console.error('[PROFILE_ROUTES] Error in GET /:userId/encrypted:', error);
+      return res.status(500).json({ error: 'Failed to fetch encrypted data' });
+    }
+  });
+  
+  // Register PUT endpoint for encrypted profile data
+  router.put('/:userId/encrypted', async (req, res) => {
+    console.log('[PROFILE_ROUTES] PUT /:userId/encrypted request received');
+    console.log('[PROFILE_ROUTES] User ID:', req.params.userId);
+    console.log('[PROFILE_ROUTES] Headers:', JSON.stringify(req.headers));
+    console.log('[PROFILE_ROUTES] Full URL path:', req.originalUrl);
+    console.log('[PROFILE_ROUTES] Request body has data:', !!req.body.data);
+    console.log('[PROFILE_ROUTES] Request body has IV:', !!req.body.iv);
+    
+    try {
+      const userId: string = req.params.userId;
+      const { data, iv } = req.body;
+      
+      if (!userId) {
+        console.log('[PROFILE_ROUTES] No userId provided');
+        return res.status(400).json({ error: 'userId is required' });
+      }
+      
+      if (!data || !iv) {
+        console.log('[PROFILE_ROUTES] Missing data or IV in request body');
+        return res.status(400).json({ error: 'data and iv are required' });
+      }
+      
+      // Check if user profile exists first
+      console.log('[PROFILE_ROUTES] Checking if user profile exists');
+      const profile = await getUserProfile(userId);
+      if (!profile) {
+        console.log('[PROFILE_ROUTES] User profile not found for user:', userId);
+        return res.status(404).json({ error: 'User profile not found' });
+      }
+      
+      // Convert iv array to string for storage
+      const ivString = Array.isArray(iv) ? iv.toString() : iv;
+      console.log('[PROFILE_ROUTES] IV converted to string, length:', ivString.length);
+      
+      // Save encrypted data
+      console.log('[PROFILE_ROUTES] Saving encrypted data for user:', userId);
+      await updateEncryptedProfileData(userId, { 
+        data, 
+        iv: ivString 
+      });
+      
+      console.log('[PROFILE_ROUTES] Encrypted data saved successfully');
+      res.setHeader('Content-Type', 'application/json');
+      res.status(200).json({ success: true });
+    } catch (error) {
+      console.error('[PROFILE_ROUTES] Error in PUT /:userId/encrypted:', error);
+      return res.status(500).json({ error: 'Failed to save encrypted data' });
+    }
+  });
+  
   return router;
 }
 
@@ -126,6 +229,8 @@ router.get('/', verifyToken, async (req: express.Request, res: express.Response,
   try {
     console.log('[PROFILE_ROUTES] GET / request received');
     console.log('[PROFILE_ROUTES] Headers:', JSON.stringify(req.headers));
+    console.log('[PROFILE_ROUTES] Full URL path:', req.originalUrl);
+    console.log('[PROFILE_ROUTES] Route path:', req.route.path);
     
     const userId = (req as any).userId;
     console.log('[PROFILE_ROUTES] Profile requested for authenticated user:', userId);
@@ -183,6 +288,8 @@ router.post('/', verifyToken, async (req: express.Request, res: express.Response
   try {
     console.log('[PROFILE_ROUTES] POST / request received');
     console.log('[PROFILE_ROUTES] Headers:', JSON.stringify(req.headers));
+    console.log('[PROFILE_ROUTES] Full URL path:', req.originalUrl);
+    console.log('[PROFILE_ROUTES] Route path:', req.route.path);
     console.log('[PROFILE_ROUTES] Body keys:', Object.keys(req.body));
     
     const userId = (req as any).userId;
@@ -271,8 +378,10 @@ router.post('/', verifyToken, async (req: express.Request, res: express.Response
 router.post('/create', verifyToken, async (req: express.Request, res: express.Response, next: express.NextFunction) => {
   try {
     console.log('[PROFILE_ROUTES] POST /create request received');
-    console.log('[PROFILE_ROUTES] Headers:', req.headers);
-    console.log('[PROFILE_ROUTES] Body:', req.body);
+    console.log('[PROFILE_ROUTES] Headers:', JSON.stringify(req.headers));
+    console.log('[PROFILE_ROUTES] Full URL path:', req.originalUrl);
+    console.log('[PROFILE_ROUTES] Route path:', req.route.path);
+    console.log('[PROFILE_ROUTES] Body:', JSON.stringify(req.body));
     
     const userId = (req as any).userId;
     console.log('[PROFILE_ROUTES] Creating profile for authenticated user:', userId);
@@ -295,9 +404,10 @@ router.post('/create', verifyToken, async (req: express.Request, res: express.Re
       sharingPreferences: req.body.privacySettings || req.body.sharingPreferences || {}
     };
     
-    console.log('[PROFILE_ROUTES] Processed profile data:', profileData);
+    console.log('[PROFILE_ROUTES] Processed profile data:', JSON.stringify(profileData));
     
     // Create profile directly
+    console.log('[PROFILE_ROUTES] Calling createUserProfile');
     const profile = await profileRepository.createUserProfile(profileData);
     
     // Format response
@@ -315,9 +425,19 @@ router.post('/create', verifyToken, async (req: express.Request, res: express.Re
       updatedAt: profile.updated_at
     };
     
-    console.log('[PROFILE_ROUTES] Profile created successfully');
+    console.log('[PROFILE_ROUTES] Profile created successfully with ID:', response.id);
+    console.log('[PROFILE_ROUTES] Response data:', JSON.stringify({
+      id: response.id,
+      userId: response.userId,
+      preferencesKeys: response.preferences ? Object.keys(response.preferences) : [],
+      sharingPreferencesKeys: response.sharingPreferences ? Object.keys(response.sharingPreferences) : [],
+      version: response.version
+    }));
+    
+    res.setHeader('Content-Type', 'application/json');
     res.status(201).json(response);
   } catch (error) {
+    console.error('[PROFILE_ROUTES] Error in POST /profile/create:', error);
     next(error);
   }
 });

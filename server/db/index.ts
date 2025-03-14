@@ -173,77 +173,67 @@ export async function deleteUserProfile(userId: unknown): Promise<boolean> {
 /**
  * Get encrypted profile data
  */
-export async function getEncryptedProfileData(userId: unknown): Promise<EncryptedProfileData | null> {
-  if (typeof userId !== 'string' || !userId) {
-    console.log('[DB DEBUG] Invalid userId provided to getEncryptedProfileData:', userId);
-    return null;
-  }
-  
+export async function getEncryptedProfileData(userId: string): Promise<any> {
+  console.log(`[DB] Getting encrypted profile data for user: ${userId}`);
   try {
-    console.log(`[DB DEBUG] Getting encrypted profile data for userId: ${userId}`);
-    console.log(`[DB DEBUG] Database mode: ${USE_DATABASE ? 'PostgreSQL' : 'In-Memory'}`);
+    const result = await pg.pool.query(
+      'SELECT data, iv FROM encrypted_profiles WHERE user_id = $1',
+      [userId]
+    );
     
-    let encryptedData = null;
-    
-    if (USE_DATABASE) {
-      console.log(`[DB DEBUG] Using database storage for encrypted data`);
-      encryptedData = await pg.getEncryptedProfileData(userId);
-    } else {
-      console.log(`[DB DEBUG] Using in-memory storage for encrypted data`);
-      encryptedData = await memory.getEncryptedProfileDataFromMemory(userId);
+    if (result.rows.length === 0) {
+      console.log(`[DB] No encrypted profile found for user: ${userId}`);
+      return null;
     }
     
-    console.log(`[DB DEBUG] Encrypted data lookup result: ${encryptedData ? 'Found' : 'Not found'}`);
-    
-    if (encryptedData) {
-      console.log(`[DB DEBUG] Encrypted data details: userId=${encryptedData.userId}, data length=${encryptedData.data ? encryptedData.data.length : 0}, iv present=${!!encryptedData.iv}`);
-    }
-    
-    return encryptedData;
+    console.log(`[DB] Found encrypted profile for user: ${userId}`);
+    return {
+      data: result.rows[0].data,
+      iv: result.rows[0].iv
+    };
   } catch (error) {
-    console.error(`[DB DEBUG] Error getting encrypted profile data: ${error instanceof Error ? error.message : String(error)}`);
-    log(`Error getting encrypted profile data: ${error instanceof Error ? error.message : String(error)}`, 'error');
-    return null;
+    console.error(`[DB] Error getting encrypted profile data for user ${userId}:`, error);
+    throw error;
   }
 }
 
 /**
  * Update or create encrypted profile data
  */
-export async function updateEncryptedProfileData(
-  userId: unknown, 
-  encryptedData: { data: string; iv: string }
-): Promise<EncryptedProfileData> {
-  if (typeof userId !== 'string' || !userId) {
-    console.log('[DB DEBUG] Invalid userId provided to updateEncryptedProfileData:', userId);
-    throw new Error('Invalid userId');
-  }
-  
+export async function updateEncryptedProfileData(userId: string, encryptedData: { data: string, iv: string[] | string }): Promise<boolean> {
+  console.log(`[DB] Updating encrypted profile data for user: ${userId}`);
   try {
-    console.log(`[DB DEBUG] Updating encrypted profile data for userId: ${userId}`);
-    console.log(`[DB DEBUG] Database mode: ${USE_DATABASE ? 'PostgreSQL' : 'In-Memory'}`);
-    console.log(`[DB DEBUG] Encrypted data: data length=${encryptedData.data ? encryptedData.data.length : 0}, iv length=${encryptedData.iv ? encryptedData.iv.length : 0}`);
+    // Check if profile exists
+    const existingProfile = await pg.pool.query(
+      'SELECT 1 FROM encrypted_profiles WHERE user_id = $1',
+      [userId]
+    );
     
-    let result = null;
+    // Convert iv to string if it's an array
+    const ivString = Array.isArray(encryptedData.iv) 
+      ? JSON.stringify(encryptedData.iv) 
+      : encryptedData.iv;
     
-    if (USE_DATABASE) {
-      console.log(`[DB DEBUG] Using database storage for updating encrypted data`);
-      result = await pg.updateEncryptedProfileData(userId, encryptedData);
+    if (existingProfile.rows.length === 0) {
+      // Create new profile
+      console.log(`[DB] Creating new encrypted profile for user: ${userId}`);
+      await pg.pool.query(
+        'INSERT INTO encrypted_profiles (user_id, data, iv) VALUES ($1, $2, $3)',
+        [userId, encryptedData.data, ivString]
+      );
     } else {
-      console.log(`[DB DEBUG] Using in-memory storage for updating encrypted data`);
-      result = await memory.saveEncryptedProfileDataToMemory(userId, encryptedData.data, encryptedData.iv);
+      // Update existing profile
+      console.log(`[DB] Updating existing encrypted profile for user: ${userId}`);
+      await pg.pool.query(
+        'UPDATE encrypted_profiles SET data = $1, iv = $2 WHERE user_id = $3',
+        [encryptedData.data, ivString, userId]
+      );
     }
     
-    console.log(`[DB DEBUG] Encrypted data update result: ${result ? 'Success' : 'Failed'}`);
-    
-    if (result) {
-      console.log(`[DB DEBUG] Updated encrypted data details: userId=${result.userId}, data length=${result.data ? result.data.length : 0}, iv present=${!!result.iv}`);
-    }
-    
-    return result;
+    console.log(`[DB] Successfully updated encrypted profile for user: ${userId}`);
+    return true;
   } catch (error) {
-    console.error(`[DB DEBUG] Error updating encrypted profile data: ${error instanceof Error ? error.message : String(error)}`);
-    log(`Error updating encrypted profile data: ${error instanceof Error ? error.message : String(error)}`, 'error');
+    console.error(`[DB] Error updating encrypted profile data for user ${userId}:`, error);
     throw error;
   }
 }

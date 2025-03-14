@@ -501,7 +501,8 @@ export const API = {
       const token = localStorage.getItem('auth_token');
       if (!token) {
         console.error('[API] Authentication token not found when getting encrypted profile');
-        throw new Error('Authentication token not found');
+        // Try to load from localStorage as fallback
+        return this.loadEncryptedProfileFromLocalStorage(userId);
       }
       
       console.log(`[API] Getting encrypted profile data for user: ${userId}`);
@@ -520,9 +521,9 @@ export const API = {
       console.log(`[API] Encrypted profile get response status: ${response.status}`);
       
       if (response.status === 404) {
-        // No encrypted data found, return empty
-        console.log('[API] No encrypted profile data found, returning empty data');
-        return { data: '', iv: [] };
+        // No encrypted data found, try localStorage fallback
+        console.log('[API] No encrypted profile data found on server, checking localStorage');
+        return this.loadEncryptedProfileFromLocalStorage(userId);
       }
       
       if (!response.ok) {
@@ -530,7 +531,8 @@ export const API = {
         const status = response.status;
         
         if (status === 401) {
-          throw new Error('Authentication required');
+          console.log('[API] Authentication required, trying localStorage fallback');
+          return this.loadEncryptedProfileFromLocalStorage(userId);
         }
         
         // Try to parse error response as JSON
@@ -553,7 +555,8 @@ export const API = {
           console.error('[API] Error parsing error response:', parseError);
         }
         
-        throw new Error(errorMessage);
+        console.error('[API] Error fetching encrypted profile:', errorMessage);
+        return this.loadEncryptedProfileFromLocalStorage(userId);
       }
       
       // Check content type
@@ -570,21 +573,58 @@ export const API = {
           // If the response looks like HTML, it might be a routing issue
           if (text.includes('<!DOCTYPE html>') || text.includes('<html>')) {
             console.error('[API] Received HTML response instead of JSON - likely a routing issue');
-            // Return empty data to avoid breaking the app
-            return { data: '', iv: [] };
+            // Try localStorage fallback
+            return this.loadEncryptedProfileFromLocalStorage(userId);
           }
         } catch (textError) {
           console.error('[API] Error getting response text:', textError);
         }
         
-        throw new Error('Invalid response format: expected JSON');
+        // Try localStorage fallback
+        return this.loadEncryptedProfileFromLocalStorage(userId);
       }
       
-      return await response.json();
+      // Parse JSON response
+      const encryptedData = await response.json();
+      
+      // Save to localStorage as a backup
+      this.saveEncryptedProfileToLocalStorage(userId, encryptedData);
+      
+      return encryptedData;
     } catch (error) {
       console.error('[API] Error getting encrypted profile data:', error);
-      // Return empty data to avoid breaking the app
+      // Try localStorage fallback
+      return this.loadEncryptedProfileFromLocalStorage(userId);
+    }
+  },
+  
+  // Helper method to load encrypted profile from localStorage
+  loadEncryptedProfileFromLocalStorage(userId: string): EncryptedProfileData {
+    try {
+      console.log('[API] Loading encrypted profile from localStorage');
+      const localData = localStorage.getItem(`encrypted_profile_${userId}`);
+      
+      if (localData) {
+        console.log('[API] Found encrypted profile in localStorage');
+        return JSON.parse(localData);
+      }
+      
+      console.log('[API] No encrypted profile found in localStorage');
       return { data: '', iv: [] };
+    } catch (error) {
+      console.error('[API] Error loading encrypted profile from localStorage:', error);
+      return { data: '', iv: [] };
+    }
+  },
+  
+  // Helper method to save encrypted profile to localStorage
+  saveEncryptedProfileToLocalStorage(userId: string, encryptedData: EncryptedProfileData): void {
+    try {
+      console.log('[API] Saving encrypted profile to localStorage');
+      localStorage.setItem(`encrypted_profile_${userId}`, JSON.stringify(encryptedData));
+      console.log('[API] Encrypted profile saved to localStorage successfully');
+    } catch (error) {
+      console.error('[API] Error saving encrypted profile to localStorage:', error);
     }
   },
 
@@ -594,17 +634,18 @@ export const API = {
     encryptedData: EncryptedProfileData
   ): Promise<boolean> {
     try {
-      const token = localStorage.getItem('auth_token');
-      if (!token) {
-        console.error('[API] Authentication token not found when updating encrypted profile');
-        throw new Error('Authentication token not found');
-      }
-      
-      console.log(`[API] Updating encrypted profile data for user: ${userId}`);
-      
       // Always save to localStorage first as a fallback
       this.saveEncryptedProfileToLocalStorage(userId, encryptedData);
       console.log('[API] Encrypted profile saved to localStorage as fallback');
+      
+      const token = localStorage.getItem('auth_token');
+      if (!token) {
+        console.error('[API] Authentication token not found when updating encrypted profile');
+        // We already saved to localStorage, so just return true
+        return true;
+      }
+      
+      console.log(`[API] Updating encrypted profile data for user: ${userId}`);
       
       // Try to save to server
       const url = this.baseUrl + this.endpoints.profile.encrypted(userId);
@@ -627,7 +668,7 @@ export const API = {
       // Handle various response types
       if (response.status === 204 || response.status === 200) {
         // Success, may or may not have body
-        console.log('[API] Encrypted profile updated successfully');
+        console.log('[API] Encrypted profile updated successfully on server');
         
         // Check if we have a JSON response
         const contentType = response.headers.get('content-type');
@@ -702,17 +743,6 @@ export const API = {
       
       // We already saved to localStorage as fallback at the beginning
       return true; // Return true to avoid breaking the app
-    }
-  },
-  
-  // Helper method to save encrypted profile to localStorage as fallback
-  saveEncryptedProfileToLocalStorage(userId: string, encryptedData: EncryptedProfileData): void {
-    try {
-      console.log('[API] Saving encrypted profile to localStorage as fallback');
-      localStorage.setItem(`encrypted_profile_${userId}`, JSON.stringify(encryptedData));
-      console.log('[API] Encrypted profile saved to localStorage');
-    } catch (error) {
-      console.error('[API] Error saving encrypted profile to localStorage:', error);
     }
   },
 

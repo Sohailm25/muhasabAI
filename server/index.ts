@@ -112,6 +112,32 @@ app.use((req, res, next) => {
   next();
 });
 
+// Add middleware to log all requests
+app.use((req, res, next) => {
+  console.log(`[SERVER] ${req.method} ${req.originalUrl}`);
+  console.log(`[SERVER] Headers: ${JSON.stringify(req.headers)}`);
+  
+  // Check if this is an API request
+  const isApiRequest = req.originalUrl.startsWith('/api/');
+  console.log(`[SERVER] Is API request: ${isApiRequest}`);
+  
+  if (isApiRequest) {
+    // Store the original json method
+    const originalJson = res.json;
+    
+    // Override the json method
+    res.json = function(body) {
+      // Set the content-type header
+      res.setHeader('Content-Type', 'application/json');
+      
+      // Call the original json method
+      return originalJson.call(this, body);
+    };
+  }
+  
+  next();
+});
+
 // Define a direct route handler for /api/generate/wird-suggestions
 // This must be defined BEFORE any other routes
 app.post('/api/generate/wird-suggestions', (req, res, next) => {
@@ -284,10 +310,6 @@ function registerRoutes() {
   // Register profile routes
   console.log("🔍 [SERVER INIT] Registering profile routes at /api/profile");
   app.use(PROFILE_PREFIX, initProfileRoutes(db.getPool()));
-  
-  // Register profile routes at the root API path to handle /api/profile/:userId/encrypted endpoints
-  console.log("🔍 [SERVER INIT] Registering profile routes at /api for encrypted profile endpoints");
-  app.use(API_PREFIX, initProfileRoutes(db.getPool()));
   
   // Register compatibility routes
   console.log("🔍 [SERVER INIT] Registering compatibility routes");
