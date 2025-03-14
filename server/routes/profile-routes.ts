@@ -75,12 +75,13 @@ const verifyToken = (req: express.Request, res: express.Response, next: express.
 router.get('/', verifyToken, async (req: express.Request, res: express.Response, next: express.NextFunction) => {
   try {
     console.log('[PROFILE_ROUTES] GET / request received');
-    console.log('[PROFILE_ROUTES] Headers:', req.headers);
+    console.log('[PROFILE_ROUTES] Headers:', JSON.stringify(req.headers));
     
     const userId = (req as any).userId;
     console.log('[PROFILE_ROUTES] Profile requested for authenticated user:', userId);
     
     try {
+      console.log('[PROFILE_ROUTES] Fetching profile from repository for user:', userId);
       const profile = await profileRepository.getUserProfileById(userId);
       
       // Format response
@@ -98,19 +99,29 @@ router.get('/', verifyToken, async (req: express.Request, res: express.Response,
         updatedAt: profile.updated_at
       };
       
-      console.log('[PROFILE_ROUTES] Profile found, returning data');
-      res.json(response);
+      console.log('[PROFILE_ROUTES] Profile found, returning data with ID:', response.id);
+      console.log('[PROFILE_ROUTES] Profile data:', JSON.stringify({
+        id: response.id,
+        userId: response.userId,
+        preferencesKeys: response.preferences ? Object.keys(response.preferences) : [],
+        sharingPreferencesKeys: response.sharingPreferences ? Object.keys(response.sharingPreferences) : [],
+        version: response.version
+      }));
+      
+      res.setHeader('Content-Type', 'application/json');
+      return res.json(response);
     } catch (error) {
       console.log('[PROFILE_ROUTES] Error getting profile:', error);
       
       if (error instanceof NotFoundError) {
         console.log('[PROFILE_ROUTES] Profile not found, returning 404');
-        res.status(404).json({ error: 'Profile not found' });
+        return res.status(404).json({ error: 'Profile not found' });
       } else {
         next(error);
       }
     }
   } catch (error) {
+    console.error('[PROFILE_ROUTES] Unexpected error in GET /:', error);
     next(error);
   }
 });
@@ -121,14 +132,15 @@ router.get('/', verifyToken, async (req: express.Request, res: express.Response,
 router.post('/', verifyToken, async (req: express.Request, res: express.Response, next: express.NextFunction) => {
   try {
     console.log('[PROFILE_ROUTES] POST / request received');
-    console.log('[PROFILE_ROUTES] Headers:', req.headers);
-    console.log('[PROFILE_ROUTES] Body:', req.body);
+    console.log('[PROFILE_ROUTES] Headers:', JSON.stringify(req.headers));
+    console.log('[PROFILE_ROUTES] Body keys:', Object.keys(req.body));
     
     const userId = (req as any).userId;
     console.log('[PROFILE_ROUTES] Creating/updating profile for authenticated user:', userId);
     
     // Validate request body
     if (!req.body) {
+      console.log('[PROFILE_ROUTES] No request body provided');
       throw new Error('Request body is required');
     }
     
@@ -146,7 +158,7 @@ router.post('/', verifyToken, async (req: express.Request, res: express.Response
     
     if (hasSensitiveProps) {
       console.log('[PROFILE_ROUTES] Request contains wird-related properties that might cause issues');
-      console.log('[PROFILE_ROUTES] These properties should be removed before sending the request');
+      console.log('[PROFILE_ROUTES] Request body keys:', Object.keys(req.body));
       return res.status(400).json({ 
         error: 'Request contains wird-related properties that might cause issues',
         message: 'Please remove wird-related properties from the request body'
@@ -160,9 +172,14 @@ router.post('/', verifyToken, async (req: express.Request, res: express.Response
       sharingPreferences: req.body.privacySettings || req.body.sharingPreferences || {}
     };
     
-    console.log('[PROFILE_ROUTES] Processed profile data:', profileData);
+    console.log('[PROFILE_ROUTES] Processed profile data:', JSON.stringify({
+      userId: profileData.userId,
+      preferencesKeys: Object.keys(profileData.preferences),
+      sharingPreferencesKeys: Object.keys(profileData.sharingPreferences)
+    }));
     
     // Create or update profile
+    console.log('[PROFILE_ROUTES] Calling createOrUpdateUserProfile');
     const profile = await profileRepository.createOrUpdateUserProfile(profileData);
     
     // Format response
@@ -180,7 +197,16 @@ router.post('/', verifyToken, async (req: express.Request, res: express.Response
       updatedAt: profile.updated_at
     };
     
-    console.log('[PROFILE_ROUTES] Profile created/updated successfully');
+    console.log('[PROFILE_ROUTES] Profile created/updated successfully with ID:', response.id);
+    console.log('[PROFILE_ROUTES] Response data:', JSON.stringify({
+      id: response.id,
+      userId: response.userId,
+      preferencesKeys: response.preferences ? Object.keys(response.preferences) : [],
+      sharingPreferencesKeys: response.sharingPreferences ? Object.keys(response.sharingPreferences) : [],
+      version: response.version
+    }));
+    
+    res.setHeader('Content-Type', 'application/json');
     res.status(200).json(response);
   } catch (error) {
     console.error('[PROFILE_ROUTES] Error in POST /profile:', error);
@@ -328,7 +354,12 @@ router.get('/profile/:userId/encrypted', async (req, res) => {
   try {
     const userId: string = req.params.userId;
     
+    console.log('[PROFILE_ROUTES] GET /profile/:userId/encrypted request received');
+    console.log('[PROFILE_ROUTES] User ID:', userId);
+    console.log('[PROFILE_ROUTES] Headers:', JSON.stringify(req.headers));
+    
     if (!userId) {
+      console.log('[PROFILE_ROUTES] No userId provided');
       return res.status(400).json({ error: 'userId is required' });
     }
 
@@ -337,11 +368,16 @@ router.get('/profile/:userId/encrypted', async (req, res) => {
     //   return res.status(403).json({ error: 'Unauthorized access to encrypted data' });
     // }
 
+    console.log('[PROFILE_ROUTES] Fetching encrypted profile data for user:', userId);
     const encryptedData = await getEncryptedProfileData(userId);
     
     if (!encryptedData) {
+      console.log('[PROFILE_ROUTES] No encrypted data found for user:', userId);
       return res.status(404).json({ error: 'Encrypted data not found' });
     }
+
+    console.log('[PROFILE_ROUTES] Encrypted data found, data length:', encryptedData.data ? encryptedData.data.length : 0);
+    console.log('[PROFILE_ROUTES] IV present:', !!encryptedData.iv);
 
     // Transform to client format
     const clientEncryptedData = {
@@ -349,8 +385,11 @@ router.get('/profile/:userId/encrypted', async (req, res) => {
       iv: encryptedData.iv.split(',').map(Number) // Convert string to array of numbers
     };
 
-    res.json(clientEncryptedData);
+    console.log('[PROFILE_ROUTES] Sending encrypted data response');
+    res.setHeader('Content-Type', 'application/json');
+    return res.json(clientEncryptedData);
   } catch (error) {
+    console.error('[PROFILE_ROUTES] Error in GET /profile/:userId/encrypted:', error);
     log(`Error fetching encrypted data: ${error instanceof Error ? error.message : String(error)}`, 'error');
     res.status(500).json({ error: 'Failed to fetch encrypted data' });
   }
@@ -364,11 +403,19 @@ router.put('/profile/:userId/encrypted', async (req, res) => {
     const userId: string = req.params.userId;
     const { data, iv } = req.body;
     
+    console.log('[PROFILE_ROUTES] PUT /profile/:userId/encrypted request received');
+    console.log('[PROFILE_ROUTES] User ID:', userId);
+    console.log('[PROFILE_ROUTES] Headers:', JSON.stringify(req.headers));
+    console.log('[PROFILE_ROUTES] Request body has data:', !!data);
+    console.log('[PROFILE_ROUTES] Request body has IV:', !!iv);
+    
     if (!userId) {
+      console.log('[PROFILE_ROUTES] No userId provided');
       return res.status(400).json({ error: 'userId is required' });
     }
     
     if (!data || !iv) {
+      console.log('[PROFILE_ROUTES] Missing data or IV in request body');
       return res.status(400).json({ error: 'data and iv are required' });
     }
 
@@ -378,22 +425,29 @@ router.put('/profile/:userId/encrypted', async (req, res) => {
     // }
 
     // Check if user profile exists first
+    console.log('[PROFILE_ROUTES] Checking if user profile exists');
     const profile = await getUserProfile(userId);
     if (!profile) {
+      console.log('[PROFILE_ROUTES] User profile not found for user:', userId);
       return res.status(404).json({ error: 'User profile not found' });
     }
 
     // Convert iv array to string for storage
     const ivString = Array.isArray(iv) ? iv.toString() : iv;
+    console.log('[PROFILE_ROUTES] IV converted to string, length:', ivString.length);
 
     // Save encrypted data
+    console.log('[PROFILE_ROUTES] Saving encrypted data for user:', userId);
     await updateEncryptedProfileData(userId, { 
       data, 
       iv: ivString 
     });
 
+    console.log('[PROFILE_ROUTES] Encrypted data saved successfully');
+    res.setHeader('Content-Type', 'application/json');
     res.status(200).json({ success: true });
   } catch (error) {
+    console.error('[PROFILE_ROUTES] Error in PUT /profile/:userId/encrypted:', error);
     log(`Error saving encrypted data: ${error instanceof Error ? error.message : String(error)}`, 'error');
     res.status(500).json({ error: 'Failed to save encrypted data' });
   }

@@ -119,9 +119,25 @@ export async function deleteUserProfileFromMemory(userId: string): Promise<boole
  * Get encrypted profile data from memory
  */
 export async function getEncryptedProfileDataFromMemory(userId: string): Promise<EncryptedProfileData | null> {
-  if (!userId) return null;
+  if (!userId) {
+    console.log('[MEMORY DB] Invalid userId provided to getEncryptedProfileDataFromMemory');
+    return null;
+  }
+  
+  console.log(`[MEMORY DB] Looking up encrypted data for userId: ${userId}`);
+  console.log(`[MEMORY DB] In-memory encrypted data count: ${Object.keys(encryptedData).length}`);
+  
+  // Log a few encrypted data IDs from the store for debugging
+  const encryptedDataIds = Object.keys(encryptedData).slice(0, 5);
+  console.log(`[MEMORY DB] Sample encrypted data IDs in memory: ${encryptedDataIds.join(', ') || 'none'}`);
   
   const data = encryptedData[userId];
+  console.log(`[MEMORY DB] Encrypted data lookup result: ${data ? 'Found' : 'Not found'}`);
+  
+  if (data) {
+    console.log(`[MEMORY DB] Encrypted data details: userId=${data.userId}, data length=${data.data ? data.data.length : 0}, iv present=${!!data.iv}`);
+  }
+  
   return data || null;
 }
 
@@ -134,8 +150,12 @@ export async function saveEncryptedProfileDataToMemory(
   iv: string
 ): Promise<EncryptedProfileData> {
   if (!userId) {
+    console.log('[MEMORY DB] Invalid userId provided to saveEncryptedProfileDataToMemory');
     throw new Error('userId is required');
   }
+  
+  console.log(`[MEMORY DB] Saving encrypted data for userId: ${userId}`);
+  console.log(`[MEMORY DB] Data length: ${data ? data.length : 0}, IV length: ${iv ? iv.length : 0}`);
   
   const now = new Date();
   
@@ -151,7 +171,10 @@ export async function saveEncryptedProfileDataToMemory(
   // Save to memory
   encryptedData[userId] = encryptedProfile;
   
-  log(`Saved encrypted data for user ${userId} to memory storage`, 'database');
+  console.log(`[MEMORY DB] Saved encrypted data for userId: ${userId}`);
+  console.log(`[MEMORY DB] Updated in-memory encrypted data count: ${Object.keys(encryptedData).length}`);
+  
+  log(`Saved encrypted profile data for user ${userId} to memory storage`, 'database');
   
   return encryptedProfile;
 }
@@ -160,17 +183,26 @@ export async function saveEncryptedProfileDataToMemory(
  * Delete encrypted profile data from memory
  */
 export async function deleteEncryptedProfileDataFromMemory(userId: string): Promise<boolean> {
-  if (!userId) return false;
+  if (!userId) {
+    console.log('[MEMORY DB] Invalid userId provided to deleteEncryptedProfileDataFromMemory');
+    return false;
+  }
+  
+  console.log(`[MEMORY DB] Deleting encrypted data for userId: ${userId}`);
   
   // Check if data exists
   if (!encryptedData[userId]) {
+    console.log(`[MEMORY DB] No encrypted data found for userId: ${userId}`);
     return false;
   }
   
   // Delete data
   delete encryptedData[userId];
   
-  log(`Deleted encrypted data for user ${userId} from memory storage`, 'database');
+  console.log(`[MEMORY DB] Deleted encrypted data for userId: ${userId}`);
+  console.log(`[MEMORY DB] Updated in-memory encrypted data count: ${Object.keys(encryptedData).length}`);
+  
+  log(`Deleted encrypted profile data for user ${userId} from memory storage`, 'database');
   
   return true;
 }

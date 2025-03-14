@@ -432,6 +432,76 @@ export function useProfile() {
         }
       }
       
+      // If we have private preferences and personalization is enabled, update those
+      if (privatePreferences && allowPersonalization) {
+        try {
+          // Store private preferences in localStorage first as a fallback
+          try {
+            localStorage.setItem('sahabai_private_preferences', JSON.stringify(privatePreferences));
+            console.log('Private preferences saved to localStorage as fallback');
+          } catch (localStorageErr) {
+            console.error('Failed to save to localStorage:', localStorageErr);
+          }
+          
+          // If we have a userId, try to update the server
+          if (userId) {
+            console.log(`Updating private profile for user: ${userId}`);
+            console.log('Private preferences data:', JSON.stringify(privatePreferences, null, 2));
+            
+            try {
+              await updatePrivateProfile(userId, privatePreferences);
+              console.log('Private personalization preferences saved successfully to server');
+              
+              // Also update local state
+              if (privateProfile) {
+                const mergedProfile = mergePrivateProfiles(privateProfile, privatePreferences);
+                setPrivateProfile(mergedProfile);
+                console.log('Private profile state updated with new preferences');
+              } else {
+                // No existing private profile, create one from scratch
+                const defaultProfile = getDefaultPrivateProfile();
+                const mergedProfile = mergePrivateProfiles(defaultProfile, privatePreferences);
+                setPrivateProfile(mergedProfile);
+                console.log('New private profile created from preferences');
+              }
+            } catch (privateErr) {
+              console.error('Failed to save private personalization preferences to server:', privateErr);
+              
+              // Already stored in localStorage above, so just update local state
+              if (privateProfile) {
+                const mergedProfile = mergePrivateProfiles(privateProfile, privatePreferences);
+                setPrivateProfile(mergedProfile);
+                console.log('Private profile state updated with new preferences (server update failed)');
+              } else {
+                // No existing private profile, create one from scratch
+                const defaultProfile = getDefaultPrivateProfile();
+                const mergedProfile = mergePrivateProfiles(defaultProfile, privatePreferences);
+                setPrivateProfile(mergedProfile);
+                console.log('New private profile created from preferences (server update failed)');
+              }
+            }
+          } else {
+            console.log('No userId available, only saving preferences to localStorage');
+            
+            // No userId, so just update local state
+            if (privateProfile) {
+              const mergedProfile = mergePrivateProfiles(privateProfile, privatePreferences);
+              setPrivateProfile(mergedProfile);
+              console.log('Private profile state updated with new preferences (no userId)');
+            } else {
+              // No existing private profile, create one from scratch
+              const defaultProfile = getDefaultPrivateProfile();
+              const mergedProfile = mergePrivateProfiles(defaultProfile, privatePreferences);
+              setPrivateProfile(mergedProfile);
+              console.log('New private profile created from preferences (no userId)');
+            }
+          }
+        } catch (err) {
+          console.error('Error handling private preferences:', err);
+          // Continue with the function, as we've already updated the public profile
+        }
+      }
+      
       // Try to update the public profile on the server using a direct approach
       // that avoids the problematic updateUserProfile method
       try {
@@ -473,63 +543,7 @@ export function useProfile() {
         }
       } catch (publicErr) {
         console.error('Failed to update public profile on server:', publicErr);
-        // Continue with private profile update even if public update fails
-      }
-      
-      // If we have private preferences and personalization is enabled, update those
-      if (privatePreferences && allowPersonalization && userId) {
-        try {
-          console.log(`Updating private profile for user: ${userId}`);
-          console.log('Private preferences data:', JSON.stringify(privatePreferences, null, 2));
-          
-          await updatePrivateProfile(userId, privatePreferences);
-          console.log('Private personalization preferences saved successfully to server');
-          
-          // Also update local state
-          if (privateProfile) {
-            const mergedProfile = mergePrivateProfiles(privateProfile, privatePreferences);
-            setPrivateProfile(mergedProfile);
-            console.log('Private profile state updated with new preferences');
-          } else {
-            // No existing private profile, create one from scratch
-            const defaultProfile = getDefaultPrivateProfile();
-            const mergedProfile = mergePrivateProfiles(defaultProfile, privatePreferences);
-            setPrivateProfile(mergedProfile);
-            console.log('New private profile created from preferences');
-          }
-        } catch (privateErr) {
-          console.error('Failed to save private personalization preferences to server:', privateErr);
-          
-          // Store locally as fallback
-          if (privateProfile) {
-            const mergedProfile = mergePrivateProfiles(
-              privateProfile, 
-              privatePreferences
-            );
-            setPrivateProfile(mergedProfile);
-            
-            // Also try to store in localStorage
-            try {
-              localStorage.setItem('sahabai_private_preferences', JSON.stringify(privatePreferences));
-              console.log('Private preferences saved to localStorage as fallback');
-            } catch (localStorageErr) {
-              console.error('Failed to save to localStorage:', localStorageErr);
-            }
-          } else {
-            // No existing private profile, create one from scratch
-            const defaultProfile = getDefaultPrivateProfile();
-            const mergedProfile = mergePrivateProfiles(defaultProfile, privatePreferences);
-            setPrivateProfile(mergedProfile);
-            
-            // Also store in localStorage
-            try {
-              localStorage.setItem('sahabai_private_preferences', JSON.stringify(privatePreferences));
-              console.log('New private preferences saved to localStorage');
-            } catch (localStorageErr) {
-              console.error('Failed to save to localStorage:', localStorageErr);
-            }
-          }
-        }
+        // Continue with the function, as we've already updated local state
       }
       
       return true;

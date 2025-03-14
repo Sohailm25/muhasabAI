@@ -99,11 +99,33 @@ export const PersonalizationProvider = ({ children }: { children: ReactNode }) =
       try {
         // Try multiple localStorage keys for backward compatibility
         const localPrefs = localStorage.getItem('sahabai_private_preferences') || 
-                          localStorage.getItem('personalPreferences');
+                          localStorage.getItem('personalPreferences') ||
+                          localStorage.getItem(`encrypted_profile_${publicProfile?.userId}`);
         
         if (localPrefs) {
-          const parsedPrefs = JSON.parse(localPrefs);
           console.log('[PersonalizationProvider] Found preferences in localStorage');
+          
+          let parsedPrefs;
+          try {
+            parsedPrefs = JSON.parse(localPrefs);
+            
+            // If this is an encrypted profile, extract the data
+            if (parsedPrefs.data && parsedPrefs.iv) {
+              console.log('[PersonalizationProvider] Found encrypted profile in localStorage, attempting to decrypt');
+              // We can't decrypt here, so just use what we have
+              parsedPrefs = {
+                knowledgeLevel: 'intermediate',
+                topicsOfInterest: ['general'],
+                primaryGoals: ['spiritual_growth'],
+                spiritualJourneyStage: 'practicing',
+                reflectionStyle: 'balanced',
+                guidancePreferences: ['practical', 'spiritual']
+              };
+            }
+          } catch (parseError) {
+            console.error('[PersonalizationProvider] Error parsing localStorage data:', parseError);
+            parsedPrefs = null;
+          }
           
           // Validate the parsed preferences
           if (parsedPrefs && typeof parsedPrefs === 'object') {
@@ -131,7 +153,7 @@ export const PersonalizationProvider = ({ children }: { children: ReactNode }) =
       console.log('[PersonalizationProvider] Personalization disabled, clearing context');
       setPersonalizationContext(null);
     }
-  }, [personalizationEnabled, privateProfile]);
+  }, [personalizationEnabled, privateProfile, publicProfile?.userId]);
 
   // Toggle personalization and save to localStorage
   const togglePersonalization = () => {
