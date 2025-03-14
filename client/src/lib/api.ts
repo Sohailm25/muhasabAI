@@ -373,91 +373,12 @@ export const API = {
   /**
    * Update user profile
    */
-  async updateUserProfile(profile: any) {
-    console.log('[API Debug] Updating user profile with data:', JSON.stringify(profile, null, 2));
+  async updateUserProfile(profileData: any): Promise<any> {
+    console.log('[API] Updating user profile with data:', profileData);
     
-    // Create a deep copy of the profile for sanitization
-    const sanitizedProfile = JSON.parse(JSON.stringify(profile));
-    
-    // Function to recursively clean wird-related properties from objects
-    const sanitizeObject = (obj: any) => {
-      if (!obj || typeof obj !== 'object') return;
-      
-      // Expanded list of words to detect and remove (case insensitive)
-      const sensitiveTerms = ['wird', 'wirdid', 'wirdplan', 'wirdsuggestion', 'habit', 'tracker'];
-      
-      // Process all properties at this level
-      Object.keys(obj).forEach(key => {
-        // Check if the key contains any sensitive terms (case insensitive)
-        const lowerKey = key.toLowerCase();
-        
-        // Check if this key should be removed based on any sensitive term
-        if (sensitiveTerms.some(term => lowerKey.includes(term.toLowerCase()))) {
-          console.log(`[API Debug] Removing sensitive property: ${key}`);
-          delete obj[key];
-          return; // Skip further processing of this property
-        }
-        
-        // If value is an array, check each item
-        if (Array.isArray(obj[key])) {
-          // First sanitize any object elements in the array
-          obj[key].forEach((item: any, index: number) => {
-            if (item && typeof item === 'object') {
-              sanitizeObject(item);
-            }
-          });
-          
-          // Then filter out any string elements that contain sensitive terms
-          obj[key] = obj[key].filter((item: any) => {
-            if (typeof item === 'string') {
-              const containsSensitiveTerm = sensitiveTerms.some(term => 
-                item.toLowerCase().includes(term.toLowerCase())
-              );
-              if (containsSensitiveTerm) {
-                console.log(`[API Debug] Removing sensitive array item: ${item}`);
-                return false;
-              }
-            }
-            return true;
-          });
-        } 
-        // If it's an object, recurse
-        else if (obj[key] && typeof obj[key] === 'object') {
-          sanitizeObject(obj[key]);
-        }
-        // If it's a string, check if it contains any sensitive terms
-        else if (typeof obj[key] === 'string') {
-          const containsSensitiveTerm = sensitiveTerms.some(term => 
-            obj[key].toLowerCase().includes(term.toLowerCase())
-          );
-          if (containsSensitiveTerm) {
-            console.log(`[API Debug] Removing sensitive string value for ${key}: ${obj[key]}`);
-            // For string values that contain sensitive terms, replace with empty string
-            // rather than deleting the property
-            obj[key] = '';
-          }
-        }
-      });
-    };
-    
-    // Sanitize the profile copy
-    sanitizeObject(sanitizedProfile);
-    
-    // Make sure we're not sending any nested plans or wirdPlan properties
-    if (sanitizedProfile.plans) delete sanitizedProfile.plans;
-    if (sanitizedProfile.wirdPlan) delete sanitizedProfile.wirdPlan;
-    
-    // Additional safety check for common sources of Invalid wird ID format
-    const keysToCheck = ['dailyTracking', 'habits', 'trackingData', 'wirdPlans', 'wirdData', 'trackers'];
-    keysToCheck.forEach(key => {
-      if (sanitizedProfile[key]) {
-        console.log(`[API Debug] Removing potential source of wird issues: ${key}`);
-        delete sanitizedProfile[key];
-      }
-    });
-    
-    console.log('[API Debug] Sending sanitized profile without sensitive properties:', JSON.stringify(sanitizedProfile, null, 2));
-    return this.put(this.endpoints.profile.update, sanitizedProfile);
+    // Use POST to /api/profile/create instead of PUT to /api/profile
+    // This endpoint is specifically designed to handle profile updates correctly
+    return this.post('/api/profile/create', profileData);
   },
   
   /**
@@ -495,106 +416,27 @@ export const API = {
     }
   },
 
-  // Get encrypted profile data
-  async getEncryptedProfileData(userId: string): Promise<EncryptedProfileData> {
+  /**
+   * Get encrypted profile data for a user
+   */
+  async getEncryptedProfileData(userId: string): Promise<{ data: string | null, iv: number[] | null }> {
     try {
-      const token = localStorage.getItem('auth_token');
-      if (!token) {
-        console.error('[API] Authentication token not found when getting encrypted profile');
-        // Try to load from localStorage as fallback
-        return this.loadEncryptedProfileFromLocalStorage(userId);
+      console.log('[API] Getting encrypted profile data for user:', userId);
+      
+      // Use the API.request method which already has proper headers and error handling
+      const url = this.endpoints.profile.encrypted(userId);
+      const response = await this.get<{ data: string, iv: number[] }>(url);
+      
+      if (!response || !response.data) {
+        console.log('[API] No encrypted profile data found, returning empty data');
+        return { data: null, iv: null };
       }
       
-      console.log(`[API] Getting encrypted profile data for user: ${userId}`);
-      const url = this.baseUrl + this.endpoints.profile.encrypted(userId);
-      
-      // Add cache busting to avoid stale responses
-      const urlWithCacheBusting = `${url}?_t=${Date.now()}`;
-      
-      const response = await fetch(urlWithCacheBusting, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Accept': 'application/json'
-        }
-      });
-      
-      console.log(`[API] Encrypted profile get response status: ${response.status}`);
-      
-      if (response.status === 404) {
-        // No encrypted data found, try localStorage fallback
-        console.log('[API] No encrypted profile data found on server, checking localStorage');
-        return this.loadEncryptedProfileFromLocalStorage(userId);
-      }
-      
-      if (!response.ok) {
-        // Handle other error statuses
-        const status = response.status;
-        
-        if (status === 401) {
-          console.log('[API] Authentication required, trying localStorage fallback');
-          return this.loadEncryptedProfileFromLocalStorage(userId);
-        }
-        
-        // Try to parse error response as JSON
-        let errorMessage = `Failed to fetch encrypted profile: ${status}`;
-        
-        try {
-          // Only try to parse as JSON if the content type is application/json
-          const contentType = response.headers.get('content-type');
-          if (contentType && contentType.includes('application/json')) {
-            const errorData = await response.json();
-            errorMessage = errorData.error || errorMessage;
-          } else {
-            // If not JSON, try to get text
-            const textError = await response.text();
-            if (textError) {
-              errorMessage += ` - ${textError.substring(0, 100)}`;
-            }
-          }
-        } catch (parseError) {
-          console.error('[API] Error parsing error response:', parseError);
-        }
-        
-        console.error('[API] Error fetching encrypted profile:', errorMessage);
-        return this.loadEncryptedProfileFromLocalStorage(userId);
-      }
-      
-      // Check content type
-      const contentType = response.headers.get('content-type');
-      if (!contentType || !contentType.includes('application/json')) {
-        console.error('[API] Received non-JSON response for encrypted profile data');
-        console.log('[API] Content-Type:', contentType);
-        
-        // Try to get the response text for debugging
-        try {
-          const text = await response.text();
-          console.log('[API] Response text (first 200 chars):', text.substring(0, 200));
-          
-          // If the response looks like HTML, it might be a routing issue
-          if (text.includes('<!DOCTYPE html>') || text.includes('<html>')) {
-            console.error('[API] Received HTML response instead of JSON - likely a routing issue');
-            // Try localStorage fallback
-            return this.loadEncryptedProfileFromLocalStorage(userId);
-          }
-        } catch (textError) {
-          console.error('[API] Error getting response text:', textError);
-        }
-        
-        // Try localStorage fallback
-        return this.loadEncryptedProfileFromLocalStorage(userId);
-      }
-      
-      // Parse JSON response
-      const encryptedData = await response.json();
-      
-      // Save to localStorage as a backup
-      this.saveEncryptedProfileToLocalStorage(userId, encryptedData);
-      
-      return encryptedData;
+      return response;
     } catch (error) {
       console.error('[API] Error getting encrypted profile data:', error);
-      // Try localStorage fallback
-      return this.loadEncryptedProfileFromLocalStorage(userId);
+      // Return empty data on error to avoid breaking the app
+      return { data: null, iv: null };
     }
   },
   

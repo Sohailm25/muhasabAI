@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import axios from 'axios';
 import {
   Box,
   Container,
@@ -18,21 +17,7 @@ import {
 } from '@chakra-ui/react';
 import { ArrowBackIcon } from '@chakra-ui/icons';
 import { useLocation } from 'wouter';
-
-interface UserPreferences {
-  emailNotifications: boolean;
-  darkMode: boolean;
-  saveHistory: boolean;
-}
-
-interface UserSettings {
-  id: string;
-  userId: string;
-  name: string | null;
-  email: string | null;
-  preferences: UserPreferences;
-  timestamp: string;
-}
+import { userService, UserSettings, UserPreferences } from '../services/userService';
 
 export default function Settings() {
   const [settings, setSettings] = useState<UserSettings | null>(null);
@@ -53,8 +38,10 @@ export default function Settings() {
   const loadUserSettings = async () => {
     try {
       setLoading(true);
-      const response = await axios.get('/api/user/settings');
-      setSettings(response.data);
+      console.log('Loading user settings...');
+      const userSettings = await userService.getUserSettings();
+      console.log('User settings loaded:', userSettings);
+      setSettings(userSettings);
     } catch (error) {
       console.error('Error loading user settings:', error);
       toast({
@@ -80,11 +67,13 @@ export default function Settings() {
         ...newPreferences
       };
       
-      const response = await axios.post('/api/user/settings', {
+      console.log('Updating user settings with preferences:', updatedPreferences);
+      const updatedSettings = await userService.updateUserSettings({
         preferences: updatedPreferences
       });
       
-      setSettings(response.data);
+      console.log('Settings updated successfully:', updatedSettings);
+      setSettings(updatedSettings);
       
       toast({
         title: 'Settings Updated',

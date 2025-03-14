@@ -235,23 +235,47 @@ router.get('/', verifyToken, async (req: express.Request, res: express.Response,
     const userId = (req as any).userId;
     console.log('[PROFILE_ROUTES] Profile requested for authenticated user:', userId);
     
+    // Check if userId is valid
+    if (!userId) {
+      console.log('[PROFILE_ROUTES] No userId found in request after token verification');
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+    
     try {
       console.log('[PROFILE_ROUTES] Fetching profile from repository for user:', userId);
-      const profile = await profileRepository.getUserProfileById(userId);
+      
+      // Try to get profile from repository
+      let profile;
+      try {
+        profile = await profileRepository.getUserProfileById(userId);
+        console.log('[PROFILE_ROUTES] Profile found in repository:', profile ? 'Yes' : 'No');
+      } catch (repoError) {
+        console.error('[PROFILE_ROUTES] Repository error:', repoError);
+        
+        // If repository fails, try direct DB access as fallback
+        console.log('[PROFILE_ROUTES] Trying fallback with direct DB access');
+        profile = await getUserProfile(userId);
+        console.log('[PROFILE_ROUTES] Profile found with direct DB access:', profile ? 'Yes' : 'No');
+      }
+      
+      if (!profile) {
+        console.log('[PROFILE_ROUTES] No profile found for user:', userId);
+        return res.status(404).json({ error: 'Profile not found' });
+      }
       
       // Format response
       const response = {
         id: profile.id,
-        userId: profile.user_id,
+        userId: profile.user_id || profile.userId,
         preferences: typeof profile.preferences === 'string' 
           ? JSON.parse(profile.preferences) 
           : profile.preferences,
         sharingPreferences: typeof profile.sharing_preferences === 'string'
           ? JSON.parse(profile.sharing_preferences)
-          : profile.sharing_preferences,
+          : (profile.sharingPreferences || profile.sharing_preferences),
         version: profile.version || 1,
-        createdAt: profile.created_at,
-        updatedAt: profile.updated_at
+        createdAt: profile.created_at || profile.createdAt,
+        updatedAt: profile.updated_at || profile.updatedAt
       };
       
       console.log('[PROFILE_ROUTES] Profile found, returning data with ID:', response.id);

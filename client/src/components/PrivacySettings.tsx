@@ -6,11 +6,13 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useProfile } from '../hooks/useProfile';
 import { exportKeyForBackup } from '../lib/encryption';
 import { API } from '../lib/api';
+import { userService } from '../services/userService';
 
 export function PrivacySettings() {
   const { publicProfile, updateProfile, error } = useProfile();
   const [isDeleting, setIsDeleting] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
+  const [isAcceptingPolicy, setIsAcceptingPolicy] = useState(false);
   const [operationError, setOperationError] = useState<string | null>(null);
   const [operationSuccess, setOperationSuccess] = useState<string | null>(null);
   
@@ -29,11 +31,35 @@ export function PrivacySettings() {
         privacySettings: updatedSettings
       });
       
+      // If toggling allowPersonalization to true, also accept privacy policy
+      if (setting === 'allowPersonalization' && value === true) {
+        await handleAcceptPrivacyPolicy();
+      }
+      
       setOperationSuccess(`Privacy setting updated successfully`);
       setTimeout(() => setOperationSuccess(null), 3000);
     } catch (err) {
       console.error('Error updating privacy setting:', err);
       setOperationError('Failed to update privacy setting. Please try again.');
+    }
+  };
+  
+  const handleAcceptPrivacyPolicy = async () => {
+    try {
+      setIsAcceptingPolicy(true);
+      setOperationError(null);
+      
+      console.log('Accepting privacy policy...');
+      await userService.acceptPrivacyPolicy();
+      console.log('Privacy policy accepted successfully');
+      
+      return true;
+    } catch (err) {
+      console.error('Error accepting privacy policy:', err);
+      setOperationError('Failed to accept privacy policy. Please try again.');
+      return false;
+    } finally {
+      setIsAcceptingPolicy(false);
     }
   };
   

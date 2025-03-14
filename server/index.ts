@@ -68,13 +68,37 @@ app.get('/api/health', (req, res) => {
 
 // Configure CORS
 app.use(cors({
-  origin: process.env.NODE_ENV === 'production' 
-    ? ['https://sahabai-production.up.railway.app', 'https://sahabai.dev', 'https://www.sahabai.dev'] // Include all production domains
-    : ['http://localhost:3000', 'http://localhost:5000', 'http://127.0.0.1:3000', 'http://127.0.0.1:5000'],
+  origin: function(origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    
+    // List of allowed origins
+    const allowedOrigins = [
+      'http://localhost:3000',
+      'http://localhost:3001',
+      'https://www.sahabai.dev',
+      'https://sahabai.dev'
+    ];
+    
+    if (allowedOrigins.indexOf(origin) !== -1 || !origin) {
+      callback(null, true);
+    } else {
+      console.log('[CORS] Blocked request from:', origin);
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
 }));
+
+// Log CORS configuration
+console.log('🔍 [SERVER INIT] CORS configured with allowed origins:', [
+  'http://localhost:3000',
+  'http://localhost:3001',
+  'https://www.sahabai.dev',
+  'https://sahabai.dev'
+]);
 
 // Add a request logger middleware
 app.use((req, res, next) => {
@@ -300,6 +324,17 @@ function registerRoutes() {
   const API_PREFIX = '/api';
   const AUTH_PREFIX = `${API_PREFIX}/auth`;
   const PROFILE_PREFIX = `${API_PREFIX}/profile`;
+  
+  // Add a middleware to log all API requests
+  app.use((req, res, next) => {
+    if (req.originalUrl.includes('/api/profile')) {
+      console.log(`[API DEBUG] ${req.method} ${req.originalUrl} request received`);
+      console.log(`[API DEBUG] Headers: ${JSON.stringify(req.headers)}`);
+      console.log(`[API DEBUG] Query params: ${JSON.stringify(req.query)}`);
+      console.log(`[API DEBUG] Body: ${req.body ? JSON.stringify(req.body) : 'none'}`);
+    }
+    next();
+  });
   
   // Register auth routes
   console.log("🔍 [SERVER INIT] Registering auth routes at /auth");
